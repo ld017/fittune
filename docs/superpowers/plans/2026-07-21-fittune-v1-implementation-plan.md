@@ -96,6 +96,7 @@
 2. 自动热身按正式组目标逐级加重、减次，且不计入正式有效组。
 3. RIR 0、动作质量差、疼痛或心率异常均不自动减少计划组数或结束动作。
 4. 用户覆盖重量/次数后，实际输入优先并持久化。
+5. 复合动作连续 RIR 0 或次数显著下降时只生成减容量/延长休息建议；孤立动作采用较低的全身疲劳权重，二者都不自动删组。
 
 **实现：** 扩展 `SetKind` 和热身处方；将“是否继续”改为提示状态；训练页醒目显示组类型及“第 N / 共 M 组”。
 
@@ -385,6 +386,7 @@
 2. 力量总结包含容量、组类型、力竭率、e1RM 和肌群负荷。
 3. 有氧总结按方式包含距离、配速、步频/划水和心率恢复；数据不足不生成 VO₂max。
 4. 华为/HealthKit 延迟样本只追加摘要修订，原始记录不变。
+5. e1RM 超出算法适用次数/RIR 范围时标记低可信度且不进入力量进步判定；同重量次数趋势仍可独立计算。
 
 **实现：** 结束训练强制弹出总结；历史详情复用总结组件并展示计划快照、组明细、曲线及修订来源。
 
@@ -404,6 +406,7 @@
 2. e1RM、相对力量、训练容量、心率恢复、配速、睡眠和恢复趋势分别计算。
 3. 样本不足时返回 unavailable，不用单点制造趋势。
 4. 连续低恢复/表现下降只生成减量建议，不修改计划。
+5. 心率区间按近期可靠实测最大心率 → 可识别手表记录 → 年龄公式的顺序选择来源，并结合个人静息心率计算；来源和用户修正会被保留。
 
 **实现：** 新增趋势聚合层和图表；显示数据来源及样本数。
 
@@ -416,17 +419,31 @@
 - `SCIENTIFIC_BASIS.md`
 - `README.md`
 - `FitTune/Views/AlgorithmInfoView.swift`（新增）
+- `FitTune/Services/DataExportService.swift`（新增）
 - `FitTune/Views/ProfileView.swift`
 - `FitTune/Resources/PrivacyInfo.xcprivacy`
+- `FitTuneTests/DataExportServiceTests.swift`（新增）
 - Info.plist 构建设置
 
-**实施：** 展示算法版本、输入、公式选择、可信度含义和限制；更新 HealthKit、蓝牙、定位和运动权限说明；保留回收、恢复与永久删除入口。
+**测试先行：** 完整 JSON 导出后可恢复计划、原始训练、指标样本和摘要修订；CSV 分别导出训练、组明细、时序和恢复表，特殊字符与小数格式稳定，且不把 CSV 宣称为完整备份。
+
+**实施：** 展示算法版本、输入、公式选择、可信度含义和限制；实现用户主动触发的 JSON/CSV 导出和系统分享；更新 HealthKit、蓝牙、定位和运动权限说明；保留回收、恢复与永久删除入口。
 
 **验证：** 搜索所有健康权限用途文案，确认功能与声明一一对应；运行隐私清单和模拟器构建检查。
 
 ## 阶段 G：版本、回归与交付
 
 ### 任务 20：完整回归与性能/中断测试
+
+**新增基准 fixture：**
+
+- `FitTuneTests/Fixtures/EnergyBenchmarks.json`
+- `FitTuneTests/Fixtures/RestRecommendationBenchmarks.json`
+- `FitTuneTests/Fixtures/E1RMBenchmarks.json`
+- `FitTuneTests/Fixtures/RecoveryBenchmarks.json`
+- `FitTuneTests/Fixtures/HealthDeduplicationBenchmarks.json`
+
+每个 fixture 保存固定输入、预期输出、容差、算法版本和依据说明。算法结果有意调整时必须同时更新版本、fixture 和 `SCIENTIFIC_BASIS.md`，禁止只放宽测试容差。
 
 **验证矩阵：**
 
