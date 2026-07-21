@@ -20,6 +20,8 @@ let package = Package(
                 "Engine/RecoveryEngine.swift",
                 "Engine/LiveAdaptationEngine.swift",
                 "Engine/SummaryEngine.swift",
+                "Engine/TrendEngine.swift",
+                "Engine/EnergyEngine.swift",
                 "Services/HealthImportModels.swift",
                 "Services/LiveSensorSource.swift",
                 "Services/LiveSensorCoordinator.swift",

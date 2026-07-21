@@ -98,25 +98,43 @@ final class AppStore {
     }
 
     var todayEnergySummary: DailyEnergySummary {
+        let report = todayEnergyReport
+        return DailyEnergySummary(
+            restingKcal: report.resting?.value,
+            strengthKcal: report.strength.value,
+            cardioKcal: report.cardio.value,
+            walkingStepsKcal: report.walking.value,
+            steps: report.steps,
+            otherWearableKcal: report.otherActive.value
+        )
+    }
+
+    var todayEnergyReport: DailyEnergyReport {
         let calendar = Calendar.current
         let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
-        let strength = workoutHistory.filter { calendar.isDateInToday($0.completedAt) }
-            .reduce(0.0) { $0 + ($1.activeEnergyKcal ?? TrainingEngine.estimateStrengthActiveEnergy(record: $1, weightKg: weight, profile: profile)) }
-        let cardio = cardioWorkouts.filter { calendar.isDateInToday($0.date) }
-            .reduce(0.0) { $0 + $1.activeEnergyKcal }
-        let wearable = dailyActiveEnergy.filter { calendar.isDateInToday($0.date) }.map(\.kilocalories).max() ?? 0
+        let strength = workoutHistory.filter { calendar.isDateInToday($0.completedAt) }.map { record in
+            let estimate = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: weight, profile: profile)
+            return EnergyEngine.metricRange(from: estimate, source: record.measuredActiveEnergyKcal == nil ? .historicalModel : .appleHealth)
+        }
+        let cardio = cardioWorkouts.filter { calendar.isDateInToday($0.date) }.map { record in
+            MetricRange(value: record.activeEnergyKcal, lowerBound: record.energyLowerBoundKcal ?? record.activeEnergyKcal * 0.75, upperBound: record.energyUpperBoundKcal ?? record.activeEnergyKcal * 1.25, provenance: .init(source: record.source.contains("Watch") ? .appleWatch : .historicalModel, sourceName: record.energyMethod ?? record.source, confidence: record.energyMethod?.contains("实测") == true ? .measured : .derived, coverage: 1, algorithmVersion: EnergyEngine.algorithmVersion))
+        }
+        let wearableEntry = dailyActiveEnergy.filter { calendar.isDateInToday($0.date) }.max { $0.kilocalories < $1.kilocalories }
         let stepEntry = dailySteps.filter { calendar.isDateInToday($0.date) }.max { $0.steps < $1.steps }
-        let stepEstimate = stepEntry?.estimatedActiveEnergyKcal ?? 0
-        let residualWearable = max(0, wearable - strength - cardio)
-        let walking = wearable > 0 ? min(stepEstimate, residualWearable) : stepEstimate
-        let other = wearable > 0 ? max(0, residualWearable - walking) : 0
-        return DailyEnergySummary(
-            restingKcal: profile.flatMap { TrainingEngine.restingEnergy(profile: $0, weightKg: weight) },
-            strengthKcal: strength,
-            cardioKcal: cardio,
-            walkingStepsKcal: walking,
+        let resting = profile.flatMap { TrainingEngine.restingEnergyEstimate(profile: $0, weightKg: weight) }.map { EnergyEngine.metricRange(from: $0, source: .historicalModel) }
+        let steps = stepEntry.map { entry in
+            MetricRange(value: entry.estimatedActiveEnergyKcal, lowerBound: entry.estimatedActiveEnergyKcal * 0.7, upperBound: entry.estimatedActiveEnergyKcal * 1.3, provenance: .init(source: .phoneEstimate, sourceName: "\(entry.source)步数/距离估算", confidence: .estimated, coverage: 1, algorithmVersion: EnergyEngine.algorithmVersion))
+        }
+        let wearable = wearableEntry.map { entry in
+            MetricRange(value: entry.kilocalories, lowerBound: entry.kilocalories * 0.95, upperBound: entry.kilocalories * 1.05, provenance: .init(source: entry.source.contains("华为") ? .huaweiHealth : .appleHealth, sourceName: entry.source, confidence: .measured, coverage: 1, algorithmVersion: EnergyEngine.algorithmVersion))
+        }
+        return EnergyEngine.dailyReport(
+            resting: resting,
+            strength: strength,
+            cardio: cardio,
             steps: stepEntry?.steps ?? 0,
-            otherWearableKcal: other
+            stepEstimate: steps,
+            measuredDailyActive: wearable
         )
     }
 

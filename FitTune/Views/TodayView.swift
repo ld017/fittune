@@ -206,6 +206,7 @@ struct TodayView: View {
 
     private var todayEnergyCard: some View {
         let energy = store.todayEnergySummary
+        let report = store.todayEnergyReport
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
@@ -234,6 +235,9 @@ struct TodayView: View {
                     .font(.caption.bold())
                     .foregroundStyle(FitTheme.accentBlue)
             }
+            Text("总消耗合理区间 \(Int(report.total.lowerBound.rounded()))–\(Int(report.total.upperBound.rounded())) kcal · \(report.active.provenance.sourceName) · \(confidenceTitle(report.active.provenance.confidence))可信度")
+                .font(.caption.bold())
+                .foregroundStyle(FitTheme.accentBlue)
             let restingMethod = store.profile.flatMap { TrainingEngine.restingEnergyEstimate(profile: $0, weightKg: store.latestWeight)?.method }
             Text(energy.restingKcal == nil
                  ? "请到“我的”补充身体参数。运动消耗仍可独立记录。"
@@ -242,6 +246,15 @@ struct TodayView: View {
                 .foregroundStyle(FitTheme.secondaryText)
         }
         .fitCard(padding: 18)
+    }
+
+    private func confidenceTitle(_ confidence: DataConfidence) -> String {
+        switch confidence {
+        case .measured: "实测"
+        case .derived: "推导"
+        case .estimated: "估算"
+        case .unavailable: "不可用"
+        }
     }
 
     private func scoreRow(title: String, symbol: String, value: Binding<Int>, highIsGood: Bool) -> some View {

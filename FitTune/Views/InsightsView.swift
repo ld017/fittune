@@ -24,6 +24,7 @@ struct InsightsView: View {
                     .padding(.top, 10)
 
                     summaryCards
+                    if let deloadSuggestion { deloadCard(deloadSuggestion) }
                     weightCard
                     strengthCard
                     cardioCard
@@ -122,7 +123,7 @@ struct InsightsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("力量水平").font(.headline)
-                    Text("近 30 天主力动作 e1RM 趋势 + 各动作最佳纪录")
+                    Text("近 30 天主力动作 e1RM 趋势 · \(strengthMetricTrend.sampleCount) 个有效样本")
                         .font(.caption)
                         .foregroundStyle(FitTheme.secondaryText)
                 }
@@ -171,6 +172,17 @@ struct InsightsView: View {
             Text("e1RM 只用于个人趋势；高次数组和 RIR 误差会降低准确度。")
                 .font(.caption)
                 .foregroundStyle(FitTheme.secondaryText)
+        }
+        .fitCard()
+    }
+
+    private func deloadCard(_ suggestion: DeloadSuggestion) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("减量周建议", systemImage: "gauge.with.dots.needle.33percent")
+                .font(.headline).foregroundStyle(FitTheme.warning)
+            Text(suggestion.reason).font(.subheadline)
+            Text("仅为建议，不会自动修改训练计划。")
+                .font(.caption).foregroundStyle(FitTheme.secondaryText)
         }
         .fitCard()
     }
@@ -359,6 +371,8 @@ struct InsightsView: View {
     }
 
     private var bestE1RM: Double? { strengthLeaders.first?.e1RM }
+    private var strengthMetricTrend: MetricTrend { TrendEngine.strength(records: store.workoutHistory, bodyWeightKg: store.latestWeight) }
+    private var deloadSuggestion: DeloadSuggestion? { TrendEngine.deloadSuggestion(workouts: store.workoutHistory, recovery: store.recoveryHistory) }
     private var latestRecovery: RecoveryEntry? { store.recoveryHistory.max { $0.date < $1.date } }
     private var monthStart: Date { Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .distantPast }
     private var recentWeightEntries: [WeightEntry] { store.weightHistory.filter { $0.date >= monthStart }.sorted { $0.date < $1.date } }
