@@ -300,7 +300,11 @@ enum TrainingEngine {
         return average(newer) - average(older)
     }
 
-    static func generatePlan(for profile: UserProfile) -> TrainingPlan {
+    static func generatePlan(
+        for profile: UserProfile,
+        favoriteExerciseIDs: Set<String> = [],
+        customExercises: [ExerciseOption] = []
+    ) -> TrainingPlan {
         let split = profile.splitPreference ?? .automatic
         let templates = splitTemplates(preference: split, days: profile.weeklyDays)
         let maxExercises: Int
@@ -313,7 +317,12 @@ enum TrainingEngine {
         let strengthGoal = effectiveStrengthGoal(for: profile)
         let sessions = templates.map { template in
             let exercises = template.patterns.prefix(maxExercises).enumerated().map { index, pattern in
-                let option = preferredExercise(for: pattern, equipment: profile.equipment)
+                let option = preferredExercise(
+                    for: pattern,
+                    equipment: profile.equipment,
+                    favoriteExerciseIDs: favoriteExerciseIDs,
+                    customExercises: customExercises
+                )
                 return prescription(
                     option: option,
                     goal: strengthGoal,
@@ -406,6 +415,8 @@ enum TrainingEngine {
     static func exerciseAlternatives(for pattern: MovementPattern) -> [ExerciseOption] {
         exerciseCatalog.filter { $0.pattern == pattern }
     }
+
+    static var allExercises: [ExerciseOption] { exerciseCatalog }
 
     static var allExerciseOptions: [ExerciseOption] { exerciseCatalog }
 
@@ -928,8 +939,26 @@ enum TrainingEngine {
         }
     }
 
-    private static func preferredExercise(for pattern: MovementPattern, equipment: EquipmentProfile) -> ExerciseOption {
-        let options = exerciseAlternatives(for: pattern)
+    private static func preferredExercise(
+        for pattern: MovementPattern,
+        equipment: EquipmentProfile,
+        favoriteExerciseIDs: Set<String> = [],
+        customExercises: [ExerciseOption] = []
+    ) -> ExerciseOption {
+        let allowedEquipment: Set<EquipmentKind>
+        switch equipment {
+        case .fullGym:
+            allowedEquipment = Set(EquipmentKind.allCases)
+        case .dumbbells:
+            allowedEquipment = [.dumbbell, .bodyweightBand]
+        case .bodyweightBands:
+            allowedEquipment = [.bodyweightBand]
+        }
+        let options = (exerciseAlternatives(for: pattern) + customExercises.filter { $0.pattern == pattern })
+            .filter { allowedEquipment.contains($0.equipment) }
+        if let favorite = options.first(where: { favoriteExerciseIDs.contains($0.id) }) {
+            return favorite
+        }
         let order: [EquipmentKind]
         switch equipment {
         case .fullGym: order = [.barbell, .smithMachine, .selectorizedMachine, .cable, .machineCable, .dumbbell, .bodyweightBand]
@@ -994,7 +1023,7 @@ enum TrainingEngine {
         ExerciseOption(name: "单腿提踵", pattern: .calves, equipment: .bodyweightBand),
 
         // 扩展库：同一动作模式内替换，兼顾自由重量、器械和居家条件。
-        ExerciseOption(name: "前蹲", pattern: .squat, equipment: .barbell),
+        ExerciseOption(name: "颈前深蹲", pattern: .squat, equipment: .barbell, category: .quadriceps, subcategory: .squat, aliases: ["前蹲"]),
         ExerciseOption(name: "哑铃前蹲", pattern: .squat, equipment: .dumbbell),
         ExerciseOption(name: "哈克深蹲", pattern: .squat, equipment: .machineCable),
         ExerciseOption(name: "西西深蹲", pattern: .squat, equipment: .bodyweightBand),
@@ -1074,7 +1103,7 @@ enum TrainingEngine {
         ExerciseOption(name: "双臂哑铃划船", pattern: .horizontalPull, equipment: .dumbbell, category: .back),
         ExerciseOption(name: "史密斯俯身划船", pattern: .horizontalPull, equipment: .smithMachine, category: .back),
         ExerciseOption(name: "胸托划船机", pattern: .horizontalPull, equipment: .selectorizedMachine, category: .back),
-        ExerciseOption(name: "中立握高位下拉", pattern: .verticalPull, equipment: .selectorizedMachine, category: .back),
+        ExerciseOption(name: "对握高位下拉", pattern: .verticalPull, equipment: .cable, category: .back, subcategory: .verticalPull, aliases: ["中立握高位下拉"]),
         ExerciseOption(name: "宽握高位下拉", pattern: .verticalPull, equipment: .cable, category: .back),
         ExerciseOption(name: "直臂下压", pattern: .verticalPull, equipment: .cable, category: .back),
         ExerciseOption(name: "单臂绳索划船", pattern: .horizontalPull, equipment: .cable, category: .back),
@@ -1096,7 +1125,15 @@ enum TrainingEngine {
         ExerciseOption(name: "上斜哑铃弯举", pattern: .arms, equipment: .dumbbell, category: .arms),
         ExerciseOption(name: "绳索过顶臂屈伸", pattern: .arms, equipment: .cable, category: .arms),
         ExerciseOption(name: "单臂绳索下压", pattern: .arms, equipment: .cable, category: .arms),
-        ExerciseOption(name: "牧师凳弯举机", pattern: .arms, equipment: .selectorizedMachine, category: .arms)
+        ExerciseOption(name: "牧师凳弯举机", pattern: .arms, equipment: .selectorizedMachine, category: .arms),
+        // v1.0：按动作模式、器械与子分类补齐用户指定动作。
+        ExerciseOption(name: "哑铃前平举", pattern: .shoulderIsolation, equipment: .dumbbell, category: .shoulders, subcategory: .shoulderFront),
+        ExerciseOption(name: "哑铃弯举", pattern: .arms, equipment: .dumbbell, category: .arms, subcategory: .biceps),
+        ExerciseOption(name: "哑铃锤式弯举", pattern: .arms, equipment: .dumbbell, category: .arms, subcategory: .brachialis, aliases: ["锤式弯举"]),
+        ExerciseOption(name: "负重引体向上", pattern: .verticalPull, equipment: .bodyweightBand, category: .back, subcategory: .verticalPull),
+        ExerciseOption(name: "窄握高位下拉", pattern: .verticalPull, equipment: .cable, category: .back, subcategory: .verticalPull),
+        ExerciseOption(name: "反手高位下拉", pattern: .verticalPull, equipment: .cable, category: .back, subcategory: .verticalPull),
+        ExerciseOption(name: "泽奇深蹲", pattern: .squat, equipment: .barbell, category: .quadriceps, subcategory: .squat)
     ]
 
     private static let exerciseCatalog: [ExerciseOption] = {

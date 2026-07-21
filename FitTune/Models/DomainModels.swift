@@ -424,23 +424,62 @@ enum MovementPattern: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-struct ExerciseOption: Identifiable, Hashable {
+enum ExerciseSource: String, Codable, Hashable {
+    case builtIn
+    case custom
+}
+
+struct ExerciseOption: Identifiable, Hashable, Codable {
     var name: String
     var pattern: MovementPattern
     var equipment: EquipmentKind
     var category: ExerciseCategory? = nil
+    var subcategory: ExerciseSubcategory? = nil
     var stableID: String? = nil
+    var replacementIDs: [String] = []
+    var source: ExerciseSource = .builtIn
     var aliases: [String] = []
     var secondaryCategories: [ExerciseCategory] = []
     var isCompound: Bool? = nil
 
     var id: String { stableID ?? "\(pattern.rawValue)-\(name)" }
     var resolvedCategory: ExerciseCategory { category ?? ExerciseCategory(pattern: pattern) }
+    var resolvedSubcategory: ExerciseSubcategory { subcategory ?? ExerciseSubcategory(pattern: pattern) }
     var resolvedIsCompound: Bool {
         isCompound ?? [
             .squat, .hinge, .horizontalPush, .horizontalPull,
             .verticalPush, .verticalPull, .singleLeg
         ].contains(pattern)
+    }
+}
+
+enum ExerciseSubcategory: String, CaseIterable, Codable, Identifiable {
+    case horizontalPress, inclinePress, declinePress, chestFly
+    case verticalPull, horizontalRow, straightArmPull
+    case shoulderPress, shoulderFront, shoulderLateral, shoulderRear
+    case squat, singleLeg, hipHinge, kneeFlexion, calves
+    case biceps, brachialis, triceps
+    case core, conditioning
+
+    var id: String { rawValue }
+
+    init(pattern: MovementPattern) {
+        switch pattern {
+        case .horizontalPush: self = .horizontalPress
+        case .chestIsolation: self = .chestFly
+        case .verticalPull: self = .verticalPull
+        case .horizontalPull: self = .horizontalRow
+        case .verticalPush: self = .shoulderPress
+        case .shoulderIsolation: self = .shoulderLateral
+        case .squat: self = .squat
+        case .singleLeg: self = .singleLeg
+        case .hinge: self = .hipHinge
+        case .kneeFlexion: self = .kneeFlexion
+        case .calves: self = .calves
+        case .arms: self = .biceps
+        case .core: self = .core
+        case .conditioning: self = .conditioning
+        }
     }
 }
 
@@ -1006,6 +1045,8 @@ struct AppSnapshot: Codable {
     var activeWorkoutDraft: WorkoutDraft? = nil
     var recoveryCheckIns: [RecoveryCheckIn]? = nil
     var safetySettings: PersonalSafetySettings? = nil
+    var favoriteExerciseIDs: Set<String>? = nil
+    var customExercises: [ExerciseOption]? = nil
     var schemaVersion: Int? = currentSchemaVersion
 
     var resolvedSchemaVersion: Int { schemaVersion ?? 6 }

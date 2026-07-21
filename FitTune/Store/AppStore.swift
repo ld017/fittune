@@ -25,6 +25,8 @@ final class AppStore {
     var activeWorkoutDraft: WorkoutDraft?
     var recoveryCheckIns: [RecoveryCheckIn] = []
     var safetySettings = PersonalSafetySettings()
+    var favoriteExerciseIDs: Set<String> = []
+    var customExercises: [ExerciseOption] = []
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -103,7 +105,7 @@ final class AppStore {
 
     func finishOnboarding(with newProfile: UserProfile) {
         profile = newProfile
-        plan = TrainingEngine.generatePlan(for: newProfile)
+        plan = TrainingEngine.generatePlan(for: newProfile, favoriteExerciseIDs: favoriteExerciseIDs, customExercises: customExercises)
         readiness = ReadinessInput()
         if newProfile.bodyWeightKg > 0 {
             weightHistory = [WeightEntry(date: .now, kilograms: newProfile.bodyWeightKg, source: "手动")]
@@ -159,7 +161,36 @@ final class AppStore {
 
     func updateProfileAndRegenerate(_ updated: UserProfile) {
         profile = updated
-        plan = TrainingEngine.generatePlan(for: updated)
+        plan = TrainingEngine.generatePlan(for: updated, favoriteExerciseIDs: favoriteExerciseIDs, customExercises: customExercises)
+        persist()
+    }
+
+    func toggleFavoriteExercise(_ exerciseID: String) {
+        if favoriteExerciseIDs.contains(exerciseID) {
+            favoriteExerciseIDs.remove(exerciseID)
+        } else {
+            favoriteExerciseIDs.insert(exerciseID)
+        }
+        persist()
+    }
+
+    func saveCustomExercise(_ exercise: ExerciseOption) {
+        var custom = exercise
+        custom.source = .custom
+        if custom.stableID == nil {
+            custom.stableID = "custom.\(UUID().uuidString.lowercased())"
+        }
+        if let index = customExercises.firstIndex(where: { $0.id == custom.id }) {
+            customExercises[index] = custom
+        } else {
+            customExercises.append(custom)
+        }
+        persist()
+    }
+
+    func deleteCustomExercise(id: String) {
+        customExercises.removeAll { $0.id == id }
+        favoriteExerciseIDs.remove(id)
         persist()
     }
 
@@ -346,7 +377,7 @@ final class AppStore {
     func startWorkout(_ session: TrainingSession) {
         guard activeWorkoutDraft == nil, let first = session.exercises.first else { return }
         let starting = loadRecommendation(for: first)
-        activeWorkoutDraft = WorkoutDraft(
+        var draft = WorkoutDraft(
             sourceSessionID: session.id,
             session: session,
             exerciseIndex: 0,
@@ -357,6 +388,19 @@ final class AppStore {
             techniqueQuality: 4,
             hasPain: false
         )
+        if let profile {
+            draft.planSnapshot = PlanSnapshot(
+                sourcePlanRuleVersion: plan?.ruleVersion ?? TrainingEngine.ruleVersion,
+                sourceSessionID: session.id,
+                planTitle: plan?.title ?? "自由训练",
+                sessionName: session.name,
+                goal: profile.goal,
+                split: profile.splitPreference ?? .automatic,
+                equipment: profile.equipment,
+                exercises: session.exercises
+            )
+        }
+        activeWorkoutDraft = draft
         persist()
     }
 
@@ -511,6 +555,13 @@ final class AppStore {
         draft.session.exercises[draft.exerciseIndex].equipmentKind = option.equipment
         draft.session.exercises[draft.exerciseIndex].suggestedLoadKg = nil
         draft.session.exercises[draft.exerciseIndex].suggestedLoadReason = "训练中替换动作，请按当前器械校准重量。"
+        var changes = draft.changeEvents ?? []
+        changes.append(WorkoutChangeEvent(
+            kind: .exerciseReplaced,
+            exerciseName: option.name,
+            detail: "由\(current.name)替换为\(option.name)"
+        ))
+        draft.changeEvents = changes
         let starting = loadRecommendation(for: draft.session.exercises[draft.exerciseIndex])
         draft.loadKg = starting.loadKg ?? 0
         draft.reps = draft.session.exercises[draft.exerciseIndex].repLower
@@ -523,6 +574,9 @@ final class AppStore {
     func addDraftExercise(_ option: ExerciseOption) {
         guard var draft = activeWorkoutDraft, let profile else { return }
         draft.session.exercises.append(TrainingEngine.makePrescription(for: option, profile: profile))
+        var changes = draft.changeEvents ?? []
+        changes.append(WorkoutChangeEvent(kind: .exerciseAdded, exerciseName: option.name, detail: "用户在训练中添加"))
+        draft.changeEvents = changes
         draft.updatedAt = .now
         activeWorkoutDraft = draft
         persist()
@@ -536,6 +590,9 @@ final class AppStore {
         let current = draft.session.exercises[draft.exerciseIndex]
         guard !draft.results.contains(where: { $0.exerciseID == current.id }) else { return }
         draft.session.exercises.remove(at: draft.exerciseIndex)
+        var changes = draft.changeEvents ?? []
+        changes.append(WorkoutChangeEvent(kind: .exerciseRemoved, exerciseName: current.name, detail: "用户在训练中移除"))
+        draft.changeEvents = changes
         draft.exerciseIndex = min(draft.exerciseIndex, draft.session.exercises.count - 1)
         prepareDraftForCurrentExercise(&draft)
         activeWorkoutDraft = draft
@@ -595,6 +652,9 @@ final class AppStore {
         record.energyLowerBoundKcal = energy.lowerBound
         record.energyUpperBoundKcal = energy.upperBound
         record.effect = TrainingEngine.evaluateStrengthWorkout(record)
+        record.planSnapshot = draft.planSnapshot
+        record.changeEvents = draft.changeEvents
+        record.metricSamples = draft.metricSamples
         finishWorkoutDraft(with: record)
         return record
     }
@@ -766,6 +826,10 @@ final class AppStore {
         deletedBodyCompositionHistory = []
         dailyTrainingChoice = nil
         activeWorkoutDraft = nil
+        recoveryCheckIns = []
+        safetySettings = PersonalSafetySettings()
+        favoriteExerciseIDs = []
+        customExercises = []
         defaults.removeObject(forKey: storageKey)
     }
 
@@ -824,7 +888,9 @@ final class AppStore {
             deletedBodyCompositionHistory: deletedBodyCompositionHistory,
             activeWorkoutDraft: activeWorkoutDraft,
             recoveryCheckIns: recoveryCheckIns,
-            safetySettings: safetySettings
+            safetySettings: safetySettings,
+            favoriteExerciseIDs: favoriteExerciseIDs,
+            customExercises: customExercises
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -865,6 +931,9 @@ final class AppStore {
         activeWorkoutDraft = snapshot.activeWorkoutDraft
         recoveryCheckIns = snapshot.recoveryCheckIns ?? []
         safetySettings = snapshot.safetySettings ?? PersonalSafetySettings()
+        customExercises = (snapshot.customExercises ?? []).filter { $0.source == .custom }
+        let validExerciseIDs = Set(TrainingEngine.allExercises.map(\.id) + customExercises.map(\.id))
+        favoriteExerciseIDs = (snapshot.favoriteExerciseIDs ?? []).intersection(validExerciseIDs)
         if needsSchemaMigration {
             persist()
         }

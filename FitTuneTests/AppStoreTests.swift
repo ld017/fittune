@@ -276,4 +276,83 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.activeWorkoutDraft?.changeEvents?.count, 1)
         XCTAssertEqual(restored.activeWorkoutDraft?.metricSamples?.first?.heartRateBPM, 130)
     }
+
+    func testFavoritesAndCustomExercisesPersistAndDeletingCustomKeepsHistory() {
+        let defaults = makeDefaults()
+        let store = AppStore(defaults: defaults)
+        let custom = ExerciseOption(
+            name: "我的绳索弯举",
+            pattern: .arms,
+            equipment: .cable,
+            category: .arms,
+            subcategory: .biceps,
+            stableID: "custom.cable.curl",
+            replacementIDs: ["arms.cable.arms.绳索弯举"],
+            source: .custom
+        )
+        store.saveCustomExercise(custom)
+        store.toggleFavoriteExercise(custom.id)
+        let historicalSet = SetResult(exerciseID: UUID(), exerciseName: custom.name, setNumber: 1, loadKg: 20, reps: 10, rir: 0)
+        store.workoutHistory = [WorkoutRecord(sessionName: "手臂", startedAt: .now, completedAt: .now, readinessScore: 80, sets: [historicalSet])]
+        store.deleteCustomExercise(id: custom.id)
+
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertTrue(restored.customExercises.isEmpty)
+        XCTAssertFalse(restored.favoriteExerciseIDs.contains(custom.id))
+        XCTAssertEqual(restored.workoutHistory.first?.sets.first?.exerciseName, "我的绳索弯举")
+    }
+
+    func testStartedWorkoutKeepsImmutablePlanSnapshotAfterRegeneration() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let originalProfile = testProfile(goal: .hypertrophy, split: .chestBackShouldersLegs)
+        store.finishOnboarding(with: originalProfile)
+        let session = try XCTUnwrap(store.plan?.sessions.first)
+
+        store.startWorkout(session)
+        let snapshot = try XCTUnwrap(store.activeWorkoutDraft?.planSnapshot)
+        var changedProfile = originalProfile
+        changedProfile.goal = .strength
+        changedProfile.splitPreference = .pushPullLegs
+        store.updateProfileAndRegenerate(changedProfile)
+
+        XCTAssertEqual(store.activeWorkoutDraft?.planSnapshot, snapshot)
+        XCTAssertEqual(snapshot.goal, .hypertrophy)
+        XCTAssertEqual(snapshot.split, .chestBackShouldersLegs)
+    }
+
+    func testWorkoutEditsAndMetricsAreCopiedIntoSavedHistory() throws {
+        let store = AppStore(defaults: makeDefaults())
+        store.finishOnboarding(with: testProfile(goal: .hypertrophy, split: .fullBody))
+        let session = try XCTUnwrap(store.plan?.sessions.first)
+        store.startWorkout(session)
+        let added = try XCTUnwrap(TrainingEngine.canonicalExercise(named: "哑铃弯举"))
+        store.addDraftExercise(added)
+        let provenance = MetricProvenance(source: .phoneEstimate, sourceName: "iPhone 估算", confidence: .estimated, coverage: 0.5)
+        store.updateWorkoutDraft {
+            $0.metricSamples = [WorkoutMetricSample(timestamp: .now, heartRateBPM: 135, provenance: provenance)]
+        }
+        store.completeCurrentDraftSet()
+
+        let record = try XCTUnwrap(store.saveActiveWorkout(status: .partial))
+
+        XCTAssertNotNil(record.planSnapshot)
+        XCTAssertEqual(record.changeEvents?.last?.kind, .exerciseAdded)
+        XCTAssertEqual(record.metricSamples?.first?.heartRateBPM, 135)
+    }
+
+    private func testProfile(goal: TrainingGoal, split: TrainingSplit) -> UserProfile {
+        UserProfile(
+            nickname: "测试",
+            goal: goal,
+            secondaryGoal: .none,
+            experience: .intermediate,
+            weeklyDays: split == .chestBackShouldersLegs ? 4 : 3,
+            sessionMinutes: 60,
+            equipment: .fullGym,
+            bodyWeightKg: 70,
+            loadIncrementKg: 2.5,
+            splitPreference: split
+        )
+    }
 }
