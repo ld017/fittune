@@ -96,6 +96,57 @@ struct RecoveryCheckIn: Identifiable, Codable, Equatable {
     }
 }
 
+enum RecoveryDimension: String, Codable, Equatable, CaseIterable {
+    case sleep
+    case soreness
+    case stress
+    case motivation
+}
+
+struct RecoveryContribution: Codable, Equatable {
+    var dimension: RecoveryDimension
+    var resolvedValue: Double
+    var provenance: RecoveryValueProvenance
+    var weightedPoints: Double
+}
+
+struct RecoveryAssessmentResult: Codable, Equatable {
+    var score: Int
+    var level: ReadinessLevel
+    var summary: String
+    var loadMultiplier: Double
+    var setReduction: Int
+    var contributions: [RecoveryContribution]
+    var restingHeartRateBaseline: Double?
+    var currentRestingHeartRate: Double?
+    var restingHeartRateAdjustment: Int
+}
+
+struct RestingHeartRateSample: Identifiable, Codable, Equatable {
+    var id: UUID
+    var date: Date
+    var bpm: Double
+    var source: MetricSource
+    var sourceName: String
+    var externalID: String?
+
+    init(
+        id: UUID = UUID(),
+        date: Date,
+        bpm: Double,
+        source: MetricSource,
+        sourceName: String,
+        externalID: String? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.bpm = bpm
+        self.source = source
+        self.sourceName = sourceName
+        self.externalID = externalID
+    }
+}
+
 struct WorkoutMetricSample: Identifiable, Codable, Equatable {
     var id: UUID
     var timestamp: Date

@@ -60,6 +60,69 @@ final class HealthKitService {
         }
     }
 
+    func fetchRecoveryData(completion: @escaping (SleepImportSummary?, [RestingHeartRateSample]) -> Void) {
+        guard isAvailable,
+              let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis),
+              let restingHeartRate = HKObjectType.quantityType(forIdentifier: .restingHeartRate) else {
+            state = .failed("此设备暂不支持睡眠或静息心率数据")
+            completion(nil, [])
+            return
+        }
+        state = .requesting
+        store.requestAuthorization(toShare: [], read: [sleepType, restingHeartRate]) { [weak self] success, error in
+            guard success else {
+                Task { @MainActor in
+                    self?.state = .failed(error?.localizedDescription ?? "未获得恢复数据读取权限")
+                    completion(nil, [])
+                }
+                return
+            }
+            let now = Date.now
+            let sleepStart = Calendar.current.date(byAdding: .hour, value: -36, to: now) ?? now.addingTimeInterval(-129_600)
+            let heartRateStart = Calendar.current.date(byAdding: .day, value: -22, to: now) ?? now.addingTimeInterval(-1_900_800)
+            let group = DispatchGroup()
+            var sleepSummary: SleepImportSummary?
+            var heartRates: [RestingHeartRateSample] = []
+
+            group.enter()
+            let sleepPredicate = HKQuery.predicateForSamples(withStart: sleepStart, end: now)
+            let sleepQuery = HKSampleQuery(sampleType: sleepType, predicate: sleepPredicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                let imported = (samples as? [HKCategorySample] ?? []).compactMap(Self.sleepImportSample)
+                sleepSummary = imported.isEmpty ? nil : HealthImportMerger.mergeSleep(imported)
+                group.leave()
+            }
+            self?.store.execute(sleepQuery)
+
+            group.enter()
+            let heartRatePredicate = HKQuery.predicateForSamples(withStart: heartRateStart, end: now)
+            let heartRateQuery = HKSampleQuery(sampleType: restingHeartRate, predicate: heartRatePredicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                heartRates = (samples as? [HKQuantitySample] ?? []).map { sample in
+                    let sourceKind = HealthSourceClassifier.classify(
+                        sourceName: sample.sourceRevision.source.name,
+                        bundleIdentifier: sample.sourceRevision.source.bundleIdentifier,
+                        productType: sample.sourceRevision.productType
+                    )
+                    return RestingHeartRateSample(
+                        date: sample.startDate,
+                        bpm: sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
+                        source: Self.metricSource(for: sourceKind),
+                        sourceName: sample.sourceRevision.source.name,
+                        externalID: sample.uuid.uuidString
+                    )
+                }
+                group.leave()
+            }
+            self?.store.execute(heartRateQuery)
+
+            group.notify(queue: .main) {
+                Task { @MainActor in
+                    self?.state = .success("已同步睡眠与静息心率")
+                    completion(sleepSummary, heartRates)
+                }
+            }
+        }
+    }
+
     func fetchTodayWorkoutData(
         weightKg: Double,
         completion: @escaping (Double?, [CardioWorkoutRecord], DailyStepEntry?, [WearableStrengthWorkout]) -> Void
@@ -177,6 +240,40 @@ final class HealthKitService {
         case .elliptical: .elliptical
         case .jumpRope: .jumpRope
         default: nil
+        }
+    }
+
+    nonisolated private static func sleepImportSample(_ sample: HKCategorySample) -> SleepImportSample? {
+        let stage: SleepStage
+        switch sample.value {
+        case HKCategoryValueSleepAnalysis.awake.rawValue: stage = .awake
+        case HKCategoryValueSleepAnalysis.asleepCore.rawValue: stage = .core
+        case HKCategoryValueSleepAnalysis.asleepDeep.rawValue: stage = .deep
+        case HKCategoryValueSleepAnalysis.asleepREM.rawValue: stage = .rem
+        case HKCategoryValueSleepAnalysis.asleep.rawValue,
+             HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue: stage = .asleep
+        default: stage = .unknown
+        }
+        guard stage != .unknown else { return nil }
+        let source = HealthSourceClassifier.classify(
+            sourceName: sample.sourceRevision.source.name,
+            bundleIdentifier: sample.sourceRevision.source.bundleIdentifier,
+            productType: sample.sourceRevision.productType
+        )
+        return SleepImportSample(
+            externalID: sample.uuid.uuidString,
+            start: sample.startDate,
+            end: sample.endDate,
+            stage: stage,
+            source: source
+        )
+    }
+
+    nonisolated private static func metricSource(for source: HealthSourceKind) -> MetricSource {
+        switch source {
+        case .appleWatch: .appleWatch
+        case .huaweiHealth: .huaweiHealth
+        case .other: .appleHealth
         }
     }
 }

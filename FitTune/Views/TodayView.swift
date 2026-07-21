@@ -34,8 +34,20 @@ struct TodayView: View {
         )
     }
 
-    private var assessment: ReadinessAssessment {
-        TrainingEngine.assessReadiness(draftInput)
+    private var draftRecoveryCheckIn: RecoveryCheckIn {
+        let automaticSleep = store.recoveryCheckIns.last?.sleep.automaticValue
+        let automaticSource = store.recoveryCheckIns.last?.sleep.provenance ?? .unavailable
+        return RecoveryCheckIn(
+            date: .now,
+            sleep: .init(automaticValue: automaticSleep, manualValue: Double(sleepQuality), resolvedValue: Double(sleepQuality), provenance: automaticSleep == nil ? .manual : automaticSource),
+            soreness: .init(manualValue: Double(soreness), resolvedValue: Double(soreness), provenance: .manual),
+            stress: .init(manualValue: Double(stress), resolvedValue: Double(stress), provenance: .manual),
+            motivation: .init(manualValue: Double(motivation), resolvedValue: Double(motivation), provenance: .manual)
+        )
+    }
+
+    private var assessment: RecoveryAssessmentResult {
+        RecoveryEngine.assess(checkIn: draftRecoveryCheckIn, restingHeartRates: store.restingHeartRateSamples)
     }
 
     var body: some View {
@@ -75,6 +87,12 @@ struct TodayView: View {
             soreness = store.readiness.soreness
             stress = store.readiness.stress
             motivation = store.readiness.motivation
+            if let latest = store.recoveryCheckIns.last {
+                sleepQuality = Int(latest.sleep.resolvedValue ?? latest.sleep.manualValue ?? latest.sleep.automaticValue ?? Double(sleepQuality))
+                soreness = Int(latest.soreness.resolvedValue ?? latest.soreness.manualValue ?? Double(soreness))
+                stress = Int(latest.stress.resolvedValue ?? latest.stress.manualValue ?? Double(stress))
+                motivation = Int(latest.motivation.resolvedValue ?? latest.motivation.manualValue ?? Double(motivation))
+            }
         }
         .sheet(isPresented: $showCardioEntry) { cardioEntrySheet }
     }
@@ -148,8 +166,26 @@ struct TodayView: View {
                 scoreRow(title: "训练意愿", symbol: "bolt.heart.fill", value: $motivation, highIsGood: true)
             }
 
+            if let baseline = assessment.restingHeartRateBaseline, let current = assessment.currentRestingHeartRate {
+                Label("静息心率 \(Int(current.rounded())) bpm · 21 天基线 \(Int(baseline.rounded())) bpm · 调整 \(assessment.restingHeartRateAdjustment) 分", systemImage: "heart.text.square")
+                    .font(.caption)
+                    .foregroundStyle(assessment.restingHeartRateAdjustment < 0 ? FitTheme.warning : FitTheme.accentBlue)
+            } else {
+                Text("静息心率需至少 7 个有效日建立个人基线；不足时不扣分。")
+                    .font(.caption)
+                    .foregroundStyle(FitTheme.secondaryText)
+            }
+
+            Button { syncRecoveryData() } label: {
+                Label("同步睡眠与静息心率", systemImage: "heart.text.square.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(healthKit.state == .requesting)
+
             Button {
                 store.updateReadiness(draftInput)
+                store.updateRecoveryCheckIn(draftRecoveryCheckIn)
                 withAnimation { savedFeedback = true }
                 Task {
                     try? await Task.sleep(for: .seconds(1.4))
@@ -557,6 +593,33 @@ struct TodayView: View {
             if let stepEntry {
                 store.importDailySteps(steps: stepEntry.steps, distanceKm: stepEntry.distanceKm, weightKg: store.latestWeight ?? 70, source: stepEntry.source)
             }
+        }
+    }
+
+    private func syncRecoveryData() {
+        healthKit.fetchRecoveryData { sleep, heartRates in
+            heartRates.forEach(store.importRestingHeartRate)
+            guard let sleep else { return }
+            sleepHours = min(12, max(0, sleep.totalSleepMinutes / 60))
+            let automaticScore: Double
+            switch sleepHours {
+            case ..<5: automaticScore = 1
+            case ..<6: automaticScore = 2
+            case ..<7: automaticScore = 3
+            case ..<9: automaticScore = 4
+            default: automaticScore = 5
+            }
+            sleepQuality = Int(automaticScore)
+            let source: RecoveryValueProvenance = sleep.sourceKinds.contains(.huaweiHealth) ? .huaweiHealth : .appleHealth
+            let checkIn = RecoveryCheckIn(
+                date: .now,
+                sleep: .init(automaticValue: automaticScore, resolvedValue: automaticScore, provenance: source),
+                soreness: .init(manualValue: Double(soreness), resolvedValue: Double(soreness), provenance: .manual),
+                stress: .init(manualValue: Double(stress), resolvedValue: Double(stress), provenance: .manual),
+                motivation: .init(manualValue: Double(motivation), resolvedValue: Double(motivation), provenance: .manual)
+            )
+            store.updateRecoveryCheckIn(checkIn)
+            store.updateReadiness(draftInput)
         }
     }
 

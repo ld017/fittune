@@ -11,12 +11,14 @@ let package = Package(
         .target(
             name: "FitTune",
             path: "FitTune",
-            exclude: ["App", "Resources", "Services", "Views"],
+            exclude: ["App", "Resources", "Services/HealthKitService.swift", "Views"],
             sources: [
                 "Models/DomainModels.swift",
                 "Models/WorkoutModels.swift",
                 "Models/HealthMetricModels.swift",
                 "Engine/TrainingEngine.swift",
+                "Engine/RecoveryEngine.swift",
+                "Services/HealthImportModels.swift",
                 "Store/AppStore.swift"
             ]
         ),

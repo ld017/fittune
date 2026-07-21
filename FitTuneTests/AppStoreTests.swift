@@ -233,6 +233,36 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.safetySettings, safety)
     }
 
+    func testRestingHeartRateSamplesPersistAndUpdateRecoveryAssessment() {
+        let defaults = makeDefaults()
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let store = AppStore(defaults: defaults)
+        store.updateRecoveryCheckIn(RecoveryCheckIn(
+            date: now,
+            sleep: .init(manualValue: 3, provenance: .manual),
+            soreness: .init(manualValue: 3, provenance: .manual),
+            stress: .init(manualValue: 3, provenance: .manual),
+            motivation: .init(manualValue: 3, provenance: .manual)
+        ))
+        for day in 1...7 {
+            store.importRestingHeartRate(.init(
+                date: now.addingTimeInterval(Double(-day * 86_400)),
+                bpm: 60,
+                source: .appleHealth,
+                sourceName: "健康",
+                externalID: "baseline-\(day)"
+            ))
+        }
+        store.importRestingHeartRate(.init(date: now, bpm: 70, source: .appleHealth, sourceName: "健康", externalID: "today"))
+        store.importRestingHeartRate(.init(date: now, bpm: 70, source: .appleHealth, sourceName: "健康", externalID: "today"))
+
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertEqual(restored.restingHeartRateSamples.count, 8)
+        XCTAssertEqual(restored.currentRecoveryAssessment?.restingHeartRateAdjustment, -10)
+        XCTAssertEqual(restored.readinessAssessment.score, restored.currentRecoveryAssessment?.score)
+    }
+
     func testSummaryRevisionAppendPreservesOriginalSets() {
         let store = AppStore(defaults: makeDefaults())
         let exerciseID = UUID()

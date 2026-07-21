@@ -29,6 +29,10 @@
 		B00000000000000000000014 /* HealthMetricModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* HealthMetricModels.swift */; };
 		B00000000000000000000015 /* ExerciseLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000018 /* ExerciseLibraryView.swift */; };
 		B00000000000000000000016 /* CustomExerciseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000019 /* CustomExerciseEditorView.swift */; };
+		B00000000000000000000017 /* RecoveryEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001A /* RecoveryEngine.swift */; };
+		B00000000000000000000018 /* RecoveryEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* RecoveryEngineTests.swift */; };
+		B00000000000000000000019 /* HealthImportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001C /* HealthImportModels.swift */; };
+		B0000000000000000000001A /* HealthImportMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001D /* HealthImportMergeTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +71,10 @@
 		C00000000000000000000017 /* HealthMetricModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricModels.swift; sourceTree = "<group>"; };
 		C00000000000000000000018 /* ExerciseLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseLibraryView.swift; sourceTree = "<group>"; };
 		C00000000000000000000019 /* CustomExerciseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExerciseEditorView.swift; sourceTree = "<group>"; };
+		C0000000000000000000001A /* RecoveryEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryEngine.swift; sourceTree = "<group>"; };
+		C0000000000000000000001B /* RecoveryEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryEngineTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000001C /* HealthImportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthImportModels.swift; sourceTree = "<group>"; };
+		C0000000000000000000001D /* HealthImportMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthImportMergeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000003 /* TrainingEngine.swift */,
+				C0000000000000000000001A /* RecoveryEngine.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -137,6 +146,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000005 /* HealthKitService.swift */,
+				C0000000000000000000001C /* HealthImportModels.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -172,6 +182,8 @@
 			children = (
 				C0000000000000000000000E /* TrainingEngineTests.swift */,
 				C00000000000000000000015 /* AppStoreTests.swift */,
+				C0000000000000000000001B /* RecoveryEngineTests.swift */,
+				C0000000000000000000001D /* HealthImportMergeTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -313,8 +325,10 @@
 				B00000000000000000000013 /* WorkoutModels.swift in Sources */,
 				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
+				B00000000000000000000017 /* RecoveryEngine.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,
+				B00000000000000000000019 /* HealthImportModels.swift in Sources */,
 				B00000000000000000000006 /* DesignSystem.swift in Sources */,
 				B00000000000000000000007 /* RootView.swift in Sources */,
 				B00000000000000000000008 /* OnboardingView.swift in Sources */,
@@ -334,6 +348,8 @@
 			files = (
 				B0000000000000000000000E /* TrainingEngineTests.swift in Sources */,
 				B00000000000000000000012 /* AppStoreTests.swift in Sources */,
+				B00000000000000000000018 /* RecoveryEngineTests.swift in Sources */,
+				B0000000000000000000001A /* HealthImportMergeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -403,7 +419,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重趋势，帮助你理解训练进展。";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重、睡眠、静息心率、步数、能量和训练数据，以生成恢复与训练建议。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -432,7 +448,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重趋势，帮助你理解训练进展。";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重、睡眠、静息心率、步数、能量和训练数据，以生成恢复与训练建议。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -27,6 +27,7 @@ final class AppStore {
     var safetySettings = PersonalSafetySettings()
     var favoriteExerciseIDs: Set<String> = []
     var customExercises: [ExerciseOption] = []
+    var restingHeartRateSamples: [RestingHeartRateSample] = []
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -37,7 +38,21 @@ final class AppStore {
     }
 
     var readinessAssessment: ReadinessAssessment {
-        TrainingEngine.assessReadiness(readiness)
+        if let currentRecoveryAssessment {
+            return ReadinessAssessment(
+                score: currentRecoveryAssessment.score,
+                level: currentRecoveryAssessment.level,
+                summary: currentRecoveryAssessment.summary,
+                loadMultiplier: currentRecoveryAssessment.loadMultiplier,
+                setReduction: currentRecoveryAssessment.setReduction
+            )
+        }
+        return TrainingEngine.assessReadiness(readiness)
+    }
+
+    var currentRecoveryAssessment: RecoveryAssessmentResult? {
+        guard let checkIn = recoveryCheckIns.max(by: { $0.date < $1.date }) else { return nil }
+        return RecoveryEngine.assess(checkIn: checkIn, restingHeartRates: restingHeartRateSamples)
     }
 
     var latestWeight: Double? {
@@ -141,6 +156,21 @@ final class AppStore {
             recoveryCheckIns.append(checkIn)
         }
         recoveryCheckIns.sort { $0.date < $1.date }
+        persist()
+    }
+
+    func importRestingHeartRate(_ sample: RestingHeartRateSample) {
+        let duplicate = restingHeartRateSamples.contains { existing in
+            if let externalID = sample.externalID, !externalID.isEmpty {
+                return existing.externalID == externalID && existing.source == sample.source
+            }
+            return existing.source == sample.source
+                && abs(existing.date.timeIntervalSince(sample.date)) < 1
+                && abs(existing.bpm - sample.bpm) < 0.01
+        }
+        guard !duplicate, sample.bpm > 0 else { return }
+        restingHeartRateSamples.append(sample)
+        restingHeartRateSamples.sort { $0.date < $1.date }
         persist()
     }
 
@@ -868,6 +898,7 @@ final class AppStore {
         dailyTrainingChoice = nil
         activeWorkoutDraft = nil
         recoveryCheckIns = []
+        restingHeartRateSamples = []
         safetySettings = PersonalSafetySettings()
         favoriteExerciseIDs = []
         customExercises = []
@@ -931,7 +962,8 @@ final class AppStore {
             recoveryCheckIns: recoveryCheckIns,
             safetySettings: safetySettings,
             favoriteExerciseIDs: favoriteExerciseIDs,
-            customExercises: customExercises
+            customExercises: customExercises,
+            restingHeartRateSamples: restingHeartRateSamples
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -975,6 +1007,7 @@ final class AppStore {
         customExercises = (snapshot.customExercises ?? []).filter { $0.source == .custom }
         let validExerciseIDs = Set(TrainingEngine.allExercises.map(\.id) + customExercises.map(\.id))
         favoriteExerciseIDs = (snapshot.favoriteExerciseIDs ?? []).intersection(validExerciseIDs)
+        restingHeartRateSamples = snapshot.restingHeartRateSamples ?? []
         if needsSchemaMigration {
             persist()
         }
