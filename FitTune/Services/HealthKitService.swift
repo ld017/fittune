@@ -250,7 +250,7 @@ final class HealthKitService {
         case HKCategoryValueSleepAnalysis.asleepCore.rawValue: stage = .core
         case HKCategoryValueSleepAnalysis.asleepDeep.rawValue: stage = .deep
         case HKCategoryValueSleepAnalysis.asleepREM.rawValue: stage = .rem
-        case HKCategoryValueSleepAnalysis.asleep.rawValue,
+        case HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
              HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue: stage = .asleep
         default: stage = .unknown
         }

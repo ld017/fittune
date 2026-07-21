@@ -5,7 +5,7 @@ import WatchConnectivity
 
 @MainActor
 @Observable
-final class WatchWorkoutSessionManager: NSObject, @preconcurrency WCSessionDelegate, @preconcurrency HKWorkoutSessionDelegate, @preconcurrency HKLiveWorkoutBuilderDelegate {
+final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     private let healthStore = HKHealthStore()
     private var workoutSession: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
@@ -56,7 +56,9 @@ final class WatchWorkoutSessionManager: NSObject, @preconcurrency WCSessionDeleg
     func resume() { workoutSession?.resume(); isPaused = false; sendEvent("resumed") }
     func end() {
         workoutSession?.end()
-        builder?.endCollection(withEnd: .now) { [weak self] _, _ in self?.builder?.finishWorkout { _, _ in } }
+        builder?.endCollection(withEnd: .now) { [weak self] _, _ in
+            Task { @MainActor in self?.builder?.finishWorkout { _, _ in } }
+        }
         isRunning = false; isPaused = false; status = "训练已结束"; sendEvent("ended")
     }
 
