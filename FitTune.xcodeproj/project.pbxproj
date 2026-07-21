@@ -1,0 +1,505 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000001 /* FitTuneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000001 /* FitTuneApp.swift */; };
+		B00000000000000000000002 /* DomainModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000002 /* DomainModels.swift */; };
+		B00000000000000000000003 /* TrainingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000003 /* TrainingEngine.swift */; };
+		B00000000000000000000004 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000004 /* AppStore.swift */; };
+		B00000000000000000000005 /* HealthKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000005 /* HealthKitService.swift */; };
+		B00000000000000000000006 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000006 /* DesignSystem.swift */; };
+		B00000000000000000000007 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000007 /* RootView.swift */; };
+		B00000000000000000000008 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000008 /* OnboardingView.swift */; };
+		B00000000000000000000009 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000009 /* TodayView.swift */; };
+		B0000000000000000000000A /* WorkoutSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000A /* WorkoutSessionView.swift */; };
+		B0000000000000000000000B /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000B /* PlanView.swift */; };
+		B0000000000000000000000C /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000C /* InsightsView.swift */; };
+		B0000000000000000000000D /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000D /* ProfileView.swift */; };
+		B0000000000000000000000E /* TrainingEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000E /* TrainingEngineTests.swift */; };
+		B0000000000000000000000F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000F /* PrivacyInfo.xcprivacy */; };
+		B00000000000000000000010 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C00000000000000000000010 /* HealthKit.framework */; };
+		B00000000000000000000011 /* Charts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C00000000000000000000011 /* Charts.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		H00000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = G00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F00000000000000000000001;
+			remoteInfo = FitTune;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		C00000000000000000000001 /* FitTuneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitTuneApp.swift; sourceTree = "<group>"; };
+		C00000000000000000000002 /* DomainModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainModels.swift; sourceTree = "<group>"; };
+		C00000000000000000000003 /* TrainingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingEngine.swift; sourceTree = "<group>"; };
+		C00000000000000000000004 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		C00000000000000000000005 /* HealthKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitService.swift; sourceTree = "<group>"; };
+		C00000000000000000000006 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		C00000000000000000000007 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C00000000000000000000008 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		C00000000000000000000009 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000A /* WorkoutSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSessionView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000B /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000C /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000D /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000E /* TrainingEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainingEngineTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000000F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C00000000000000000000010 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
+		C00000000000000000000011 /* Charts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Charts.framework; path = System/Library/Frameworks/Charts.framework; sourceTree = SDKROOT; };
+		C00000000000000000000012 /* FitTune.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FitTune.entitlements; sourceTree = "<group>"; };
+		C00000000000000000000013 /* FitTune.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitTune.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C00000000000000000000014 /* FitTuneTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FitTuneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E00000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000010 /* HealthKit.framework in Frameworks */,
+				B00000000000000000000011 /* Charts.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E00000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D00000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				D00000000000000000000100 /* FitTune */,
+				D00000000000000000000009 /* FitTuneTests */,
+				D0000000000000000000000B /* Frameworks */,
+				D0000000000000000000000A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D00000000000000000000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000001 /* FitTuneApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000002 /* DomainModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000004 /* Engine */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000003 /* TrainingEngine.swift */,
+			);
+			path = Engine;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000005 /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000004 /* AppStore.swift */,
+			);
+			path = Store;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000006 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000005 /* HealthKitService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000006 /* DesignSystem.swift */,
+				C00000000000000000000007 /* RootView.swift */,
+				C00000000000000000000008 /* OnboardingView.swift */,
+				C00000000000000000000009 /* TodayView.swift */,
+				C0000000000000000000000A /* WorkoutSessionView.swift */,
+				C0000000000000000000000B /* PlanView.swift */,
+				C0000000000000000000000C /* InsightsView.swift */,
+				C0000000000000000000000D /* ProfileView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000012 /* FitTune.entitlements */,
+				C0000000000000000000000F /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000009 /* FitTuneTests */ = {
+			isa = PBXGroup;
+			children = (
+				C0000000000000000000000E /* TrainingEngineTests.swift */,
+			);
+			path = FitTuneTests;
+			sourceTree = "<group>";
+		};
+		D0000000000000000000000A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000013 /* FitTune.app */,
+				C00000000000000000000014 /* FitTuneTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D0000000000000000000000B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000010 /* HealthKit.framework */,
+				C00000000000000000000011 /* Charts.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000100 /* FitTune */ = {
+			isa = PBXGroup;
+			children = (
+				D00000000000000000000002 /* App */,
+				D00000000000000000000003 /* Models */,
+				D00000000000000000000004 /* Engine */,
+				D00000000000000000000005 /* Store */,
+				D00000000000000000000006 /* Services */,
+				D00000000000000000000007 /* Views */,
+				D00000000000000000000008 /* Resources */,
+			);
+			path = FitTune;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F00000000000000000000001 /* FitTune */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = J00000000000000000000002 /* Build configuration list for PBXNativeTarget "FitTune" */;
+			buildPhases = (
+				E00000000000000000000001 /* Sources */,
+				E00000000000000000000002 /* Frameworks */,
+				E00000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FitTune;
+			productName = FitTune;
+			productReference = C00000000000000000000013 /* FitTune.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F00000000000000000000002 /* FitTuneTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = J00000000000000000000003 /* Build configuration list for PBXNativeTarget "FitTuneTests" */;
+			buildPhases = (
+				E00000000000000000000004 /* Sources */,
+				E00000000000000000000005 /* Frameworks */,
+				E00000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				H00000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = FitTuneTests;
+			productName = FitTuneTests;
+			productReference = C00000000000000000000014 /* FitTuneTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		G00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					F00000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					F00000000000000000000002 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = F00000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = J00000000000000000000001 /* Build configuration list for PBXProject "FitTune" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				"zh-Hans",
+				en,
+			);
+			mainGroup = D00000000000000000000001;
+			productRefGroup = D0000000000000000000000A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F00000000000000000000001 /* FitTune */,
+				F00000000000000000000002 /* FitTuneTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E00000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0000000000000000000000F /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E00000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E00000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000001 /* FitTuneApp.swift in Sources */,
+				B00000000000000000000002 /* DomainModels.swift in Sources */,
+				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
+				B00000000000000000000004 /* AppStore.swift in Sources */,
+				B00000000000000000000005 /* HealthKitService.swift in Sources */,
+				B00000000000000000000006 /* DesignSystem.swift in Sources */,
+				B00000000000000000000007 /* RootView.swift in Sources */,
+				B00000000000000000000008 /* OnboardingView.swift in Sources */,
+				B00000000000000000000009 /* TodayView.swift in Sources */,
+				B0000000000000000000000A /* WorkoutSessionView.swift in Sources */,
+				B0000000000000000000000B /* PlanView.swift in Sources */,
+				B0000000000000000000000C /* InsightsView.swift in Sources */,
+				B0000000000000000000000D /* ProfileView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E00000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0000000000000000000000E /* TrainingEngineTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		H00000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F00000000000000000000001 /* FitTune */;
+			targetProxy = H00000000000000000000002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		I00000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		I00000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		I00000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FitTune/Resources/FitTune.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = PWP85U27MD;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重趋势，帮助你理解训练进展。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		I00000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FitTune/Resources/FitTune.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = PWP85U27MD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重趋势，帮助你理解训练进展。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		I00000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.codex.FitTuneTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FitTune.app/FitTune";
+			};
+			name = Debug;
+		};
+		I00000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.codex.FitTuneTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FitTune.app/FitTune";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		J00000000000000000000001 /* Build configuration list for PBXProject "FitTune" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				I00000000000000000000001 /* Debug */,
+				I00000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		J00000000000000000000002 /* Build configuration list for PBXNativeTarget "FitTune" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				I00000000000000000000003 /* Debug */,
+				I00000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		J00000000000000000000003 /* Build configuration list for PBXNativeTarget "FitTuneTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				I00000000000000000000005 /* Debug */,
+				I00000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = G00000000000000000000001 /* Project object */;
+}
