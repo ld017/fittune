@@ -68,4 +68,81 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertEqual(store.deletedRecordCount, 0)
     }
+
+    func testFourthOfFiveAtRIRZeroKeepsFifthAvailable() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 5,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 2,
+            isPriority: true
+        )
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        store.updateWorkoutDraft {
+            $0.setNumber = 4
+            $0.warmupSetsByExercise[exercise.id] = 2
+            $0.loadKg = 80
+            $0.reps = 8
+            $0.rir = 0
+        }
+
+        store.completeCurrentDraftSet()
+
+        XCTAssertEqual(store.activeWorkoutDraft?.setNumber, 4)
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .resting)
+        XCTAssertEqual(store.activeWorkoutDraft?.session.exercises[0].sets, 5)
+        XCTAssertEqual(store.activeWorkoutDraft?.results.last?.resolvedSetKind, .working)
+
+        store.advanceDraftToNextSet()
+
+        XCTAssertEqual(store.activeWorkoutDraft?.setNumber, 5)
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .training)
+    }
+
+    func testSuggestedNextLoadCanBeOverriddenAndPersists() {
+        let defaults = makeDefaults()
+        let store = AppStore(defaults: defaults)
+        let exercise = ExercisePrescription(name: "深蹲", pattern: .squat, sets: 3, repLower: 5, repUpper: 8, targetRIR: 2, isPriority: true)
+        store.startWorkout(TrainingSession(name: "腿", focus: "腿", exercises: [exercise]))
+        store.updateWorkoutDraft { $0.loadKg = 100; $0.reps = 8; $0.rir = 4 }
+        store.completeCurrentDraftSet()
+        store.advanceDraftToNextSet()
+        store.updateWorkoutDraft { $0.loadKg = 107.5; $0.userOverrodeSuggestedLoad = true }
+
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertEqual(restored.activeWorkoutDraft?.loadKg, 107.5)
+        XCTAssertEqual(restored.activeWorkoutDraft?.userOverrodeSuggestedLoad, true)
+    }
+
+    func testIncreasingPlannedSetsAfterCompletionReopensUserSet() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(name: "弯举", pattern: .arms, sets: 1, repLower: 8, repUpper: 12, targetRIR: 2, isPriority: false)
+        store.startWorkout(TrainingSession(name: "手臂", focus: "手臂", exercises: [exercise]))
+        store.completeCurrentDraftSet()
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .exerciseComplete)
+
+        store.setDraftPlannedSets(2)
+
+        XCTAssertEqual(store.activeWorkoutDraft?.session.exercises[0].sets, 2)
+        XCTAssertEqual(store.activeWorkoutDraft?.setNumber, 2)
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .training)
+    }
+
+    func testSavingPartialDraftCreatesHistoryAndClearsDraft() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(name: "划船", pattern: .horizontalPull, sets: 3, repLower: 8, repUpper: 12, targetRIR: 2, isPriority: true)
+        store.startWorkout(TrainingSession(name: "背", focus: "背", exercises: [exercise]))
+        store.completeCurrentDraftSet()
+
+        let record = store.saveActiveWorkout(status: .partial)
+
+        XCTAssertEqual(record?.resolvedCompletionStatus, .partial)
+        XCTAssertEqual(record?.sets.count, 1)
+        XCTAssertNil(store.activeWorkoutDraft)
+        XCTAssertEqual(store.workoutHistory.first?.id, record?.id)
+    }
 }

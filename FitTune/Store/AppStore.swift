@@ -341,6 +341,242 @@ final class AppStore {
         persist()
     }
 
+    func completeCurrentDraftSet() {
+        guard var draft = activeWorkoutDraft,
+              draft.phase == .training,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let exercise = draft.session.exercises[draft.exerciseIndex]
+        guard draft.setNumber >= 1,
+              draft.setNumber <= exercise.sets,
+              !draft.results.contains(where: { $0.exerciseID == exercise.id && $0.setNumber == draft.setNumber }) else { return }
+
+        let previous = draft.results.last { $0.exerciseID == exercise.id }
+        let result = SetResult(
+            exerciseID: exercise.id,
+            exerciseName: exercise.name,
+            setNumber: draft.setNumber,
+            loadKg: draft.loadKg,
+            reps: draft.reps,
+            rir: draft.rir,
+            movementPattern: exercise.pattern,
+            techniqueQuality: draft.techniqueQuality,
+            feeling: nil,
+            setKind: draft.currentSetKind
+        )
+        draft.results.append(result)
+        let exerciseHistory = draft.results.filter { $0.exerciseID == exercise.id }
+        draft.recommendation = TrainingEngine.recommendNextSet(
+            prescription: exercise,
+            result: result,
+            readiness: readinessAssessment,
+            increment: profile?.loadIncrementKg ?? 2.5,
+            exerciseHistory: exerciseHistory,
+            priorRecord: lastWorkoutRecord(for: exercise)
+        )
+        let historicalE1RM = workoutHistory
+            .flatMap(\.sets)
+            .filter { set in
+                if let canonical = TrainingEngine.canonicalExercise(named: set.exerciseName),
+                   let current = TrainingEngine.canonicalExercise(named: exercise.name) {
+                    return canonical.id == current.id
+                }
+                return set.exerciseName == exercise.name || set.movementPattern == exercise.pattern
+            }
+            .compactMap { TrainingEngine.estimatedOneRepMax(loadKg: $0.loadKg, reps: $0.reps, rir: $0.rir) }
+            .max()
+        draft.restRecommendation = TrainingEngine.recommendRest(
+            current: result,
+            previous: previous,
+            setKind: result.resolvedSetKind,
+            pattern: exercise.pattern,
+            historicalE1RM: historicalE1RM,
+            readiness: readinessAssessment
+        )
+        draft.restStartedAt = .now
+        draft.phase = draft.setNumber >= exercise.sets ? .exerciseComplete : .resting
+        draft.userOverrodeSuggestedLoad = false
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func advanceDraftToNextSet() {
+        guard var draft = activeWorkoutDraft,
+              draft.phase == .resting,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let exercise = draft.session.exercises[draft.exerciseIndex]
+        guard draft.setNumber < exercise.sets else { return }
+
+        draft.setNumber += 1
+        if let suggested = draft.recommendation?.nextLoadKg {
+            draft.loadKg = suggested
+        }
+        draft.reps = exercise.repLower
+        draft.rir = exercise.targetRIR
+        draft.techniqueQuality = 4
+        draft.hasPain = false
+        draft.phase = .training
+        draft.restRecommendation = nil
+        draft.restStartedAt = nil
+        draft.userOverrodeSuggestedLoad = false
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func setDraftPlannedSets(_ requestedSets: Int) {
+        guard var draft = activeWorkoutDraft,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let exerciseID = draft.session.exercises[draft.exerciseIndex].id
+        let completed = draft.results.filter { $0.exerciseID == exerciseID }.count
+        let minimum = max(1, completed + (draft.phase == .training ? 1 : 0))
+        let sets = min(12, max(minimum, requestedSets))
+        draft.session.exercises[draft.exerciseIndex].sets = sets
+        draft.warmupSetsByExercise[exerciseID] = min(sets, draft.warmupSetsByExercise[exerciseID] ?? 0)
+        if draft.phase == .exerciseComplete, sets > completed {
+            draft.setNumber = completed + 1
+            draft.phase = .training
+            draft.restRecommendation = nil
+            draft.restStartedAt = nil
+        }
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func setDraftWarmupSets(_ requestedSets: Int) {
+        guard var draft = activeWorkoutDraft,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let exercise = draft.session.exercises[draft.exerciseIndex]
+        draft.warmupSetsByExercise[exercise.id] = min(exercise.sets, max(0, requestedSets))
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func replaceDraftCurrentExercise(with option: ExerciseOption) {
+        guard var draft = activeWorkoutDraft,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let current = draft.session.exercises[draft.exerciseIndex]
+        guard option.pattern == current.pattern,
+              !draft.results.contains(where: { $0.exerciseID == current.id }) else { return }
+        draft.session.exercises[draft.exerciseIndex].name = option.name
+        draft.session.exercises[draft.exerciseIndex].equipmentKind = option.equipment
+        draft.session.exercises[draft.exerciseIndex].suggestedLoadKg = nil
+        draft.session.exercises[draft.exerciseIndex].suggestedLoadReason = "训练中替换动作，请按当前器械校准重量。"
+        let starting = loadRecommendation(for: draft.session.exercises[draft.exerciseIndex])
+        draft.loadKg = starting.loadKg ?? 0
+        draft.reps = draft.session.exercises[draft.exerciseIndex].repLower
+        draft.rir = draft.session.exercises[draft.exerciseIndex].targetRIR
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func addDraftExercise(_ option: ExerciseOption) {
+        guard var draft = activeWorkoutDraft, let profile else { return }
+        draft.session.exercises.append(TrainingEngine.makePrescription(for: option, profile: profile))
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func removeDraftCurrentExercise() {
+        guard var draft = activeWorkoutDraft,
+              draft.session.exercises.count > 1,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let current = draft.session.exercises[draft.exerciseIndex]
+        guard !draft.results.contains(where: { $0.exerciseID == current.id }) else { return }
+        draft.session.exercises.remove(at: draft.exerciseIndex)
+        draft.exerciseIndex = min(draft.exerciseIndex, draft.session.exercises.count - 1)
+        prepareDraftForCurrentExercise(&draft)
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    @discardableResult
+    func advanceDraftToNextExercise() -> Bool {
+        guard var draft = activeWorkoutDraft,
+              draft.exerciseIndex + 1 < draft.session.exercises.count else { return false }
+        draft.exerciseIndex += 1
+        prepareDraftForCurrentExercise(&draft)
+        activeWorkoutDraft = draft
+        persist()
+        return true
+    }
+
+    @discardableResult
+    func returnDraftToPreviousExercise() -> Bool {
+        guard var draft = activeWorkoutDraft, draft.exerciseIndex > 0 else { return false }
+        draft.exerciseIndex -= 1
+        prepareDraftForCurrentExercise(&draft)
+        activeWorkoutDraft = draft
+        persist()
+        return true
+    }
+
+    @discardableResult
+    func saveActiveWorkout(status: WorkoutCompletionStatus) -> WorkoutRecord? {
+        guard let draft = activeWorkoutDraft else { return nil }
+        guard !draft.results.isEmpty else {
+            discardWorkoutDraft()
+            return nil
+        }
+        let qualities = draft.results.compactMap(\.techniqueQuality)
+        let quality = qualities.isEmpty
+            ? nil
+            : Int((Double(qualities.reduce(0, +)) / Double(qualities.count)).rounded())
+        let setRPE = draft.results.map { min(10.0, max(5.0, 10.0 - Double($0.rir))) }
+        let sessionRPE = setRPE.reduce(0, +) / Double(setRPE.count)
+        var record = WorkoutRecord(
+            sessionName: draft.session.name,
+            startedAt: draft.startedAt,
+            completedAt: .now,
+            readinessScore: readinessAssessment.score,
+            sets: draft.results,
+            sessionQuality: quality,
+            completionStatus: status,
+            sessionRPE: sessionRPE,
+            averageHeartRate: draft.averageHeartRate > 0 ? draft.averageHeartRate : nil,
+            measuredActiveEnergyKcal: draft.measuredActiveEnergyKcal > 0 ? draft.measuredActiveEnergyKcal : nil
+        )
+        let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
+        let energy = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: weight, profile: profile)
+        record.activeEnergyKcal = energy.kilocalories
+        record.energyMethod = energy.method
+        record.energyLowerBoundKcal = energy.lowerBound
+        record.energyUpperBoundKcal = energy.upperBound
+        record.effect = TrainingEngine.evaluateStrengthWorkout(record)
+        finishWorkoutDraft(with: record)
+        return record
+    }
+
+    private func prepareDraftForCurrentExercise(_ draft: inout WorkoutDraft) {
+        let exercise = draft.session.exercises[draft.exerciseIndex]
+        let completed = draft.results.filter { $0.exerciseID == exercise.id }.count
+        draft.setNumber = min(exercise.sets, completed + 1)
+        draft.phase = completed >= exercise.sets ? .exerciseComplete : .training
+        let starting = loadRecommendation(for: exercise)
+        draft.loadKg = draft.results.last(where: { $0.exerciseID == exercise.id })?.loadKg
+            ?? starting.loadKg
+            ?? 0
+        draft.reps = exercise.repLower
+        draft.rir = exercise.targetRIR
+        draft.techniqueQuality = 4
+        draft.hasPain = false
+        draft.recommendation = nil
+        draft.restRecommendation = nil
+        draft.restStartedAt = nil
+        draft.userOverrodeSuggestedLoad = false
+        draft.updatedAt = .now
+    }
+
     func checkpointActiveWorkout() {
         guard activeWorkoutDraft != nil else { return }
         persist()

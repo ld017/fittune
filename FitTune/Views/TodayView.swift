@@ -9,7 +9,6 @@ struct TodayView: View {
     @State private var soreness = 2
     @State private var stress = 2
     @State private var motivation = 4
-    @State private var activeSession: TrainingSession?
     @State private var savedFeedback = false
     @State private var showCardioEntry = false
     @State private var cardioModality: CardioModality = .inclineWalking
@@ -76,9 +75,6 @@ struct TodayView: View {
             soreness = store.readiness.soreness
             stress = store.readiness.stress
             motivation = store.readiness.motivation
-        }
-        .fullScreenCover(item: $activeSession) { session in
-            WorkoutSessionView(session: session)
         }
         .sheet(isPresented: $showCardioEntry) { cardioEntrySheet }
     }
@@ -399,7 +395,7 @@ struct TodayView: View {
 
             Button {
                 store.updateReadiness(draftInput)
-                activeSession = session
+                store.startWorkout(session)
             } label: {
                 Label("开始训练", systemImage: "play.fill")
             }

@@ -14,6 +14,14 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: store.profile == nil)
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { store.activeWorkoutDraft != nil },
+                set: { _ in }
+            )
+        ) {
+            WorkoutSessionView()
+        }
     }
 }
 

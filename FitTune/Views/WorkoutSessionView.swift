@@ -4,285 +4,378 @@ struct WorkoutSessionView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
-    let session: TrainingSession
-    @State private var workingSession: TrainingSession
-
-    @State private var exerciseIndex = 0
-    @State private var setNumber = 1
-    @State private var loadKg = 20.0
-    @State private var reps = 8
-    @State private var rir = 3
-    @State private var techniqueQuality = 4
-    @State private var results: [SetResult] = []
-    @State private var recommendation: SetRecommendation?
-    @State private var exerciseFinished = false
-    @State private var hasPain = false
-    @State private var showExitAlert = false
-    @State private var startedAt = Date.now
-    @State private var pendingResult: SetResult?
-    @State private var showFeelingPrompt = false
+    private let initialSession: TrainingSession?
+    @State private var showExitDialog = false
+    @State private var showDiscardConfirmation = false
     @State private var showExerciseLibrary = false
-    @State private var completedEffect: TrainingEffect?
-    @State private var completedEnergyKcal = 0.0
-    @State private var completedEnergyLowerKcal = 0.0
-    @State private var completedEnergyUpperKcal = 0.0
-    @State private var completedEnergyMethod = ""
-    @State private var completedEnergyConfidence = ""
-    @State private var sessionAverageHR = 0.0
-    @State private var sessionMeasuredKcal = 0.0
-    @State private var showExerciseCompletion = false
 
-    init(session: TrainingSession) {
-        self.session = session
-        _workingSession = State(initialValue: session)
-    }
-
-    private var exercise: ExercisePrescription {
-        workingSession.exercises[exerciseIndex]
-    }
-
-    private var increment: Double {
-        store.profile?.loadIncrementKg ?? 2.5
+    init(session: TrainingSession? = nil) {
+        initialSession = session
     }
 
     var body: some View {
         ZStack {
             FitBackground()
-            VStack(spacing: 0) {
-                topBar
-                ScrollView {
-                    VStack(spacing: 18) {
-                        progressHeader
-                        sessionEditingCard
-                        prescriptionCard
-                        inputCard
-                        if hasPain { painCard }
-                        if let recommendation { recommendationCard(recommendation) }
-                        actionButton
-                    }
-                    .padding(18)
-                    .padding(.bottom, 28)
-                }
-            }
-        }
-        .onAppear { resetInputsForCurrentExercise() }
-        .alert("结束本次训练？", isPresented: $showExitAlert) {
-            Button("继续训练", role: .cancel) {}
-            if results.isEmpty {
-                Button("直接结束", role: .destructive) { dismiss() }
+            if let draft = store.activeWorkoutDraft,
+               draft.exerciseIndex >= 0,
+               draft.exerciseIndex < draft.session.exercises.count {
+                workoutContent(draft)
             } else {
-                Button("保存 \(results.count) 组并结束") {
-                    saveWorkout(status: .partial)
-                }
-                Button("放弃且不保存", role: .destructive) { dismiss() }
+                ProgressView("恢复训练中…")
+                    .tint(FitTheme.accent)
             }
-        } message: {
-            Text(results.isEmpty ? "目前还没有完成组，本次不会生成训练记录。" : "保存后会计入训练历史和重量建议，并标记为“部分完成”。")
         }
-        .confirmationDialog("这组完成后的感觉？", isPresented: $showFeelingPrompt, titleVisibility: .visible) {
-            ForEach(SetFeeling.currentCases) { feeling in
-                Button(feeling.title, role: (feeling.rpe >= 9.5 || feeling.requiresStop) ? .destructive : nil) {
-                    finalizeSet(feeling: feeling)
-                }
+        .onAppear {
+            if store.activeWorkoutDraft == nil, let initialSession {
+                store.startWorkout(initialSession)
+            }
+        }
+        .confirmationDialog("离开当前训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
+            Button("继续未完成训练", role: .cancel) {}
+            Button("保存并结束") { saveAndExit(status: .partial) }
+            Button("放弃训练", role: .destructive) { showDiscardConfirmation = true }
+        } message: {
+            Text("训练已自动缓存。只有保存或确认放弃后，未完成训练才会清除。")
+        }
+        .alert("确认放弃本次训练？", isPresented: $showDiscardConfirmation) {
+            Button("返回训练", role: .cancel) {}
+            Button("放弃且不保存", role: .destructive) {
+                store.discardWorkoutDraft()
+                dismiss()
             }
         } message: {
-            Text("感受会与 RIR、动作质量和上次记录一起决定休息时间、下组重量与剩余组数。")
+            Text("已完成和未完成的组都不会生成训练记录，此操作无法恢复。")
         }
         .sheet(isPresented: $showExerciseLibrary) { exerciseLibrarySheet }
-        .sheet(item: $completedEffect) { effect in
-            workoutSummarySheet(effect)
-        }
-        .overlay { if showExerciseCompletion { exerciseCompletionOverlay } }
+        .interactiveDismissDisabled()
     }
 
-    private var topBar: some View {
+    @ViewBuilder
+    private func workoutContent(_ draft: WorkoutDraft) -> some View {
+        let exercise = draft.session.exercises[draft.exerciseIndex]
+        VStack(spacing: 0) {
+            topBar(draft)
+            ScrollView {
+                VStack(spacing: 16) {
+                    prominentProgress(draft, exercise: exercise)
+                    exerciseCard(draft, exercise: exercise)
+                    completedSetsCard(draft, exercise: exercise)
+                    if draft.phase == .training {
+                        inputCard(draft)
+                        safetyCard(draft)
+                        completeSetButton
+                    } else if draft.phase == .resting {
+                        restCard(draft)
+                    } else {
+                        exerciseCompleteCard(draft, exercise: exercise)
+                    }
+                }
+                .padding(18)
+                .padding(.bottom, 28)
+            }
+        }
+    }
+
+    private func topBar(_ draft: WorkoutDraft) -> some View {
         HStack {
-            Button { showExitAlert = true } label: {
+            Button { showExitDialog = true } label: {
                 Image(systemName: "xmark")
                     .font(.headline)
                     .frame(width: 42, height: 42)
                     .background(FitTheme.surface, in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("结束训练")
+            .accessibilityLabel("退出训练")
+
             Spacer()
             VStack(spacing: 2) {
-                Text(workingSession.name).font(.headline)
-                Text("规则 \(store.plan?.ruleVersion ?? TrainingEngine.ruleVersion)")
-                    .font(.caption2)
-                    .foregroundStyle(FitTheme.secondaryText)
+                Text(draft.session.name).font(.headline)
+                Text("实时自动缓存")
+                    .font(.caption2.bold())
+                    .foregroundStyle(FitTheme.accent)
             }
             Spacer()
-            Text("\(results.count) 组")
+            Text("\(draft.results.count) 组")
                 .font(.subheadline.bold().monospacedDigit())
-                .frame(width: 42, height: 42)
+                .frame(width: 52)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
     }
 
-    private var progressHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func prominentProgress(_ draft: WorkoutDraft, exercise: ExercisePrescription) -> some View {
+        VStack(spacing: 10) {
             HStack {
-                Text("动作 \(exerciseIndex + 1) / \(workingSession.exercises.count)")
+                Text("动作 \(draft.exerciseIndex + 1) / \(draft.session.exercises.count)")
                     .font(.caption.bold())
                     .foregroundStyle(FitTheme.accent)
                 Spacer()
-                Text("第 \(setNumber) / \(exercise.sets) 组")
-                    .font(.caption.bold().monospacedDigit())
+                Text("整场已完成 \(draft.results.count) 组")
+                    .font(.caption.bold())
                     .foregroundStyle(FitTheme.secondaryText)
             }
-            ProgressView(value: Double(exerciseIndex) + Double(setNumber - 1) / Double(max(exercise.sets, 1)), total: Double(workingSession.exercises.count))
+            Text("第 \(draft.setNumber) / \(exercise.sets) 组")
+                .font(.system(size: 42, weight: .black, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("当前第 \(draft.setNumber) 组，共 \(exercise.sets) 组")
+            Text(setKindText(draft))
+                .font(.headline)
+                .foregroundStyle(draft.currentSetKind == .warmup ? FitTheme.warning : FitTheme.accentBlue)
+            ProgressView(value: Double(min(draft.setNumber, exercise.sets)), total: Double(max(1, exercise.sets)))
                 .tint(FitTheme.accent)
         }
+        .fitCard(padding: 18)
     }
 
-    private var sessionEditingCard: some View {
-        HStack(spacing: 10) {
-            Button { showExerciseLibrary = true } label: {
-                Label("增加动作", systemImage: "plus.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .tint(FitTheme.accent)
-
-            Button { removeCurrentExercise() } label: {
-                Label("减少动作", systemImage: "minus.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .tint(FitTheme.warning)
-            .disabled(workingSession.exercises.count <= 1)
-        }
-        .font(.subheadline.bold())
-    }
-
-    private var prescriptionCard: some View {
+    private func exerciseCard(_ draft: WorkoutDraft, exercise: ExercisePrescription) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    if exercise.isPriority {
-                        Text("优先动作")
-                            .font(.caption2.bold())
-                            .foregroundStyle(FitTheme.warning)
-                    }
-                    Text(exercise.name)
-                        .font(.largeTitle.bold())
-                        .minimumScaleFactor(0.7)
-                    Text(exercise.targetText)
-                        .font(.subheadline)
-                        .foregroundStyle(FitTheme.secondaryText)
+                    Text(exercise.name).font(.title.bold()).minimumScaleFactor(0.72)
+                    Text(exercise.targetText).font(.subheadline).foregroundStyle(FitTheme.secondaryText)
                 }
                 Spacer()
                 Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.title2)
-                    .foregroundStyle(FitTheme.accent)
+                    .font(.title2).foregroundStyle(FitTheme.accent)
             }
 
-            Menu {
-                ForEach(EquipmentKind.allCases) { kind in
-                    let options = TrainingEngine.exerciseAlternatives(for: exercise.pattern).filter { $0.equipment == kind }
-                    if !options.isEmpty {
-                        Section(kind.title) {
-                            ForEach(options) { option in
-                                Button {
-                                    replaceCurrentExercise(with: option)
-                                } label: {
-                                    Label(option.name, systemImage: option.name == exercise.name ? "checkmark" : "arrow.triangle.2.circlepath")
+            HStack(spacing: 10) {
+                Button { store.returnDraftToPreviousExercise() } label: {
+                    Label("上个动作", systemImage: "chevron.left")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(draft.exerciseIndex == 0)
+                Button {
+                    if !store.advanceDraftToNextExercise() {
+                        saveAndExit(status: .partial)
+                    }
+                } label: {
+                    Label("下个动作", systemImage: "chevron.right")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(EquipmentKind.allCases) { kind in
+                        let options = TrainingEngine.exerciseAlternatives(for: exercise.pattern).filter { $0.equipment == kind }
+                        if !options.isEmpty {
+                            Section(kind.title) {
+                                ForEach(options) { option in
+                                    Button(option.name) { store.replaceDraftCurrentExercise(with: option) }
                                 }
                             }
                         }
                     }
+                } label: {
+                    Label("更换动作/器械", systemImage: "arrow.triangle.2.circlepath")
+                        .frame(maxWidth: .infinity)
                 }
-            } label: {
-                HStack {
-                    Label("更换动作或器械", systemImage: "dumbbell.fill")
-                        .font(.subheadline.bold())
-                    Spacer()
-                    Text(exercise.equipmentKind?.title ?? "未指定")
-                        .font(.caption)
-                        .foregroundStyle(FitTheme.secondaryText)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(FitTheme.secondaryText)
+                .buttonStyle(.bordered)
+                .disabled(draft.results.contains { $0.exerciseID == exercise.id })
+
+                Button { showExerciseLibrary = true } label: {
+                    Label("增加动作", systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(FitTheme.elevated, in: RoundedRectangle(cornerRadius: 12))
+                .buttonStyle(.bordered)
             }
-            .accessibilityLabel("更换当前动作或器械")
 
-            HStack(spacing: 8) {
-                Label("完整幅度", systemImage: "arrow.up.and.down")
-                Spacer()
-                Label(recommendation.map { "建议休息 \($0.restSeconds / 60)分\($0.restSeconds % 60)秒" } ?? "完成后动态建议休息", systemImage: "timer")
+            Button(role: .destructive) { store.removeDraftCurrentExercise() } label: {
+                Label("移除当前动作", systemImage: "minus.circle")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: .infinity)
             }
-            .font(.caption)
-            .foregroundStyle(FitTheme.secondaryText)
+            .disabled(draft.session.exercises.count <= 1 || draft.results.contains { $0.exerciseID == exercise.id })
 
+            Divider().overlay(Color.white.opacity(0.08))
             IntegerInputControl(
-                title: "本动作计划组数",
-                value: Binding(
-                    get: { exercise.sets },
-                    set: { workingSession.exercises[exerciseIndex].sets = min(8, max(setNumber, $0)) }
-                ),
-                range: setNumber...8,
+                title: "预计总组数",
+                value: Binding(get: { exercise.sets }, set: { store.setDraftPlannedSets($0) }),
+                range: 1...12,
                 step: 1,
                 unit: "组"
             )
-
-            let starting = store.loadRecommendation(for: exercise)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("首组建议：\(starting.displayLoad) · \(starting.confidence)置信度")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(FitTheme.accentBlue)
-                Text(starting.reason)
-                    .font(.caption)
-                    .foregroundStyle(FitTheme.secondaryText)
-            }
+            IntegerInputControl(
+                title: "其中热身组",
+                value: Binding(get: { draft.currentWarmupSets }, set: { store.setDraftWarmupSets($0) }),
+                range: 0...exercise.sets,
+                step: 1,
+                unit: "组"
+            )
+            Text("总组数与热身组数由你决定，算法不会自动减少或提前结束。")
+                .font(.caption)
+                .foregroundStyle(FitTheme.secondaryText)
         }
         .fitCard(padding: 18)
     }
 
-    private var inputCard: some View {
-        VStack(spacing: 4) {
-            NumericInputControl(title: "重量", value: $loadKg, range: 0...400, step: increment, unit: "kg")
-            Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 8)
-            IntegerInputControl(title: "完成次数", value: $reps, range: 1...100, step: 1, unit: "次")
-            Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 8)
-            IntegerInputControl(title: "还可完成 RIR", value: $rir, range: 0...10, step: 1)
-            Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 8)
-            techniqueQualityControl
-            Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 8)
-            NumericInputControl(title: "本次平均心率（可选）", value: $sessionAverageHR, range: 0...220, step: 1, unit: "bpm")
-            Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 8)
-            NumericInputControl(title: "设备主动热量（可选）", value: $sessionMeasuredKcal, range: 0...3000, step: 5, unit: "kcal")
+    @ViewBuilder
+    private func completedSetsCard(_ draft: WorkoutDraft, exercise: ExercisePrescription) -> some View {
+        let sets = draft.results.filter { $0.exerciseID == exercise.id }
+        if !sets.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("本动作已完成", systemImage: "checkmark.circle.fill")
+                    .font(.headline).foregroundStyle(FitTheme.accent)
+                ForEach(sets) { set in
+                    HStack {
+                        Text("第 \(set.setNumber) 组")
+                            .font(.subheadline.bold().monospacedDigit())
+                        Text(set.resolvedSetKind == .warmup ? "热身" : "正式")
+                            .font(.caption2.bold())
+                            .foregroundStyle(set.resolvedSetKind == .warmup ? FitTheme.warning : FitTheme.accentBlue)
+                        Spacer()
+                        Text("\(set.loadKg.formatted(.number.precision(.fractionLength(0...1)))) kg × \(set.reps) · RIR \(set.rir)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(FitTheme.secondaryText)
+                    }
+                }
+            }
+            .fitCard()
+        }
+    }
 
-            Toggle(isOn: $hasPain) {
-                Label("出现疼痛或异常不适", systemImage: "exclamationmark.triangle.fill")
+    private func inputCard(_ draft: WorkoutDraft) -> some View {
+        VStack(spacing: 4) {
+            NumericInputControl(title: "本组重量", value: doubleBinding(\.loadKg, marksLoadOverride: true), range: 0...400, step: store.profile?.loadIncrementKg ?? 2.5, unit: "kg")
+            divider
+            IntegerInputControl(title: "完成次数", value: intBinding(\.reps), range: 1...100, step: 1, unit: "次")
+            divider
+            IntegerInputControl(title: "还可完成 RIR", value: intBinding(\.rir), range: 0...10, step: 1)
+            divider
+            techniqueControl(draft)
+            divider
+            NumericInputControl(title: "平均心率（可选）", value: doubleBinding(\.averageHeartRate), range: 0...220, step: 1, unit: "bpm")
+            divider
+            NumericInputControl(title: "设备主动热量（可选）", value: doubleBinding(\.measuredActiveEnergyKcal), range: 0...3000, step: 5, unit: "kcal")
+            Toggle(isOn: boolBinding(\.hasPain)) {
+                Label("疼痛或异常不适", systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline)
-                    .foregroundStyle(hasPain ? FitTheme.danger : FitTheme.secondaryText)
+                    .foregroundStyle(draft.hasPain ? FitTheme.danger : FitTheme.secondaryText)
             }
             .tint(FitTheme.danger)
-            .padding(.top, 14)
+            .padding(.top, 12)
         }
         .fitCard(padding: 18)
     }
 
-    private var techniqueQualityControl: some View {
+    @ViewBuilder
+    private func safetyCard(_ draft: WorkoutDraft) -> some View {
+        if draft.hasPain || draft.techniqueQuality <= 2 {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(
+                    draft.hasPain ? "建议停止并评估异常不适" : "动作质量下降",
+                    systemImage: "exclamationmark.octagon.fill"
+                )
+                .font(.headline).foregroundStyle(FitTheme.danger)
+                Text(draft.hasPain
+                    ? "尖锐疼痛、胸痛、眩晕、麻木或异常气短时应停止训练并视情况寻求专业帮助。系统不会替你自动结束。"
+                    : "建议检查动作幅度与控制，必要时自行减重或结束本动作；该提示不改变重量计算。")
+                    .font(.subheadline).foregroundStyle(FitTheme.secondaryText)
+                Button("保存当前内容并结束") { saveAndExit(status: .partial) }
+                    .font(.subheadline.bold()).foregroundStyle(FitTheme.danger)
+            }
+            .fitCard()
+        }
+    }
+
+    private var completeSetButton: some View {
+        Button { store.completeCurrentDraftSet() } label: {
+            Label("完成本组", systemImage: "checkmark.circle.fill")
+        }
+        .buttonStyle(PrimaryActionButtonStyle())
+    }
+
+    private func restCard(_ draft: WorkoutDraft) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let load = draft.recommendation {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("下一组建议重量")
+                        .font(.caption.bold()).foregroundStyle(FitTheme.secondaryText)
+                    Text("\(load.nextLoadKg.formatted(.number.precision(.fractionLength(0...1)))) kg")
+                        .font(.title.bold().monospacedDigit()).foregroundStyle(FitTheme.accentBlue)
+                    Text(load.reason).font(.caption).foregroundStyle(FitTheme.secondaryText)
+                    Text("仅为参考；进入下一组后可直接修改重量。")
+                        .font(.caption.bold()).foregroundStyle(FitTheme.warning)
+                }
+            }
+
+            if let rest = draft.restRecommendation {
+                Divider().overlay(Color.white.opacity(0.08))
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let remaining = restRemaining(draft, at: context.date)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("建议组间休息").font(.headline)
+                                Text("区间 \(formatSeconds(rest.lowerSeconds))–\(formatSeconds(rest.upperSeconds)) · \(rest.confidence)置信度")
+                                    .font(.caption).foregroundStyle(FitTheme.secondaryText)
+                            }
+                            Spacer()
+                            Text(formatSeconds(remaining))
+                                .font(.system(size: 36, weight: .black, design: .rounded))
+                                .monospacedDigit().foregroundStyle(remaining == 0 ? FitTheme.accent : .primary)
+                        }
+                        ForEach(rest.reasons, id: \.self) { reason in
+                            Label(reason, systemImage: "info.circle")
+                                .font(.caption).foregroundStyle(FitTheme.secondaryText)
+                        }
+                    }
+                }
+                HStack(spacing: 10) {
+                    Button("+30 秒") { extendRest(by: 30) }
+                        .buttonStyle(.bordered)
+                    Button("跳过计时") { store.advanceDraftToNextSet() }
+                        .buttonStyle(.bordered)
+                }
+                Button { store.advanceDraftToNextSet() } label: {
+                    Label("开始下一组", systemImage: "play.fill")
+                }
+                .buttonStyle(PrimaryActionButtonStyle())
+            }
+        }
+        .fitCard(padding: 18)
+    }
+
+    private func exerciseCompleteCard(_ draft: WorkoutDraft, exercise: ExercisePrescription) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 66, weight: .bold)).foregroundStyle(FitTheme.accent)
+                .symbolEffect(.bounce, value: draft.phase)
+            Text("\(exercise.name) 已完成").font(.title2.bold()).multilineTextAlignment(.center)
+            Text("你仍可在上方增加预计总组数；系统不会自动锁定该动作。")
+                .font(.subheadline).foregroundStyle(FitTheme.secondaryText).multilineTextAlignment(.center)
+            if draft.exerciseIndex < draft.session.exercises.count - 1 {
+                Button { store.advanceDraftToNextExercise() } label: {
+                    Label("进入下一个动作", systemImage: "arrow.right")
+                }
+                .buttonStyle(PrimaryActionButtonStyle())
+            } else {
+                Button { saveAndExit(status: .completed) } label: {
+                    Label("完成本次训练", systemImage: "flag.checkered")
+                }
+                .buttonStyle(PrimaryActionButtonStyle())
+            }
+        }
+        .fitCard(padding: 22)
+    }
+
+    private func techniqueControl(_ draft: WorkoutDraft) -> some View {
         HStack {
-            Text("动作质量")
-                .font(.subheadline)
-                .foregroundStyle(FitTheme.secondaryText)
+            Text("动作质量").font(.subheadline).foregroundStyle(FitTheme.secondaryText)
             Spacer()
             HStack(spacing: 7) {
                 ForEach(1...5, id: \.self) { score in
-                    Button { techniqueQuality = score } label: {
+                    Button { store.updateWorkoutDraft { $0.techniqueQuality = score } } label: {
                         Text("\(score)")
                             .font(.caption.bold().monospacedDigit())
                             .frame(width: 30, height: 30)
-                            .background(techniqueQuality == score ? FitTheme.accent : FitTheme.elevated, in: Circle())
-                            .foregroundStyle(techniqueQuality == score ? FitTheme.background : FitTheme.secondaryText)
+                            .background(draft.techniqueQuality == score ? FitTheme.accent : FitTheme.elevated, in: Circle())
+                            .foregroundStyle(draft.techniqueQuality == score ? FitTheme.background : FitTheme.secondaryText)
                     }
                     .buttonStyle(.plain)
                 }
@@ -290,280 +383,21 @@ struct WorkoutSessionView: View {
         }
     }
 
-    private func valueControl(label: String, valueText: String, decrease: @escaping () -> Void, increase: @escaping () -> Void) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(FitTheme.secondaryText)
-            Spacer()
-            Button(action: decrease) {
-                Image(systemName: "minus")
-                    .frame(width: 38, height: 38)
-                    .background(FitTheme.elevated, in: Circle())
-            }
-            .buttonStyle(.plain)
-            Text(valueText)
-                .font(.title3.bold().monospacedDigit())
-                .frame(minWidth: 82)
-            Button(action: increase) {
-                Image(systemName: "plus")
-                    .frame(width: 38, height: 38)
-                    .background(FitTheme.accent, in: Circle())
-                    .foregroundStyle(FitTheme.background)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var painCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("不要用“减一点重量”掩盖异常症状", systemImage: "cross.case.fill")
-                .font(.headline)
-                .foregroundStyle(FitTheme.danger)
-            Text("若出现尖锐疼痛、胸痛、眩晕、异常气短、麻木或动作突然失控，请停止训练，并视情况寻求专业帮助。")
-                .font(.subheadline)
-                .foregroundStyle(FitTheme.secondaryText)
-            Button(results.isEmpty ? "停止并退出" : "保存已完成的 \(results.count) 组并停止") {
-                if results.isEmpty {
-                    dismiss()
-                } else {
-                    saveWorkout(status: .partial)
-                }
-            }
-                .font(.subheadline.bold())
-                .foregroundStyle(FitTheme.danger)
-        }
-        .fitCard()
-    }
-
-    private func recommendationCard(_ item: SetRecommendation) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: item.adjustment.symbol)
-                .font(.headline)
-                .foregroundStyle(FitTheme.background)
-                .frame(width: 40, height: 40)
-                .background(recommendationColor(item.adjustment), in: RoundedRectangle(cornerRadius: 12))
-            VStack(alignment: .leading, spacing: 5) {
-                Text("\(item.adjustment.title) · 下一组 \(item.nextLoadKg.formatted(.number.precision(.fractionLength(1)))) kg")
-                    .font(.headline)
-                Text("休息 \(item.restSeconds / 60)分\(item.restSeconds % 60)秒 · 建议再做 \(item.suggestedRemainingSets) 组")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(item.continuation == .continueTraining ? FitTheme.accentBlue : FitTheme.warning)
-                if item.continuation != .continueTraining {
-                    Label(item.continuation.title, systemImage: "exclamationmark.octagon.fill")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(FitTheme.danger)
-                }
-                Text(item.reason)
-                    .font(.caption)
-                    .foregroundStyle(FitTheme.secondaryText)
-                Text("建议置信度：\(item.confidence)")
-                    .font(.caption2)
-                    .foregroundStyle(FitTheme.secondaryText)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fitCard()
-    }
-
-    private var actionButton: some View {
-        VStack(spacing: 10) {
-            Button {
-                if recommendation?.continuation == .stopWorkout {
-                    saveWorkout(status: .partial)
-                } else if exerciseFinished {
-                    advanceOrFinish()
-                } else {
-                    completeSet()
-                }
-            } label: {
-                Label(
-                    recommendation?.continuation == .stopWorkout ? "按建议保存并结束" : (exerciseFinished ? (exerciseIndex == workingSession.exercises.count - 1 ? "完成本次训练" : "进入下一个动作") : "完成本组"),
-                    systemImage: exerciseFinished ? "arrow.right" : "checkmark"
-                )
-            }
-            .buttonStyle(PrimaryActionButtonStyle())
-            .disabled(hasPain)
-            .opacity(hasPain ? 0.45 : 1)
-
-            Button {
-                skipCurrentExercise()
-            } label: {
-                Label(
-                    exerciseIndex == workingSession.exercises.count - 1 ? (results.isEmpty ? "结束训练" : "保存已完成内容并结束") : "跳过当前动作",
-                    systemImage: exerciseIndex == workingSession.exercises.count - 1 ? "stop.circle" : "forward.end"
-                )
-                .font(.subheadline.bold())
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .foregroundStyle(FitTheme.secondaryText)
-            }
-            .buttonStyle(.plain)
-            .disabled(hasPain)
-            .opacity(hasPain ? 0.45 : 1)
-        }
-    }
-
-    private func completeSet() {
-        pendingResult = SetResult(
-            exerciseID: exercise.id,
-            exerciseName: exercise.name,
-            setNumber: setNumber,
-            loadKg: loadKg,
-            reps: reps,
-            rir: rir,
-            movementPattern: exercise.pattern,
-            techniqueQuality: techniqueQuality
-        )
-        showFeelingPrompt = true
-    }
-
-    private func finalizeSet(feeling: SetFeeling) {
-        guard var result = pendingResult else { return }
-        result.feeling = feeling
-        pendingResult = nil
-        results.append(result)
-        let next = TrainingEngine.recommendNextSet(
-            prescription: exercise,
-            result: result,
-            readiness: store.readinessAssessment,
-            increment: increment,
-            exerciseHistory: results.filter { $0.exerciseID == exercise.id },
-            priorRecord: store.lastWorkoutRecord(for: exercise)
-        )
-        withAnimation {
-            recommendation = next
-            if next.continuation != .continueTraining || next.suggestedRemainingSets == 0 || setNumber >= max(1, exercise.sets - store.readinessAssessment.setReduction) {
-                exerciseFinished = true
-                showExerciseCompletion = next.continuation != .stopWorkout
-            } else {
-                setNumber += 1
-                if next.suggestedRemainingSets < max(0, exercise.sets - setNumber + 1) {
-                    workingSession.exercises[exerciseIndex].sets = setNumber - 1 + next.suggestedRemainingSets
-                }
-                loadKg = next.nextLoadKg
-                reps = exercise.repLower
-            }
-        }
-    }
-
-    private func advanceOrFinish() {
-        if exerciseIndex < workingSession.exercises.count - 1 {
-            withAnimation {
-                exerciseIndex += 1
-                setNumber = 1
-                recommendation = nil
-                exerciseFinished = false
-                hasPain = false
-                resetInputsForCurrentExercise()
-            }
-        } else {
-            saveWorkout(status: .completed)
-        }
-    }
-
-    private func skipCurrentExercise() {
-        if exerciseIndex < workingSession.exercises.count - 1 {
-            withAnimation {
-                exerciseIndex += 1
-                setNumber = 1
-                recommendation = nil
-                exerciseFinished = false
-                hasPain = false
-                resetInputsForCurrentExercise()
-            }
-        } else if results.isEmpty {
-            dismiss()
-        } else {
-            saveWorkout(status: .partial)
-        }
-    }
-
-    private func replaceCurrentExercise(with option: ExerciseOption) {
-        guard option.pattern == exercise.pattern else { return }
-        var replacement = exercise
-        replacement.name = option.name
-        replacement.equipmentKind = option.equipment
-        replacement.suggestedLoadKg = nil
-        replacement.suggestedLoadReason = "训练中临时替换，需要按新器械校准工作重量。"
-        workingSession.exercises[exerciseIndex] = replacement
-        setNumber = 1
-        recommendation = nil
-        exerciseFinished = false
-        hasPain = false
-        resetInputsForCurrentExercise()
-    }
-
-    private func changePlannedSets(by delta: Int) {
-        workingSession.exercises[exerciseIndex].sets = min(8, max(setNumber, exercise.sets + delta))
-        exerciseFinished = setNumber > workingSession.exercises[exerciseIndex].sets
-    }
-
-    private func removeCurrentExercise() {
-        guard workingSession.exercises.count > 1 else { return }
-        workingSession.exercises.remove(at: exerciseIndex)
-        exerciseIndex = min(exerciseIndex, workingSession.exercises.count - 1)
-        setNumber = 1
-        recommendation = nil
-        exerciseFinished = false
-        resetInputsForCurrentExercise()
-    }
-
-    private func saveWorkout(status: WorkoutCompletionStatus) {
-        guard !results.isEmpty else {
-            dismiss()
-            return
-        }
-        let qualities = results.compactMap(\.techniqueQuality)
-        let quality = qualities.isEmpty
-            ? nil
-            : Int((Double(qualities.reduce(0, +)) / Double(qualities.count)).rounded())
-        var record = WorkoutRecord(
-            sessionName: workingSession.name,
-            startedAt: startedAt,
-            completedAt: .now,
-            readinessScore: store.readinessAssessment.score,
-            sets: results,
-            sessionQuality: quality,
-            completionStatus: status,
-            sessionRPE: results.compactMap { $0.feeling?.rpe }.averageValue,
-            averageHeartRate: sessionAverageHR > 0 ? sessionAverageHR : nil,
-            measuredActiveEnergyKcal: sessionMeasuredKcal > 0 ? sessionMeasuredKcal : nil
-        )
-        let weight = store.latestWeight ?? store.profile?.bodyWeightKg ?? 70
-        let energy = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: weight, profile: store.profile)
-        record.activeEnergyKcal = energy.kilocalories
-        record.energyMethod = energy.method
-        record.energyLowerBoundKcal = energy.lowerBound
-        record.energyUpperBoundKcal = energy.upperBound
-        record.effect = TrainingEngine.evaluateStrengthWorkout(record)
-        store.completeWorkout(record)
-        completedEnergyKcal = record.activeEnergyKcal ?? 0
-        completedEnergyLowerKcal = energy.lowerBound
-        completedEnergyUpperKcal = energy.upperBound
-        completedEnergyMethod = energy.method
-        completedEnergyConfidence = energy.confidence
-        completedEffect = record.effect
-    }
-
     private var exerciseLibrarySheet: some View {
         NavigationStack {
             List {
                 ForEach(ExerciseCategory.allCases) { category in
-                    let options = TrainingEngine.allExerciseOptions.filter { $0.resolvedCategory == category }
-                    if !options.isEmpty {
+                    let categoryItems = TrainingEngine.allExerciseOptions.filter { $0.resolvedCategory == category }
+                    if !categoryItems.isEmpty {
                         Section(category.title) {
                             ForEach(EquipmentKind.allCases) { equipment in
-                                let equipmentOptions = options.filter { $0.equipment == equipment }
-                                if !equipmentOptions.isEmpty {
+                                let items = categoryItems.filter { $0.equipment == equipment }
+                                if !items.isEmpty {
                                     DisclosureGroup(equipment.title) {
-                                        ForEach(equipmentOptions) { option in
-                                            Button {
-                                                guard let profile = store.profile else { return }
-                                                workingSession.exercises.append(TrainingEngine.makePrescription(for: option, profile: profile))
+                                        ForEach(items) { option in
+                                            Button(option.name) {
+                                                store.addDraftExercise(option)
                                                 showExerciseLibrary = false
-                                            } label: {
-                                                HStack { Text(option.name); Spacer(); Text(option.pattern.title).font(.caption).foregroundStyle(.secondary) }
                                             }
                                         }
                                     }
@@ -578,92 +412,64 @@ struct WorkoutSessionView: View {
         }
     }
 
-    private func workoutSummarySheet(_ effect: TrainingEffect) -> some View {
-        NavigationStack {
-            ZStack {
-                FitBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        SectionHeading(eyebrow: "训练已保存", title: "本次训练效果", detail: effect.summary)
-                        HStack(spacing: 10) {
-                            MetricChip(value: "\(effect.strengthScore)", label: "力量刺激")
-                            MetricChip(value: "\(effect.hypertrophyScore)", label: "增肌刺激", tint: FitTheme.accentBlue)
-                            MetricChip(value: "\(effect.fatigueScore)", label: "疲劳", tint: FitTheme.warning)
-                        }
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("预计恢复 \(effect.recoveryLowerHours ?? effect.estimatedRecoveryHours)–\(effect.recoveryUpperHours ?? effect.estimatedRecoveryHours) 小时", systemImage: "clock.arrow.circlepath")
-                                .font(.title3.bold())
-                            Text(effect.advice).foregroundStyle(FitTheme.secondaryText)
-                            Text("主动消耗约 \(Int(completedEnergyKcal.rounded())) 千卡")
-                                .font(.headline)
-                                .foregroundStyle(FitTheme.accent)
-                            Text("合理区间 \(Int(completedEnergyLowerKcal.rounded()))–\(Int(completedEnergyUpperKcal.rounded())) kcal · \(completedEnergyMethod) · \(completedEnergyConfidence)置信度")
-                                .font(.caption).foregroundStyle(FitTheme.secondaryText)
-                            if let method = effect.method { Text("效果模型：\(method)").font(.caption).foregroundStyle(FitTheme.secondaryText) }
-                        }
-                        .fitCard()
-                        Button("完成") { completedEffect = nil; dismiss() }
-                            .buttonStyle(PrimaryActionButtonStyle())
-                    }
-                    .padding(20)
+    private var divider: some View {
+        Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 8)
+    }
+
+    private func setKindText(_ draft: WorkoutDraft) -> String {
+        if draft.currentSetKind == .warmup {
+            return "热身组 \(draft.setNumber) / \(max(1, draft.currentWarmupSets))"
+        }
+        return "正式组 \(draft.workingSetOrdinal) / \(max(1, draft.totalWorkingSets))"
+    }
+
+    private func restRemaining(_ draft: WorkoutDraft, at date: Date) -> Int {
+        guard let rest = draft.restRecommendation, let started = draft.restStartedAt else { return 0 }
+        return max(0, rest.recommendedSeconds - Int(date.timeIntervalSince(started)))
+    }
+
+    private func extendRest(by seconds: Int) {
+        store.updateWorkoutDraft { draft in
+            guard var rest = draft.restRecommendation else { return }
+            rest.recommendedSeconds = min(600, rest.recommendedSeconds + seconds)
+            rest.upperSeconds = max(rest.upperSeconds, rest.recommendedSeconds)
+            rest.reasons.append("用户主动延长 \(seconds) 秒")
+            draft.restRecommendation = rest
+        }
+    }
+
+    private func formatSeconds(_ value: Int) -> String {
+        "\(value / 60):\(String(format: "%02d", value % 60))"
+    }
+
+    private func saveAndExit(status: WorkoutCompletionStatus) {
+        store.saveActiveWorkout(status: status)
+        dismiss()
+    }
+
+    private func doubleBinding(_ keyPath: WritableKeyPath<WorkoutDraft, Double>, marksLoadOverride: Bool = false) -> Binding<Double> {
+        Binding(
+            get: { store.activeWorkoutDraft?[keyPath: keyPath] ?? 0 },
+            set: { value in
+                store.updateWorkoutDraft {
+                    $0[keyPath: keyPath] = value
+                    if marksLoadOverride { $0.userOverrodeSuggestedLoad = true }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .interactiveDismissDisabled()
+        )
     }
 
-    private func resetInputsForCurrentExercise() {
-        let current = workingSession.exercises[exerciseIndex]
-        reps = current.repLower
-        rir = current.targetRIR
-        techniqueQuality = 4
-        let starting = store.loadRecommendation(for: current)
-        if let suggestion = starting.loadKg {
-            loadKg = suggestion
-        } else {
-            switch store.profile?.equipment {
-            case .bodyweightBands: loadKg = 0
-            case .dumbbells: loadKg = current.isPriority ? 10 : 6
-            case .fullGym: loadKg = current.isPriority ? 20 : 12.5
-            case nil: loadKg = 20
-            }
-        }
+    private func intBinding(_ keyPath: WritableKeyPath<WorkoutDraft, Int>) -> Binding<Int> {
+        Binding(
+            get: { store.activeWorkoutDraft?[keyPath: keyPath] ?? 0 },
+            set: { value in store.updateWorkoutDraft { $0[keyPath: keyPath] = value } }
+        )
     }
 
-    private func recommendationColor(_ adjustment: LoadAdjustment) -> Color {
-        switch adjustment {
-        case .increase: FitTheme.accent
-        case .hold: FitTheme.accentBlue
-        case .decrease: FitTheme.warning
-        }
+    private func boolBinding(_ keyPath: WritableKeyPath<WorkoutDraft, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { store.activeWorkoutDraft?[keyPath: keyPath] ?? false },
+            set: { value in store.updateWorkoutDraft { $0[keyPath: keyPath] = value } }
+        )
     }
-
-    private var exerciseCompletionOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.72).ignoresSafeArea()
-            VStack(spacing: 18) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 84, weight: .bold))
-                    .foregroundStyle(FitTheme.accent)
-                    .symbolEffect(.bounce, value: showExerciseCompletion)
-                Text("\(exercise.name) 完成").font(.title.bold()).multilineTextAlignment(.center)
-                Text(exerciseIndex < workingSession.exercises.count - 1 ? "下一项：\(workingSession.exercises[exerciseIndex + 1].name)" : "所有动作已完成，可以生成本次训练总结。")
-                    .foregroundStyle(FitTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-                Button(exerciseIndex < workingSession.exercises.count - 1 ? "开始下一个动作" : "查看训练总结") {
-                    withAnimation { showExerciseCompletion = false }
-                    advanceOrFinish()
-                }
-                .buttonStyle(PrimaryActionButtonStyle())
-            }
-            .padding(24)
-            .fitCard(padding: 24)
-            .padding(24)
-        }
-    }
-}
-
-private extension Array where Element == Double {
-    var averageValue: Double? { isEmpty ? nil : reduce(0, +) / Double(count) }
 }
