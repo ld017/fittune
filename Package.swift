@@ -11,8 +11,8 @@ let package = Package(
         .target(
             name: "FitTune",
             path: "FitTune",
-            exclude: ["App", "Resources", "Services", "Store", "Views"],
-            sources: ["Models/DomainModels.swift", "Engine/TrainingEngine.swift"]
+            exclude: ["App", "Resources", "Services", "Views"],
+            sources: ["Models/DomainModels.swift", "Engine/TrainingEngine.swift", "Store/AppStore.swift"]
         ),
         .testTarget(
             name: "FitTuneTests",

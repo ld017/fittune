@@ -22,6 +22,7 @@ final class AppStore {
     var deletedRecoveryHistory: [RecoveryEntry] = []
     var deletedBodyCompositionHistory: [BodyCompositionEntry] = []
     var dailyTrainingChoice: DailyTrainingChoice?
+    var activeWorkoutDraft: WorkoutDraft?
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -315,6 +316,48 @@ final class AppStore {
         persist()
     }
 
+    func startWorkout(_ session: TrainingSession) {
+        guard activeWorkoutDraft == nil, let first = session.exercises.first else { return }
+        let starting = loadRecommendation(for: first)
+        activeWorkoutDraft = WorkoutDraft(
+            sourceSessionID: session.id,
+            session: session,
+            exerciseIndex: 0,
+            setNumber: 1,
+            loadKg: starting.loadKg ?? 0,
+            reps: first.repLower,
+            rir: first.targetRIR,
+            techniqueQuality: 4,
+            hasPain: false
+        )
+        persist()
+    }
+
+    func updateWorkoutDraft(_ mutation: (inout WorkoutDraft) -> Void) {
+        guard var draft = activeWorkoutDraft else { return }
+        mutation(&draft)
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func checkpointActiveWorkout() {
+        guard activeWorkoutDraft != nil else { return }
+        persist()
+    }
+
+    func discardWorkoutDraft() {
+        activeWorkoutDraft = nil
+        persist()
+    }
+
+    func finishWorkoutDraft(with record: WorkoutRecord) {
+        workoutHistory.insert(record, at: 0)
+        learnWorkingLoads(from: record)
+        activeWorkoutDraft = nil
+        persist()
+    }
+
     func deleteWorkout(id: UUID) {
         guard let index = workoutHistory.firstIndex(where: { $0.id == id }) else { return }
         deletedWorkoutHistory.insert(workoutHistory.remove(at: index), at: 0)
@@ -325,6 +368,13 @@ final class AppStore {
     func restoreWorkout(id: UUID) {
         guard let index = deletedWorkoutHistory.firstIndex(where: { $0.id == id }) else { return }
         workoutHistory.insert(deletedWorkoutHistory.remove(at: index), at: 0)
+        rebuildLearnedLoads()
+        persist()
+    }
+
+    func permanentlyDeleteWorkout(id: UUID) {
+        guard deletedWorkoutHistory.contains(where: { $0.id == id }) else { return }
+        deletedWorkoutHistory.removeAll { $0.id == id }
         rebuildLearnedLoads()
         persist()
     }
@@ -341,6 +391,12 @@ final class AppStore {
         persist()
     }
 
+    func permanentlyDeleteCardioWorkout(id: UUID) {
+        guard deletedCardioWorkouts.contains(where: { $0.id == id }) else { return }
+        deletedCardioWorkouts.removeAll { $0.id == id }
+        persist()
+    }
+
     func deleteWeight(id: UUID) {
         guard let index = weightHistory.firstIndex(where: { $0.id == id }) else { return }
         deletedWeightHistory.insert(weightHistory.remove(at: index), at: 0)
@@ -351,6 +407,23 @@ final class AppStore {
         guard let index = deletedWeightHistory.firstIndex(where: { $0.id == id }) else { return }
         weightHistory.append(deletedWeightHistory.remove(at: index))
         weightHistory.sort { $0.date < $1.date }
+        persist()
+    }
+
+    func permanentlyDeleteWeight(id: UUID) {
+        guard deletedWeightHistory.contains(where: { $0.id == id }) else { return }
+        deletedWeightHistory.removeAll { $0.id == id }
+        persist()
+    }
+
+    func emptyTrash() {
+        deletedWorkoutHistory.removeAll()
+        deletedCardioWorkouts.removeAll()
+        deletedWeightHistory.removeAll()
+        deletedCardioHistory.removeAll()
+        deletedRecoveryHistory.removeAll()
+        deletedBodyCompositionHistory.removeAll()
+        rebuildLearnedLoads()
         persist()
     }
 
@@ -414,6 +487,7 @@ final class AppStore {
         deletedRecoveryHistory = []
         deletedBodyCompositionHistory = []
         dailyTrainingChoice = nil
+        activeWorkoutDraft = nil
         defaults.removeObject(forKey: storageKey)
     }
 
@@ -469,7 +543,8 @@ final class AppStore {
             deletedWeightHistory: deletedWeightHistory,
             deletedCardioHistory: deletedCardioHistory,
             deletedRecoveryHistory: deletedRecoveryHistory,
-            deletedBodyCompositionHistory: deletedBodyCompositionHistory
+            deletedBodyCompositionHistory: deletedBodyCompositionHistory,
+            activeWorkoutDraft: activeWorkoutDraft
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -506,5 +581,6 @@ final class AppStore {
         deletedCardioHistory = snapshot.deletedCardioHistory ?? []
         deletedRecoveryHistory = snapshot.deletedRecoveryHistory ?? []
         deletedBodyCompositionHistory = snapshot.deletedBodyCompositionHistory ?? []
+        activeWorkoutDraft = snapshot.activeWorkoutDraft
     }
 }
