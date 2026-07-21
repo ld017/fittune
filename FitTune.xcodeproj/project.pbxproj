@@ -41,6 +41,13 @@
 		B00000000000000000000020 /* DeviceCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000023 /* DeviceCenterView.swift */; };
 		B00000000000000000000021 /* LiveAdaptationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000024 /* LiveAdaptationEngine.swift */; };
 		B00000000000000000000022 /* LiveAdaptationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000025 /* LiveAdaptationEngineTests.swift */; };
+		B00000000000000000000023 /* CardioSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000026 /* CardioSessionTests.swift */; };
+		B00000000000000000000024 /* MotionLocationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000027 /* MotionLocationSource.swift */; };
+		B00000000000000000000025 /* CardioSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000028 /* CardioSessionView.swift */; };
+		B00000000000000000000026 /* SummaryEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000029 /* SummaryEngine.swift */; };
+		B00000000000000000000027 /* SummaryEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000002A /* SummaryEngineTests.swift */; };
+		B00000000000000000000028 /* WorkoutSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000002B /* WorkoutSummaryView.swift */; };
+		B00000000000000000000029 /* HistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000002C /* HistoryDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +98,13 @@
 		C00000000000000000000023 /* DeviceCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCenterView.swift; sourceTree = "<group>"; };
 		C00000000000000000000024 /* LiveAdaptationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAdaptationEngine.swift; sourceTree = "<group>"; };
 		C00000000000000000000025 /* LiveAdaptationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAdaptationEngineTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000026 /* CardioSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardioSessionTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000027 /* MotionLocationSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionLocationSource.swift; sourceTree = "<group>"; };
+		C00000000000000000000028 /* CardioSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardioSessionView.swift; sourceTree = "<group>"; };
+		C00000000000000000000029 /* SummaryEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryEngine.swift; sourceTree = "<group>"; };
+		C0000000000000000000002A /* SummaryEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryEngineTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000002B /* WorkoutSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSummaryView.swift; sourceTree = "<group>"; };
+		C0000000000000000000002C /* HistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +161,7 @@
 				C00000000000000000000003 /* TrainingEngine.swift */,
 				C0000000000000000000001A /* RecoveryEngine.swift */,
 				C00000000000000000000024 /* LiveAdaptationEngine.swift */,
+				C00000000000000000000029 /* SummaryEngine.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -167,6 +182,7 @@
 				C0000000000000000000001E /* LiveSensorSource.swift */,
 				C0000000000000000000001F /* LiveSensorCoordinator.swift */,
 				C00000000000000000000020 /* BluetoothHeartRateSource.swift */,
+				C00000000000000000000027 /* MotionLocationSource.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -185,6 +201,9 @@
 				C00000000000000000000018 /* ExerciseLibraryView.swift */,
 				C00000000000000000000019 /* CustomExerciseEditorView.swift */,
 				C00000000000000000000023 /* DeviceCenterView.swift */,
+				C00000000000000000000028 /* CardioSessionView.swift */,
+				C0000000000000000000002B /* WorkoutSummaryView.swift */,
+				C0000000000000000000002C /* HistoryDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -208,6 +227,8 @@
 				C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */,
 				C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */,
 				C00000000000000000000025 /* LiveAdaptationEngineTests.swift */,
+				C00000000000000000000026 /* CardioSessionTests.swift */,
+				C0000000000000000000002A /* SummaryEngineTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -351,12 +372,14 @@
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
 				B00000000000000000000017 /* RecoveryEngine.swift in Sources */,
 				B00000000000000000000021 /* LiveAdaptationEngine.swift in Sources */,
+				B00000000000000000000026 /* SummaryEngine.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,
 				B00000000000000000000019 /* HealthImportModels.swift in Sources */,
 				B0000000000000000000001B /* LiveSensorSource.swift in Sources */,
 				B0000000000000000000001C /* LiveSensorCoordinator.swift in Sources */,
 				B0000000000000000000001D /* BluetoothHeartRateSource.swift in Sources */,
+				B00000000000000000000024 /* MotionLocationSource.swift in Sources */,
 				B00000000000000000000006 /* DesignSystem.swift in Sources */,
 				B00000000000000000000007 /* RootView.swift in Sources */,
 				B00000000000000000000008 /* OnboardingView.swift in Sources */,
@@ -368,6 +391,9 @@
 				B00000000000000000000015 /* ExerciseLibraryView.swift in Sources */,
 				B00000000000000000000016 /* CustomExerciseEditorView.swift in Sources */,
 				B00000000000000000000020 /* DeviceCenterView.swift in Sources */,
+				B00000000000000000000025 /* CardioSessionView.swift in Sources */,
+				B00000000000000000000028 /* WorkoutSummaryView.swift in Sources */,
+				B00000000000000000000029 /* HistoryDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -382,6 +408,8 @@
 				B0000000000000000000001E /* LiveSensorCoordinatorTests.swift in Sources */,
 				B0000000000000000000001F /* BluetoothHeartRateParserTests.swift in Sources */,
 				B00000000000000000000022 /* LiveAdaptationEngineTests.swift in Sources */,
+				B00000000000000000000023 /* CardioSessionTests.swift in Sources */,
+				B00000000000000000000027 /* SummaryEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,12 +476,15 @@
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FitTune/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重、睡眠、静息心率、步数、能量和训练数据，以生成恢复与训练建议。";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于连接标准蓝牙心率设备，在训练中读取实时心率。";
-				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在跑步、步行和骑行训练时记录距离与配速。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "用于在有氧训练时记录步数、步频和运动距离。";
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central location";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -479,12 +510,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = PWP85U27MD;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FitTune/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重、睡眠、静息心率、步数、能量和训练数据，以生成恢复与训练建议。";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于连接标准蓝牙心率设备，在训练中读取实时心率。";
-				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在跑步、步行和骑行训练时记录距离与配速。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "用于在有氧训练时记录步数、步频和运动距离。";
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central location";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

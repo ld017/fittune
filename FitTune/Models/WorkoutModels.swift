@@ -1,5 +1,55 @@
 import Foundation
 
+enum CardioMetricKind: String, Codable, Equatable, Hashable {
+    case heartRate
+    case distance
+    case pace
+    case cadence
+    case steps
+    case incline
+    case floors
+    case power
+    case strokeCount
+}
+
+enum CardioSessionCapabilities {
+    static func metrics(for modality: CardioModality, hasWatch: Bool) -> Set<CardioMetricKind> {
+        var result: Set<CardioMetricKind> = [.heartRate]
+        switch modality {
+        case .running, .briskWalking:
+            result.formUnion([.distance, .pace, .cadence, .steps])
+        case .inclineWalking:
+            result.formUnion([.distance, .pace, .cadence, .steps, .incline])
+        case .stairClimber:
+            result.formUnion([.cadence, .steps, .floors])
+        case .cycling:
+            result.formUnion([.distance, .pace, .cadence, .power])
+        case .rowing:
+            result.formUnion([.cadence, .power])
+        case .swimming:
+            if hasWatch { result.formUnion([.distance, .pace, .strokeCount]) }
+        case .elliptical, .jumpRope:
+            result.formUnion([.cadence, .steps])
+        }
+        return result
+    }
+
+    static func unavailableMetrics(for modality: CardioModality, hasWatch: Bool) -> Set<CardioMetricKind> {
+        modality == .swimming && !hasWatch ? [.strokeCount] : []
+    }
+}
+
+struct CardioSessionDraft: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var modality: CardioModality
+    var intensity: CardioIntensity
+    var startedAt: Date = .now
+    var updatedAt: Date = .now
+    var metricSamples: [WorkoutMetricSample] = []
+    var distanceMeters: Double = 0
+    var dataGapReason: String? = nil
+}
+
 struct WarmupSetSuggestion: Codable, Equatable {
     var loadKg: Double
     var reps: Int

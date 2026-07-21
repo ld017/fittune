@@ -188,6 +188,27 @@ struct MetricRange: Codable, Equatable {
     var provenance: MetricProvenance
 }
 
+struct StrengthSummaryMetrics: Codable, Equatable {
+    var volumeLoadKg: Double
+    var workingSetCount: Int
+    var warmupSetCount: Int
+    var failureRate: Double
+    var bestE1RMKg: Double?
+    var relativeStrength: Double?
+    var e1RMConfidence: DataConfidence
+    var muscleLoad: [String: Double]
+}
+
+struct CardioSummaryMetrics: Codable, Equatable {
+    var distanceKm: Double?
+    var paceSecondsPerKm: Double?
+    var averageCadence: Double?
+    var strokeCount: Double?
+    var heartRateRecovery60: Double?
+    var vo2Max: Double?
+    var vo2MaxConfidence: DataConfidence
+}
+
 struct WorkoutSummary: Codable, Equatable {
     var generatedAt: Date
     var algorithmVersion: String
@@ -197,6 +218,9 @@ struct WorkoutSummary: Codable, Equatable {
     var estimatedRecoveryHours: MetricRange?
     var trainingEffect: MetricRange?
     var dataCoverage: Double?
+    var strength: StrengthSummaryMetrics? = nil
+    var cardio: CardioSummaryMetrics? = nil
+    var heartRateCurve: [WorkoutMetricSample]? = nil
 
     init(
         generatedAt: Date,
@@ -206,7 +230,10 @@ struct WorkoutSummary: Codable, Equatable {
         activeEnergyKcal: MetricRange? = nil,
         estimatedRecoveryHours: MetricRange? = nil,
         trainingEffect: MetricRange? = nil,
-        dataCoverage: Double? = nil
+        dataCoverage: Double? = nil,
+        strength: StrengthSummaryMetrics? = nil,
+        cardio: CardioSummaryMetrics? = nil,
+        heartRateCurve: [WorkoutMetricSample]? = nil
     ) {
         self.generatedAt = generatedAt
         self.algorithmVersion = algorithmVersion
@@ -216,6 +243,9 @@ struct WorkoutSummary: Codable, Equatable {
         self.estimatedRecoveryHours = estimatedRecoveryHours
         self.trainingEffect = trainingEffect
         self.dataCoverage = dataCoverage
+        self.strength = strength
+        self.cardio = cardio
+        self.heartRateCurve = heartRateCurve
     }
 }
 
@@ -231,6 +261,13 @@ struct SummaryRevision: Identifiable, Codable, Equatable {
         self.reason = reason
         self.summary = summary
     }
+}
+
+struct WorkoutSummaryPresentation: Identifiable, Equatable {
+    var id = UUID()
+    var title: String
+    var date: Date
+    var summary: WorkoutSummary
 }
 
 struct PersonalSafetySettings: Codable, Equatable {

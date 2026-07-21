@@ -576,6 +576,14 @@ struct TodayView: View {
                             showCardioEntry = false
                         }
                         .buttonStyle(PrimaryActionButtonStyle())
+                        Button {
+                            store.startCardioSession(modality: cardioModality, intensity: cardioIntensity)
+                            showCardioEntry = false
+                        } label: {
+                            Label("开始实时记录", systemImage: "record.circle")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(FitTheme.accentBlue)
                     }
                     .padding(20)
                 }
@@ -655,7 +663,9 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeading(eyebrow: "历史", title: "最近完成")
                 ForEach(store.workoutHistory.prefix(3)) { record in
-                    HStack {
+                    NavigationLink {
+                        StrengthHistoryDetailView(record: record, bodyWeightKg: store.latestWeight ?? 70)
+                    } label: { HStack {
                         Image(systemName: record.resolvedCompletionStatus == .partial ? "circle.lefthalf.filled" : "checkmark.seal.fill")
                             .foregroundStyle(record.resolvedCompletionStatus == .partial ? FitTheme.warning : FitTheme.accent)
                         VStack(alignment: .leading) {
@@ -674,7 +684,8 @@ struct TodayView: View {
                         Spacer()
                         Text("\(record.sets.count) 组")
                             .font(.caption.bold())
-                    }
+                    } }
+                    .buttonStyle(.plain)
                     .fitCard(padding: 13)
                 }
             }

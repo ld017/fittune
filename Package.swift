@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "FitTune",
             path: "FitTune",
-            exclude: ["App", "Resources", "Services/HealthKitService.swift", "Views"],
+            exclude: ["App", "Resources", "Services/HealthKitService.swift", "Services/MotionLocationSource.swift", "Views"],
             sources: [
                 "Models/DomainModels.swift",
                 "Models/WorkoutModels.swift",
@@ -19,6 +19,7 @@ let package = Package(
                 "Engine/TrainingEngine.swift",
                 "Engine/RecoveryEngine.swift",
                 "Engine/LiveAdaptationEngine.swift",
+                "Engine/SummaryEngine.swift",
                 "Services/HealthImportModels.swift",
                 "Services/LiveSensorSource.swift",
                 "Services/LiveSensorCoordinator.swift",

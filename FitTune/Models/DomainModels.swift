@@ -809,6 +809,11 @@ struct CardioWorkoutRecord: Identifiable, Codable, Equatable {
     var energyMethod: String? = nil
     var energyLowerBoundKcal: Double? = nil
     var energyUpperBoundKcal: Double? = nil
+    var completionStatus: WorkoutCompletionStatus? = nil
+    var dataGapReason: String? = nil
+    var metricSamples: [WorkoutMetricSample]? = nil
+    var summary: WorkoutSummary? = nil
+    var summaryRevisions: [SummaryRevision]? = nil
 }
 
 struct BodyCompositionEntry: Identifiable, Codable, Equatable {
@@ -1036,7 +1041,7 @@ struct StartingLoadRecommendation: Equatable {
 }
 
 struct AppSnapshot: Codable {
-    static let currentSchemaVersion = 11
+    static let currentSchemaVersion = 12
 
     var profile: UserProfile?
     var plan: TrainingPlan?
@@ -1062,6 +1067,7 @@ struct AppSnapshot: Codable {
     var favoriteExerciseIDs: Set<String>? = nil
     var customExercises: [ExerciseOption]? = nil
     var restingHeartRateSamples: [RestingHeartRateSample]? = nil
+    var activeCardioDraft: CardioSessionDraft? = nil
     var schemaVersion: Int? = currentSchemaVersion
 
     var resolvedSchemaVersion: Int { schemaVersion ?? 6 }

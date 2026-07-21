@@ -1,0 +1,59 @@
+import XCTest
+@testable import FitTune
+
+final class SummaryEngineTests: XCTestCase {
+    func testStrengthSummaryContainsHeartRateVolumeFailureAndValidE1RM() throws {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let provenance = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
+        let warmup = SetResult(exerciseID: UUID(), exerciseName: "杠铃卧推", setNumber: 1, loadKg: 40, reps: 10, rir: 5, movementPattern: .horizontalPush, setKind: .warmup)
+        let work1 = SetResult(exerciseID: UUID(), exerciseName: "杠铃卧推", setNumber: 2, loadKg: 80, reps: 8, rir: 0, movementPattern: .horizontalPush, setKind: .working)
+        let work2 = SetResult(exerciseID: UUID(), exerciseName: "杠铃卧推", setNumber: 3, loadKg: 80, reps: 20, rir: 0, movementPattern: .horizontalPush, setKind: .working)
+        var record = WorkoutRecord(sessionName: "胸", startedAt: start, completedAt: start.addingTimeInterval(600), readinessScore: 80, sets: [warmup, work1, work2])
+        record.activeEnergyKcal = 120
+        record.metricSamples = [
+            .init(timestamp: start, heartRateBPM: 100, provenance: provenance),
+            .init(timestamp: start.addingTimeInterval(300), heartRateBPM: 150, provenance: provenance)
+        ]
+
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+
+        XCTAssertEqual(summary.averageHeartRate, 125)
+        XCTAssertEqual(summary.maximumHeartRate, 150)
+        XCTAssertEqual(summary.strength?.workingSetCount, 2)
+        XCTAssertEqual(summary.strength?.warmupSetCount, 1)
+        XCTAssertEqual(summary.strength?.failureRate, 1)
+        XCTAssertEqual(summary.strength?.volumeLoadKg, 80 * 8 + 80 * 20)
+        XCTAssertEqual(summary.strength?.bestE1RMKg, TrainingEngine.estimatedOneRepMax(loadKg: 80, reps: 8, rir: 0))
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .estimated)
+    }
+
+    func testCardioSummaryShowsVerifiableMetricsWithoutInventingVO2Max() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let provenance = MetricProvenance(source: .phoneSensor, sourceName: "iPhone", confidence: .measured, coverage: 0.8)
+        var record = CardioWorkoutRecord(date: start, modality: .running, intensity: .zone2, durationMinutes: 30, distanceKm: 5, averageHeartRate: 145, activeEnergyKcal: 300, source: "手机估算")
+        record.metricSamples = [
+            .init(timestamp: start, heartRateBPM: 130, cadence: 165, distanceMeters: 0, provenance: provenance),
+            .init(timestamp: start.addingTimeInterval(1800), heartRateBPM: 155, cadence: 175, distanceMeters: 5000, provenance: provenance)
+        ]
+
+        let summary = SummaryEngine.cardioSummary(for: record)
+
+        XCTAssertEqual(summary.averageHeartRate, 142.5)
+        XCTAssertEqual(summary.maximumHeartRate, 155)
+        XCTAssertEqual(summary.cardio?.distanceKm, 5)
+        XCTAssertEqual(summary.cardio?.averageCadence, 170)
+        XCTAssertEqual(summary.cardio?.paceSecondsPerKm, 360)
+        XCTAssertNil(summary.cardio?.vo2Max)
+    }
+
+    func testHuaweiRevisionChangesSummaryOnlyNotOriginalRawRecord() {
+        let record = WorkoutRecord(sessionName: "背", startedAt: .now, completedAt: .now, readinessScore: 80, sets: [])
+        let original = record
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+        let revision = SummaryRevision(reason: "华为健康事后同步", summary: summary)
+
+        XCTAssertEqual(record, original)
+        XCTAssertEqual(revision.reason, "华为健康事后同步")
+        XCTAssertEqual(revision.summary.algorithmVersion, SummaryEngine.algorithmVersion)
+    }
+}

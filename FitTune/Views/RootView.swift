@@ -22,6 +22,20 @@ struct RootView: View {
         ) {
             WorkoutSessionView()
         }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { store.activeCardioDraft != nil },
+                set: { _ in }
+            )
+        ) {
+            CardioSessionView()
+        }
+        .sheet(item: Binding(
+            get: { store.presentedSummary },
+            set: { store.presentedSummary = $0 }
+        )) { summary in
+            WorkoutSummaryView(presentation: summary)
+        }
     }
 }
 

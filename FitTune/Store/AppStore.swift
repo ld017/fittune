@@ -28,6 +28,8 @@ final class AppStore {
     var favoriteExerciseIDs: Set<String> = []
     var customExercises: [ExerciseOption] = []
     var restingHeartRateSamples: [RestingHeartRateSample] = []
+    var activeCardioDraft: CardioSessionDraft?
+    var presentedSummary: WorkoutSummaryPresentation?
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -172,6 +174,68 @@ final class AppStore {
         restingHeartRateSamples.append(sample)
         restingHeartRateSamples.sort { $0.date < $1.date }
         persist()
+    }
+
+    func startCardioSession(modality: CardioModality, intensity: CardioIntensity) {
+        guard activeCardioDraft == nil, activeWorkoutDraft == nil else { return }
+        activeCardioDraft = CardioSessionDraft(modality: modality, intensity: intensity)
+        persist()
+    }
+
+    func appendCardioMetricSample(_ sample: WorkoutMetricSample) {
+        guard var draft = activeCardioDraft,
+              !draft.metricSamples.contains(where: { $0.id == sample.id }) else { return }
+        draft.metricSamples.append(sample)
+        draft.distanceMeters = max(draft.distanceMeters, sample.distanceMeters ?? 0)
+        draft.updatedAt = .now
+        activeCardioDraft = draft
+        persist()
+    }
+
+    func markCardioDataGap(_ reason: String) {
+        guard var draft = activeCardioDraft else { return }
+        draft.dataGapReason = reason
+        draft.updatedAt = .now
+        activeCardioDraft = draft
+        persist()
+    }
+
+    func checkpointActiveCardio() {
+        guard activeCardioDraft != nil else { return }
+        persist()
+    }
+
+    func discardCardioSession() {
+        activeCardioDraft = nil
+        persist()
+    }
+
+    @discardableResult
+    func finishCardioSession(status: WorkoutCompletionStatus, at completedAt: Date = .now) -> CardioWorkoutRecord? {
+        guard let draft = activeCardioDraft else { return nil }
+        let minutes = max(1, Int(completedAt.timeIntervalSince(draft.startedAt) / 60))
+        let heartRates = draft.metricSamples.compactMap(\.heartRateBPM)
+        var record = TrainingEngine.makeCardioWorkout(
+            modality: draft.modality,
+            intensity: draft.intensity,
+            minutes: minutes,
+            weightKg: latestWeight ?? 70,
+            profile: profile,
+            distanceKm: draft.distanceMeters > 0 ? draft.distanceMeters / 1000 : nil,
+            averageHeartRate: heartRates.isEmpty ? nil : heartRates.reduce(0, +) / Double(heartRates.count),
+            date: draft.startedAt
+        )
+        record.completionStatus = status
+        record.dataGapReason = draft.dataGapReason
+        record.metricSamples = draft.metricSamples
+        record.summary = SummaryEngine.cardioSummary(for: record)
+        cardioWorkouts.insert(record, at: 0)
+        activeCardioDraft = nil
+        persist()
+        if let summary = record.summary {
+            presentedSummary = WorkoutSummaryPresentation(title: record.modality.title, date: record.date, summary: summary)
+        }
+        return record
     }
 
     func updateSafetySettings(_ settings: PersonalSafetySettings) {
@@ -780,7 +844,11 @@ final class AppStore {
         record.planSnapshot = draft.planSnapshot
         record.changeEvents = draft.changeEvents
         record.metricSamples = draft.metricSamples
+        record.summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: weight)
         finishWorkoutDraft(with: record)
+        if let summary = record.summary {
+            presentedSummary = WorkoutSummaryPresentation(title: record.sessionName, date: record.completedAt, summary: summary)
+        }
         return record
     }
 
@@ -953,6 +1021,7 @@ final class AppStore {
         activeWorkoutDraft = nil
         recoveryCheckIns = []
         restingHeartRateSamples = []
+        activeCardioDraft = nil
         safetySettings = PersonalSafetySettings()
         favoriteExerciseIDs = []
         customExercises = []
@@ -1017,7 +1086,8 @@ final class AppStore {
             safetySettings: safetySettings,
             favoriteExerciseIDs: favoriteExerciseIDs,
             customExercises: customExercises,
-            restingHeartRateSamples: restingHeartRateSamples
+            restingHeartRateSamples: restingHeartRateSamples,
+            activeCardioDraft: activeCardioDraft
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -1062,6 +1132,7 @@ final class AppStore {
         let validExerciseIDs = Set(TrainingEngine.allExercises.map(\.id) + customExercises.map(\.id))
         favoriteExerciseIDs = (snapshot.favoriteExerciseIDs ?? []).intersection(validExerciseIDs)
         restingHeartRateSamples = snapshot.restingHeartRateSamples ?? []
+        activeCardioDraft = snapshot.activeCardioDraft
         if needsSchemaMigration {
             persist()
         }

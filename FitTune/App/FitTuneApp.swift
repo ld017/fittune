@@ -17,6 +17,7 @@ struct FitTuneApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .inactive || phase == .background {
                         store.checkpointActiveWorkout()
+                        store.checkpointActiveCardio()
                     }
                 }
         }
