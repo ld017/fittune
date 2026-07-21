@@ -2,6 +2,15 @@ import XCTest
 @testable import FitTune
 
 final class LiveSensorCoordinatorTests: XCTestCase {
+    @MainActor
+    func testWatchActivationCallbackDoesNotRecursivelyActivateAgain() {
+        let watch = ReentrantWatchSource()
+
+        _ = LiveSensorCoordinator(watchSource: watch)
+
+        XCTAssertEqual(watch.activateCount, 1)
+    }
+
     func testNewDiscoveryCannotReplaceActiveSourceWithoutConfirmation() {
         var coordinator = LiveSensorCoordinatorStateMachine()
         let watch = LiveSourceDescriptor(id: "watch", kind: .appleWatch, name: "Apple Watch")
@@ -46,4 +55,21 @@ final class LiveSensorCoordinatorTests: XCTestCase {
         XCTAssertEqual(LiveMetricValidator.validate(.init(timestamp: now, heartRateBPM: 100, provenance: provenance), previous: previous, contactDetected: false, now: now), .poorContact)
         XCTAssertEqual(LiveMetricValidator.validate(.init(timestamp: now, heartRateBPM: 104, provenance: provenance), previous: previous, contactDetected: true, now: now), .valid)
     }
+}
+
+@MainActor
+private final class ReentrantWatchSource: WatchLiveSource {
+    var isPairedAndInstalled = false
+    var isReachable = false
+    var onEnvelope: ((WatchMetricEnvelope) -> Void)?
+    var onEvent: ((WatchWorkoutEventEnvelope) -> Void)?
+    var onStatusChange: (() -> Void)?
+    var activateCount = 0
+
+    func activate() {
+        activateCount += 1
+        if activateCount == 1 { onStatusChange?() }
+    }
+
+    func send(command: MirroredWorkoutEvent, sessionID: UUID, activity: String) {}
 }

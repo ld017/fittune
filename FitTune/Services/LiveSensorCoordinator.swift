@@ -112,6 +112,7 @@ final class LiveSensorCoordinator {
         watchSource?.onEnvelope = { [weak self] envelope in self?.receive(envelope) }
         watchSource?.onEvent = { [weak self] event in self?.receive(event) }
         watchSource?.onStatusChange = { [weak self] in self?.refreshWatchAvailability() }
+        watchSource?.activate()
         refreshWatchAvailability()
     }
 
@@ -123,7 +124,6 @@ final class LiveSensorCoordinator {
     var watchIsReachable: Bool { watchSource?.isReachable == true }
 
     func refreshWatchAvailability() {
-        watchSource?.activate()
         if watchSource?.isPairedAndInstalled == true {
             machine.discover(LiveSourceDescriptor(id: "apple-watch", kind: .appleWatch, name: "Apple Watch"))
         }

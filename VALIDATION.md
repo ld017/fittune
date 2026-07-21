@@ -194,6 +194,7 @@
 - 使用 Apple Development 签名完成 Release 真机构建；Live Activity 扩展随主应用签名并通过嵌入验证。
 - 通过 `devicectl device install app` 覆盖安装，未执行卸载；随后成功启动 `com.codex.fittune`。
 - 设备安装清单确认：版本 `1.0.0`、构建 `10`。
+- 首次真机启动发现 WatchConnectivity 状态回调会重复激活会话并导致栈溢出；现已将激活限定为初始化一次，加入可重入回调回归测试，重新覆盖安装后确认进程持续运行且未产生新的崩溃日志。
 
 ## 已知平台限制
 
