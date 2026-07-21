@@ -17,6 +17,22 @@ struct PlanView: View {
 
                     if let plan = store.plan {
                         planSummary(plan)
+                        NavigationLink {
+                            ExerciseLibraryView()
+                        } label: {
+                            HStack {
+                                Label("动作库、收藏与自定义", systemImage: "star.square.on.square.fill")
+                                    .font(.headline)
+                                Spacer()
+                                Text("收藏 \(store.favoriteExerciseIDs.count)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(FitTheme.secondaryText)
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(FitTheme.secondaryText)
+                            }
+                            .fitCard()
+                        }
+                        .buttonStyle(.plain)
                         SectionHeading(
                             eyebrow: "模块一",
                             title: "力量训练",
@@ -92,11 +108,18 @@ struct PlanView: View {
                         }
                         Spacer()
                         Menu {
-                            ForEach(TrainingEngine.exerciseAlternatives(for: exercise.pattern)) { option in
+                            let compatible = (TrainingEngine.exerciseAlternatives(for: exercise.pattern) + store.customExercises.filter { $0.pattern == exercise.pattern })
+                                .sorted {
+                                    let leftFavorite = store.favoriteExerciseIDs.contains($0.id)
+                                    let rightFavorite = store.favoriteExerciseIDs.contains($1.id)
+                                    if leftFavorite != rightFavorite { return leftFavorite }
+                                    return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                                }
+                            ForEach(compatible) { option in
                                 Button {
                                     store.replaceExercise(sessionID: session.id, exerciseID: exercise.id, with: option)
                                 } label: {
-                                    Label(option.name, systemImage: option.name == exercise.name ? "checkmark" : "arrow.triangle.2.circlepath")
+                                    Label(option.name, systemImage: store.favoriteExerciseIDs.contains(option.id) ? "star.fill" : (option.name == exercise.name ? "checkmark" : "arrow.triangle.2.circlepath"))
                                 }
                             }
                         } label: {

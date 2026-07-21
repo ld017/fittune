@@ -480,11 +480,30 @@ final class AppStore {
         let exercise = draft.session.exercises[draft.exerciseIndex]
         guard draft.setNumber < exercise.sets else { return }
 
+        let previousKind = draft.currentSetKind
         draft.setNumber += 1
-        if let suggested = draft.recommendation?.nextLoadKg {
+        if draft.currentSetKind == .warmup,
+           let target = draft.workingLoadTargetByExercise[exercise.id] {
+            let suggestions = TrainingEngine.warmupPrescription(
+                workingLoadKg: target,
+                workingReps: exercise.repLower,
+                setCount: draft.currentWarmupSets
+            )
+            let warmupIndex = min(suggestions.count - 1, max(0, draft.setNumber - 1))
+            if suggestions.indices.contains(warmupIndex) {
+                draft.loadKg = suggestions[warmupIndex].loadKg
+                draft.reps = suggestions[warmupIndex].reps
+            }
+        } else if previousKind == .warmup,
+                  let target = draft.workingLoadTargetByExercise[exercise.id] {
+            draft.loadKg = target
+            draft.reps = exercise.repLower
+        } else if let suggested = draft.recommendation?.nextLoadKg {
             draft.loadKg = suggested
+            draft.reps = exercise.repLower
+        } else {
+            draft.reps = exercise.repLower
         }
-        draft.reps = exercise.repLower
         draft.rir = draft.currentSetKind.defaultRIR
         draft.techniqueQuality = 4
         draft.hasPain = false
@@ -523,7 +542,29 @@ final class AppStore {
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
-        draft.warmupSetsByExercise[exercise.id] = min(exercise.sets, max(0, requestedSets))
+        let warmupCount = min(exercise.sets, max(0, requestedSets))
+        if warmupCount > 0, draft.workingLoadTargetByExercise[exercise.id] == nil {
+            draft.workingLoadTargetByExercise[exercise.id] = draft.loadKg
+        }
+        draft.warmupSetsByExercise[exercise.id] = warmupCount
+        if warmupCount > 0,
+           draft.currentSetKind == .warmup,
+           let target = draft.workingLoadTargetByExercise[exercise.id] {
+            let suggestions = TrainingEngine.warmupPrescription(
+                workingLoadKg: target,
+                workingReps: exercise.repLower,
+                setCount: warmupCount
+            )
+            let warmupIndex = min(suggestions.count - 1, max(0, draft.setNumber - 1))
+            if suggestions.indices.contains(warmupIndex) {
+                draft.loadKg = suggestions[warmupIndex].loadKg
+                draft.reps = suggestions[warmupIndex].reps
+            }
+        } else if warmupCount == 0,
+                  let target = draft.workingLoadTargetByExercise[exercise.id] {
+            draft.loadKg = target
+            draft.reps = exercise.repLower
+        }
         draft.rir = draft.currentSetKind.defaultRIR
         draft.updatedAt = .now
         activeWorkoutDraft = draft

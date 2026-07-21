@@ -633,12 +633,24 @@ struct TrainingPlan: Codable, Equatable {
     var cardioSessions: [CardioSession]? = nil
 }
 
-enum SetKind: String, Codable, Equatable {
+enum SetKind: String, Codable, Equatable, CaseIterable, Identifiable {
     case warmup
     case working
     case backoff
     case drop
     case amrap
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .warmup: "热身组"
+        case .working: "正式组"
+        case .backoff: "回退组"
+        case .drop: "递减组"
+        case .amrap: "AMRAP 测试组"
+        }
+    }
 
     var defaultRIR: Int {
         self == .warmup ? 5 : 0
@@ -956,6 +968,7 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var setNumber: Int
     var warmupSetsByExercise: [UUID: Int] = [:]
     var setKindsByExercise: [UUID: [Int: SetKind]] = [:]
+    var workingLoadTargetByExercise: [UUID: Double] = [:]
     var loadKg: Double
     var reps: Int
     var rir: Int

@@ -27,6 +27,8 @@
 		B00000000000000000000012 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000015 /* AppStoreTests.swift */; };
 		B00000000000000000000013 /* WorkoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000016 /* WorkoutModels.swift */; };
 		B00000000000000000000014 /* HealthMetricModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* HealthMetricModels.swift */; };
+		B00000000000000000000015 /* ExerciseLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000018 /* ExerciseLibraryView.swift */; };
+		B00000000000000000000016 /* CustomExerciseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000019 /* CustomExerciseEditorView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,8 @@
 		C00000000000000000000015 /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000016 /* WorkoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModels.swift; sourceTree = "<group>"; };
 		C00000000000000000000017 /* HealthMetricModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricModels.swift; sourceTree = "<group>"; };
+		C00000000000000000000018 /* ExerciseLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseLibraryView.swift; sourceTree = "<group>"; };
+		C00000000000000000000019 /* CustomExerciseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExerciseEditorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +152,8 @@
 				C0000000000000000000000B /* PlanView.swift */,
 				C0000000000000000000000C /* InsightsView.swift */,
 				C0000000000000000000000D /* ProfileView.swift */,
+				C00000000000000000000018 /* ExerciseLibraryView.swift */,
+				C00000000000000000000019 /* CustomExerciseEditorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -317,6 +323,8 @@
 				B0000000000000000000000B /* PlanView.swift in Sources */,
 				B0000000000000000000000C /* InsightsView.swift in Sources */,
 				B0000000000000000000000D /* ProfileView.swift in Sources */,
+				B00000000000000000000015 /* ExerciseLibraryView.swift in Sources */,
+				B00000000000000000000016 /* CustomExerciseEditorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

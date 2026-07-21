@@ -225,7 +225,7 @@ struct WorkoutSessionView: View {
                     HStack {
                         Text("第 \(set.setNumber) 组")
                             .font(.subheadline.bold().monospacedDigit())
-                        Text(set.resolvedSetKind == .warmup ? "热身" : "正式")
+                        Text(set.resolvedSetKind.title)
                             .font(.caption2.bold())
                             .foregroundStyle(set.resolvedSetKind == .warmup ? FitTheme.warning : FitTheme.accentBlue)
                         Spacer()
@@ -241,11 +241,18 @@ struct WorkoutSessionView: View {
 
     private func inputCard(_ draft: WorkoutDraft) -> some View {
         VStack(spacing: 4) {
+            Picker("组类型", selection: Binding(get: { draft.currentSetKind }, set: { store.setDraftCurrentSetKind($0) })) {
+                ForEach(SetKind.allCases) { kind in
+                    Text(kind.title).tag(kind)
+                }
+            }
+            .pickerStyle(.menu)
+            divider
             NumericInputControl(title: "本组重量", value: doubleBinding(\.loadKg, marksLoadOverride: true), range: 0...400, step: store.profile?.loadIncrementKg ?? 2.5, unit: "kg")
             divider
             IntegerInputControl(title: "完成次数", value: intBinding(\.reps), range: 1...100, step: 1, unit: "次")
             divider
-            IntegerInputControl(title: "还可完成 RIR", value: intBinding(\.rir), range: 0...10, step: 1)
+            IntegerInputControl(title: "还可完成 RIR", value: intBinding(\.rir), range: draft.currentSetKind == .warmup ? 4...6 : 0...10, step: 1)
             divider
             techniqueControl(draft)
             divider
@@ -387,7 +394,14 @@ struct WorkoutSessionView: View {
         NavigationStack {
             List {
                 ForEach(ExerciseCategory.allCases) { category in
-                    let categoryItems = TrainingEngine.allExerciseOptions.filter { $0.resolvedCategory == category }
+                    let categoryItems = (TrainingEngine.allExerciseOptions + store.customExercises)
+                        .filter { $0.resolvedCategory == category }
+                        .sorted {
+                            let leftFavorite = store.favoriteExerciseIDs.contains($0.id)
+                            let rightFavorite = store.favoriteExerciseIDs.contains($1.id)
+                            if leftFavorite != rightFavorite { return leftFavorite }
+                            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                        }
                     if !categoryItems.isEmpty {
                         Section(category.title) {
                             ForEach(EquipmentKind.allCases) { equipment in
@@ -395,9 +409,24 @@ struct WorkoutSessionView: View {
                                 if !items.isEmpty {
                                     DisclosureGroup(equipment.title) {
                                         ForEach(items) { option in
-                                            Button(option.name) {
-                                                store.addDraftExercise(option)
-                                                showExerciseLibrary = false
+                                            HStack {
+                                                Button {
+                                                    store.addDraftExercise(option)
+                                                    showExerciseLibrary = false
+                                                } label: {
+                                                    HStack {
+                                                        Text(option.name)
+                                                        if option.source == .custom {
+                                                            Text("自定义").font(.caption2).foregroundStyle(FitTheme.warning)
+                                                        }
+                                                        Spacer()
+                                                    }
+                                                }
+                                                Button { store.toggleFavoriteExercise(option.id) } label: {
+                                                    Image(systemName: store.favoriteExerciseIDs.contains(option.id) ? "star.fill" : "star")
+                                                        .foregroundStyle(store.favoriteExerciseIDs.contains(option.id) ? FitTheme.warning : FitTheme.secondaryText)
+                                                }
+                                                .buttonStyle(.plain)
                                             }
                                         }
                                     }
@@ -420,7 +449,7 @@ struct WorkoutSessionView: View {
         if draft.currentSetKind == .warmup {
             return "热身组 \(draft.setNumber) / \(max(1, draft.currentWarmupSets))"
         }
-        return "正式组 \(draft.workingSetOrdinal) / \(max(1, draft.totalWorkingSets))"
+        return "\(draft.currentSetKind.title) \(draft.workingSetOrdinal) / \(max(1, draft.totalWorkingSets))"
     }
 
     private func restRemaining(_ draft: WorkoutDraft, at date: Date) -> Int {

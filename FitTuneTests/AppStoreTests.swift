@@ -40,20 +40,27 @@ final class AppStoreTests: XCTestCase {
         let store = AppStore(defaults: makeDefaults())
         let exercise = ExercisePrescription(name: "深蹲", pattern: .squat, sets: 4, repLower: 5, repUpper: 8, targetRIR: 0, isPriority: true)
         store.startWorkout(TrainingSession(name: "腿", focus: "腿", exercises: [exercise]))
+        store.updateWorkoutDraft { $0.loadKg = 100 }
 
         store.setDraftWarmupSets(2)
         XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .warmup)
         XCTAssertEqual(store.activeWorkoutDraft?.rir, 5)
+        let firstWarmupLoad = store.activeWorkoutDraft?.loadKg ?? 0
+        XCTAssertLessThan(firstWarmupLoad, 100)
 
         store.completeCurrentDraftSet()
         store.advanceDraftToNextSet()
         XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .warmup)
         XCTAssertEqual(store.activeWorkoutDraft?.rir, 5)
+        let secondWarmupLoad = store.activeWorkoutDraft?.loadKg ?? 0
+        XCTAssertGreaterThan(secondWarmupLoad, firstWarmupLoad)
+        XCTAssertLessThan(secondWarmupLoad, 100)
 
         store.completeCurrentDraftSet()
         store.advanceDraftToNextSet()
         XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .working)
         XCTAssertEqual(store.activeWorkoutDraft?.rir, 0)
+        XCTAssertEqual(store.activeWorkoutDraft?.loadKg, 100)
     }
 
     func testSetKindCanRepresentBackoffDropAndAMRAPWithoutChangingPlannedSets() {
