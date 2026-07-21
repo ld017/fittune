@@ -142,7 +142,7 @@ struct ProfileView: View {
             Label("算法透明度", systemImage: "checkmark.shield.fill")
                 .font(.headline)
                 .foregroundStyle(FitTheme.accent)
-            Text("训练建议由透明规则生成。重量结合上次表现、动作质量、间隔与今日恢复；训练负荷采用 session-RPE × 时长，并结合 RIR、相对强度和动作质量给出恢复区间。热量显示数据来源、置信度和误差范围。")
+            Text("训练建议由透明规则生成。下组重量只依据完成次数、RIR、今日恢复和历史记录；动作质量与疼痛作为独立安全提示。组间休息显示范围、原因和置信度，但重量、组数与是否继续始终由用户决定。")
                 .font(.subheadline)
                 .foregroundStyle(FitTheme.secondaryText)
             HStack {

@@ -578,7 +578,7 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("恢复分是辅助信号")
                     .font(.subheadline.bold())
-                Text("App 会把睡眠、间隔、完成次数、RIR 和动作质量合并判断，不会只凭单次体重或一晚睡眠大幅改计划。")
+                Text("App 会把睡眠、训练间隔、完成次数、RIR 与历史记录合并生成建议，但不会自动改变你设定的动作或组数。")
                     .font(.caption)
                     .foregroundStyle(FitTheme.secondaryText)
             }

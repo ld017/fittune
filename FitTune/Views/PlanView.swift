@@ -160,7 +160,7 @@ struct PlanView: View {
             Label("为什么这样安排", systemImage: "doc.text.magnifyingglass")
                 .font(.headline)
                 .foregroundStyle(FitTheme.accent)
-            Text("总量相当时，全身训练与分化训练没有稳定的力量或增肌优劣，因此分化可按偏好选择。首组负重以最近同动作记录为基线，再由休息间隔、完成次数、RIR、动作质量和今日恢复限制变化；器械替换始终保持相同动作模式。")
+            Text("总量相当时，全身训练与分化训练没有稳定的力量或增肌优劣，因此分化可按偏好选择。首组负重以最近同动作记录为基线，下组建议只根据次数、RIR、恢复与历史记录；器械替换始终保持相同动作模式。")
                 .font(.subheadline)
                 .foregroundStyle(FitTheme.secondaryText)
             Text("规则版本：\(store.plan?.ruleVersion ?? TrainingEngine.ruleVersion)")
