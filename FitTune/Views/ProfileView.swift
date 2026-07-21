@@ -1,5 +1,17 @@
 import SwiftUI
 
+private enum TrashRecord {
+    case workout(UUID, String)
+    case cardio(UUID, String)
+    case weight(UUID, String)
+
+    var title: String {
+        switch self {
+        case let .workout(_, title), let .cardio(_, title), let .weight(_, title): title
+        }
+    }
+}
+
 struct ProfileView: View {
     @Environment(AppStore.self) private var store
 
@@ -28,6 +40,8 @@ struct ProfileView: View {
     @State private var showRecords = false
     @State private var showClearRecordsAlert = false
     @State private var bodyDataSaved = false
+    @State private var pendingPermanentDeletion: TrashRecord?
+    @State private var showEmptyTrashAlert = false
 
     var body: some View {
         ZStack {
@@ -232,19 +246,41 @@ struct ProfileView: View {
                 Section("回收站 · \(store.deletedRecordCount)") {
                     if store.deletedRecordCount == 0 { Text("回收站为空").foregroundStyle(.secondary) }
                     ForEach(store.deletedWorkoutHistory) { item in
-                        restoreRow(title: "力量 · \(item.sessionName)") { store.restoreWorkout(id: item.id) }
+                        restoreRow(title: "力量 · \(item.sessionName)", restore: { store.restoreWorkout(id: item.id) }) {
+                            pendingPermanentDeletion = .workout(item.id, item.sessionName)
+                        }
                     }
                     ForEach(store.deletedCardioWorkouts) { item in
-                        restoreRow(title: "有氧 · \(item.modality.title)") { store.restoreCardioWorkout(id: item.id) }
+                        restoreRow(title: "有氧 · \(item.modality.title)", restore: { store.restoreCardioWorkout(id: item.id) }) {
+                            pendingPermanentDeletion = .cardio(item.id, item.modality.title)
+                        }
                     }
                     ForEach(store.deletedWeightHistory) { item in
-                        restoreRow(title: "体重 · \(item.kilograms.formatted(.number.precision(.fractionLength(1)))) kg") { store.restoreWeight(id: item.id) }
+                        let title = "\(item.kilograms.formatted(.number.precision(.fractionLength(1)))) kg"
+                        restoreRow(title: "体重 · \(title)", restore: { store.restoreWeight(id: item.id) }) {
+                            pendingPermanentDeletion = .weight(item.id, title)
+                        }
                     }
-                    if store.deletedRecordCount > 0 { Button("恢复回收站全部记录") { store.restoreAllDeletedRecords() } }
+                    if store.deletedRecordCount > 0 {
+                        Button("恢复回收站全部记录") { store.restoreAllDeletedRecords() }
+                        Button("清空回收站", role: .destructive) { showEmptyTrashAlert = true }
+                    }
                 }
             }
             .navigationTitle("记录管理")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showRecords = false } } }
+            .alert("永久删除记录？", isPresented: permanentDeletionPresented) {
+                Button("取消", role: .cancel) { pendingPermanentDeletion = nil }
+                Button("永久删除", role: .destructive) { permanentlyDeletePendingRecord() }
+            } message: {
+                Text("“\(pendingPermanentDeletion?.title ?? "该记录")”将无法恢复。")
+            }
+            .alert("清空回收站？", isPresented: $showEmptyTrashAlert) {
+                Button("取消", role: .cancel) {}
+                Button("永久删除全部", role: .destructive) { store.emptyTrash() }
+            } message: {
+                Text("回收站中的 \(store.deletedRecordCount) 条记录将无法恢复。")
+            }
         }
     }
 
@@ -252,8 +288,33 @@ struct ProfileView: View {
         HStack { VStack(alignment: .leading) { Text(title); Text(detail).font(.caption).foregroundStyle(.secondary) }; Spacer(); Button(role: .destructive, action: delete) { Image(systemName: "trash") } }
     }
 
-    private func restoreRow(title: String, restore: @escaping () -> Void) -> some View {
-        HStack { Text(title); Spacer(); Button("恢复", action: restore) }
+    private func restoreRow(title: String, restore: @escaping () -> Void, permanentlyDelete: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Button("恢复", action: restore)
+            Button(role: .destructive, action: permanentlyDelete) {
+                Image(systemName: "trash.slash")
+            }
+            .accessibilityLabel("永久删除 \(title)")
+        }
+    }
+
+    private var permanentDeletionPresented: Binding<Bool> {
+        Binding(
+            get: { pendingPermanentDeletion != nil },
+            set: { if !$0 { pendingPermanentDeletion = nil } }
+        )
+    }
+
+    private func permanentlyDeletePendingRecord() {
+        guard let record = pendingPermanentDeletion else { return }
+        switch record {
+        case let .workout(id, _): store.permanentlyDeleteWorkout(id: id)
+        case let .cardio(id, _): store.permanentlyDeleteCardioWorkout(id: id)
+        case let .weight(id, _): store.permanentlyDeleteWeight(id: id)
+        }
+        pendingPermanentDeletion = nil
     }
 
     private var resetButton: some View {
