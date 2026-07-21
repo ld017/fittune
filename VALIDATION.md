@@ -188,6 +188,13 @@
 - iPhone Simulator Debug/Release 构建以及 `FitTuneWatch` watchsimulator SDK 目标构建分别执行。
 - 项目文件通过 `plutil -lint`；源代码通过 `git diff --check`。
 
+## 真机覆盖安装
+
+- 设备：iPhone 15 Pro Max（iPhone16,2），CoreDevice 状态 `connected`。
+- 使用 Apple Development 签名完成 Release 真机构建；Live Activity 扩展随主应用签名并通过嵌入验证。
+- 通过 `devicectl device install app` 覆盖安装，未执行卸载；随后成功启动 `com.codex.fittune`。
+- 设备安装清单确认：版本 `1.0.0`、构建 `10`。
+
 ## 已知平台限制
 
 - 当前 Mac 有 watchOS SDK，但未安装与 Xcode 匹配的 watchOS Simulator runtime。为保证 iPhone 包可构建和覆盖安装，Watch App 暂未嵌入 iOS 包；Watch 目标可独立编译。购买 Apple Watch 后，安装对应 Xcode watchOS 组件并恢复 `Embed Watch Content` 即可随 iPhone App 分发。

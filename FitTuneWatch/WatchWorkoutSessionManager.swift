@@ -57,7 +57,7 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
     func end() {
         workoutSession?.end()
         builder?.endCollection(withEnd: .now) { [weak self] _, _ in
-            Task { @MainActor in self?.builder?.finishWorkout { _, _ in } }
+            Task { @MainActor in _ = try? await self?.builder?.finishWorkout() }
         }
         isRunning = false; isPaused = false; status = "训练已结束"; sendEvent("ended")
     }
