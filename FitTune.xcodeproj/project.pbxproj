@@ -52,6 +52,10 @@
 		B0000000000000000000002B /* TrendEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000002E /* TrendEngineTests.swift */; };
 		B0000000000000000000002C /* EnergyEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000002F /* EnergyEngine.swift */; };
 		B0000000000000000000002D /* EnergyEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000030 /* EnergyEngineTests.swift */; };
+		B0000000000000000000002E /* DataExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000031 /* DataExportService.swift */; };
+		B0000000000000000000002F /* DataExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000032 /* DataExportServiceTests.swift */; };
+		B00000000000000000000030 /* AlgorithmInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000033 /* AlgorithmInfoView.swift */; };
+		B00000000000000000000031 /* SafetySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000034 /* SafetySettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,6 +117,10 @@
 		C0000000000000000000002E /* TrendEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendEngineTests.swift; sourceTree = "<group>"; };
 		C0000000000000000000002F /* EnergyEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnergyEngine.swift; sourceTree = "<group>"; };
 		C00000000000000000000030 /* EnergyEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnergyEngineTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000031 /* DataExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportService.swift; sourceTree = "<group>"; };
+		C00000000000000000000032 /* DataExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportServiceTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000033 /* AlgorithmInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlgorithmInfoView.swift; sourceTree = "<group>"; };
+		C00000000000000000000034 /* SafetySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetySettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -193,6 +201,7 @@
 				C0000000000000000000001F /* LiveSensorCoordinator.swift */,
 				C00000000000000000000020 /* BluetoothHeartRateSource.swift */,
 				C00000000000000000000027 /* MotionLocationSource.swift */,
+				C00000000000000000000031 /* DataExportService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -214,6 +223,8 @@
 				C00000000000000000000028 /* CardioSessionView.swift */,
 				C0000000000000000000002B /* WorkoutSummaryView.swift */,
 				C0000000000000000000002C /* HistoryDetailView.swift */,
+				C00000000000000000000033 /* AlgorithmInfoView.swift */,
+				C00000000000000000000034 /* SafetySettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -241,6 +252,7 @@
 				C0000000000000000000002A /* SummaryEngineTests.swift */,
 				C0000000000000000000002E /* TrendEngineTests.swift */,
 				C00000000000000000000030 /* EnergyEngineTests.swift */,
+				C00000000000000000000032 /* DataExportServiceTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -394,6 +406,7 @@
 				B0000000000000000000001C /* LiveSensorCoordinator.swift in Sources */,
 				B0000000000000000000001D /* BluetoothHeartRateSource.swift in Sources */,
 				B00000000000000000000024 /* MotionLocationSource.swift in Sources */,
+				B0000000000000000000002E /* DataExportService.swift in Sources */,
 				B00000000000000000000006 /* DesignSystem.swift in Sources */,
 				B00000000000000000000007 /* RootView.swift in Sources */,
 				B00000000000000000000008 /* OnboardingView.swift in Sources */,
@@ -408,6 +421,8 @@
 				B00000000000000000000025 /* CardioSessionView.swift in Sources */,
 				B00000000000000000000028 /* WorkoutSummaryView.swift in Sources */,
 				B00000000000000000000029 /* HistoryDetailView.swift in Sources */,
+				B00000000000000000000030 /* AlgorithmInfoView.swift in Sources */,
+				B00000000000000000000031 /* SafetySettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -426,6 +441,7 @@
 				B00000000000000000000027 /* SummaryEngineTests.swift in Sources */,
 				B0000000000000000000002B /* TrendEngineTests.swift in Sources */,
 				B0000000000000000000002D /* EnergyEngineTests.swift in Sources */,
+				B0000000000000000000002F /* DataExportServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

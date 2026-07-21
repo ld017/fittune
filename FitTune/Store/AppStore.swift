@@ -261,6 +261,37 @@ final class AppStore {
         persist()
     }
 
+    func makeExportFiles() throws -> [URL] {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FitTune-v1-export-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let files: [(String, Data)] = [
+            ("FitTune-backup.json", try DataExportService.json(snapshot: currentSnapshot())),
+            ("workouts.csv", Data(DataExportService.workoutsCSV(workouts: workoutHistory, cardio: cardioWorkouts).utf8)),
+            ("sets.csv", Data(DataExportService.setsCSV(workouts: workoutHistory).utf8)),
+            ("metrics.csv", Data(DataExportService.metricsCSV(workouts: workoutHistory, cardio: cardioWorkouts).utf8)),
+            ("recovery.csv", Data(DataExportService.recoveryCSV(entries: recoveryCheckIns).utf8))
+        ]
+        return try files.map { name, data in
+            let url = directory.appendingPathComponent(name)
+            try data.write(to: url, options: .atomic)
+            return url
+        }
+    }
+
+    func clearWorkoutMetrics(id: UUID) {
+        guard let index = workoutHistory.firstIndex(where: { $0.id == id }) else { return }
+        workoutHistory[index].metricSamples = []
+        workoutHistory[index].summary = SummaryEngine.strengthSummary(for: workoutHistory[index], bodyWeightKg: latestWeight ?? 70)
+        persist()
+    }
+
+    func clearCardioMetrics(id: UUID) {
+        guard let index = cardioWorkouts.firstIndex(where: { $0.id == id }) else { return }
+        cardioWorkouts[index].metricSamples = []
+        cardioWorkouts[index].summary = SummaryEngine.cardioSummary(for: cardioWorkouts[index])
+        persist()
+    }
+
     func appendSummaryRevision(_ revision: SummaryRevision, toWorkoutID workoutID: UUID) {
         guard let index = workoutHistory.firstIndex(where: { $0.id == workoutID }) else { return }
         var revisions = workoutHistory[index].summaryRevisions ?? []
@@ -1079,8 +1110,8 @@ final class AppStore {
         }
     }
 
-    private func persist() {
-        let snapshot = AppSnapshot(
+    private func currentSnapshot() -> AppSnapshot {
+        AppSnapshot(
             profile: profile,
             plan: plan,
             readiness: readiness,
@@ -1107,6 +1138,10 @@ final class AppStore {
             restingHeartRateSamples: restingHeartRateSamples,
             activeCardioDraft: activeCardioDraft
         )
+    }
+
+    private func persist() {
+        let snapshot = currentSnapshot()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(snapshot) {

@@ -42,6 +42,8 @@ struct ProfileView: View {
     @State private var bodyDataSaved = false
     @State private var pendingPermanentDeletion: TrashRecord?
     @State private var showEmptyTrashAlert = false
+    @State private var exportURLs: [URL] = []
+    @State private var exportError: String?
 
     var body: some View {
         ZStack {
@@ -65,6 +67,7 @@ struct ProfileView: View {
                     }
                     .buttonStyle(.plain)
                     recordManagementCard
+                    dataAndSafetyCard
                     algorithmInfo
                     resetButton
                 }
@@ -164,6 +167,31 @@ struct ProfileView: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(FitTheme.accentBlue)
             }
+            NavigationLink("查看公式、版本、限制与论文依据") { AlgorithmInfoView() }
+                .font(.subheadline.bold())
+        }
+        .fitCard()
+    }
+
+    private var dataAndSafetyCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("数据、隐私与安全", systemImage: "lock.shield")
+                .font(.headline).foregroundStyle(FitTheme.accent)
+            Text("健康与训练数据默认保存在本机。JSON 是完整备份；CSV 用于表格分析，不等同于完整备份。")
+                .font(.subheadline).foregroundStyle(FitTheme.secondaryText)
+            NavigationLink("个人安全阈值与伤病部位") { SafetySettingsView() }
+            Button("生成 JSON + CSV 导出文件") {
+                do { exportURLs = try store.makeExportFiles(); exportError = nil }
+                catch { exportError = error.localizedDescription }
+            }
+            .buttonStyle(PrimaryActionButtonStyle())
+            if !exportURLs.isEmpty {
+                ShareLink(items: exportURLs) {
+                    Label("分享 5 个导出文件", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            if let exportError { Text(exportError).font(.caption).foregroundStyle(FitTheme.danger) }
         }
         .fitCard()
     }

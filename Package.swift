@@ -26,6 +26,7 @@ let package = Package(
                 "Services/LiveSensorSource.swift",
                 "Services/LiveSensorCoordinator.swift",
                 "Services/BluetoothHeartRateSource.swift",
+                "Services/DataExportService.swift",
                 "Store/AppStore.swift"
             ]
         ),
