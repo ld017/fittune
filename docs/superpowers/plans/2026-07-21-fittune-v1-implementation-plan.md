@@ -53,6 +53,7 @@
 - `MetricProvenance`：来源、覆盖率、采集时间和算法版本。
 - `PlanSnapshot`、`WorkoutChangeEvent`。
 - `RecoveryCheckIn`：睡眠、酸痛、压力、动力的自动值、手动值和最终值。
+- `PersonalSafetySettings`：伤病部位、禁用动作、疼痛阈值和最大心率提醒。
 - `WorkoutMetricSample`、`WorkoutSummary`、`SummaryRevision`。
 
 **实现：** 引入稳定数据结构，旧 `WorkoutRecord` 以可选字段桥接，保持现有初始化器和测试可编译。
@@ -165,6 +166,7 @@
 2. 今日可选择不训练、只力量、只有氧或两者，并可绕过计划选择部位。
 3. 开始训练即冻结 `PlanSnapshot`；之后编辑计划不改变活动训练和历史。
 4. 训练中增删/替换动作只写 `WorkoutChangeEvent`。
+5. 禁用动作不进入计划或自动替换候选；用户临时手选只提示，不被系统强制阻止。
 
 **实现：** 扩展分化编辑、当天组训入口和快照创建；伤病/避用部位继续作为筛选条件。
 
@@ -237,6 +239,7 @@
 2. 发现新设备不会抢占；切换必须显式确认。
 3. 断线只重连原设备，超时后进入 estimated，不自动连其他设备。
 4. 心率过期、异常跳变和缺口被标记并排除出算法输入。
+5. BLE 接触不良时立即将对应样本标为无效并公开显示 estimated 降级状态。
 
 **实现：** 协调器统一管理 none、Apple Watch 和 BLE；输出规范化 `WorkoutMetricSample` 和连接状态。
 
@@ -275,8 +278,9 @@
 
 1. iPhone/Watch 同 session ID 的样本按时间去重合并。
 2. Watch 断开后 iPhone 进入 stale/estimated，恢复后不生成第二条训练。
+3. Watch 暂停、继续和结束正确镜像到 iPhone；Watch 结束只保存同一 session ID 的一条记录。
 
-**实现：** Watch 上使用 `HKWorkoutSession` 和 live workout builder 采集心率、能量及运动支持指标，通过镜像/WatchConnectivity 发送到 iPhone；设备中心可选 Apple Watch 作为唯一实时源。
+**实现：** Watch 上使用 `HKWorkoutSession` 和 live workout builder 采集心率、能量及运动支持指标，通过镜像/WatchConnectivity 发送到 iPhone；设备中心可选 Apple Watch 作为唯一实时源；Watch 训练页提供暂停、继续和结束关键操作。
 
 **验证：** iPhone + Watch Simulator 联合构建和会话测试；用户购入 Apple Watch 后再完成实表校验，不阻塞手机端 v1.0 使用。
 
@@ -298,6 +302,8 @@
 2. 心率恢复差只能延长休息、阻止加重或给出保守建议，不能单独加重。
 3. 心率无效/缺失时结果退回原算法且训练可继续。
 4. 所有建议包含原因、可信度和用户覆盖能力。
+5. 前 3–5 次同动作训练分别累计心率反应、组间恢复、实际 RIR、容量和表现，推荐权重逐次增加；样本不足时不得冒充已个体化。
+6. 达到用户疼痛或最大心率提醒阈值时只生成醒目提示和停止入口，不自动结束。
 
 **实现：** 将休息拆为初始建议与实时更新；记录 60/120 秒恢复；训练页显示数据来源和不确定性。
 
@@ -387,6 +393,7 @@
 3. 有氧总结按方式包含距离、配速、步频/划水和心率恢复；数据不足不生成 VO₂max。
 4. 华为/HealthKit 延迟样本只追加摘要修订，原始记录不变。
 5. e1RM 超出算法适用次数/RIR 范围时标记低可信度且不进入力量进步判定；同重量次数趋势仍可独立计算。
+6. 热量、恢复时间和训练效果在结果旁显示来源、可信度和合理区间；延迟修订保留初始估算、更新时间和修正原因。
 
 **实现：** 结束训练强制弹出总结；历史详情复用总结组件并展示计划快照、组明细、曲线及修订来源。
 
@@ -421,11 +428,13 @@
 - `FitTune/Views/AlgorithmInfoView.swift`（新增）
 - `FitTune/Services/DataExportService.swift`（新增）
 - `FitTune/Views/ProfileView.swift`
+- `FitTune/Views/SafetySettingsView.swift`（新增）
+- `FitTune/Views/HealthDataManagementView.swift`（新增）
 - `FitTune/Resources/PrivacyInfo.xcprivacy`
 - `FitTuneTests/DataExportServiceTests.swift`（新增）
 - Info.plist 构建设置
 
-**测试先行：** 完整 JSON 导出后可恢复计划、原始训练、指标样本和摘要修订；CSV 分别导出训练、组明细、时序和恢复表，特殊字符与小数格式稳定，且不把 CSV 宣称为完整备份。
+**测试先行：** 完整 JSON 导出后可恢复计划、原始训练、指标样本和摘要修订；CSV 分别导出训练、组明细、时序和恢复表，特殊字符与小数格式稳定，且不把 CSV 宣称为完整备份。分别删除某设备导入副本、选定训练心率曲线和整次训练后，保留范围及摘要降级结果正确；删除本地副本不宣称删除外部健康库原始数据。
 
 **实施：** 展示算法版本、输入、公式选择、可信度含义和限制；实现用户主动触发的 JSON/CSV 导出和系统分享；更新 HealthKit、蓝牙、定位和运动权限说明；保留回收、恢复与永久删除入口。
 
