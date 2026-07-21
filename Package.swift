@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "FitTune",
             path: "FitTune",
-            exclude: ["App", "Resources", "Services/HealthKitService.swift", "Services/MotionLocationSource.swift", "Views"],
+            exclude: ["App", "Resources", "Models/WorkoutActivityAttributes.swift", "Services/HealthKitService.swift", "Services/MotionLocationSource.swift", "Services/WatchWorkoutBridge.swift", "Services/WorkoutActivityController.swift", "Views"],
             sources: [
                 "Models/DomainModels.swift",
                 "Models/WorkoutModels.swift",
@@ -22,18 +22,27 @@ let package = Package(
                 "Engine/SummaryEngine.swift",
                 "Engine/TrendEngine.swift",
                 "Engine/EnergyEngine.swift",
+                "Engine/WorkoutActivitySnapshot.swift",
                 "Services/HealthImportModels.swift",
                 "Services/LiveSensorSource.swift",
                 "Services/LiveSensorCoordinator.swift",
                 "Services/BluetoothHeartRateSource.swift",
                 "Services/DataExportService.swift",
+                "Services/WatchMetricMerge.swift",
                 "Store/AppStore.swift"
             ]
         ),
         .testTarget(
             name: "FitTuneTests",
             dependencies: ["FitTune"],
-            path: "FitTuneTests"
+            path: "FitTuneTests",
+            resources: [
+                .copy("Fixtures/EnergyBenchmarks.json"),
+                .copy("Fixtures/RestRecommendationBenchmarks.json"),
+                .copy("Fixtures/E1RMBenchmarks.json"),
+                .copy("Fixtures/RecoveryBenchmarks.json"),
+                .copy("Fixtures/HealthDeduplicationBenchmarks.json")
+            ]
         )
     ]
 )

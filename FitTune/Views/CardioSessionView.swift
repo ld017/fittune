@@ -29,12 +29,18 @@ struct CardioSessionView: View {
             }
         }
         .interactiveDismissDisabled()
-        .onAppear { startSensorsIfNeeded() }
+        .onAppear { startSensorsIfNeeded(); updateLiveActivity() }
         .onChange(of: liveSensors.latestSample?.id) { _, _ in
             if let sample = liveSensors.latestSample, liveSensors.latestValidity == .valid {
                 store.appendCardioMetricSample(sample)
+                updateLiveActivity()
             }
         }
+        .onChange(of: liveSensors.latestWatchEvent) { _, event in
+            guard event?.sessionID == store.activeCardioDraft?.id, event?.event == .ended else { return }
+            finish(.partial)
+        }
+        .onChange(of: store.activeCardioDraft?.updatedAt) { _, _ in updateLiveActivity() }
         .confirmationDialog("离开当前有氧训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
             Button("继续未完成训练") {}
             Button("保存并结束") { finish(.partial) }
@@ -44,6 +50,8 @@ struct CardioSessionView: View {
             Button("取消", role: .cancel) {}
             Button("放弃", role: .destructive) {
                 motion.stop()
+                liveSensors.endWorkout()
+                WorkoutActivityController.shared.end()
                 store.discardCardioSession()
                 dismiss()
             }
@@ -97,6 +105,7 @@ struct CardioSessionView: View {
 
     private func startSensorsIfNeeded() {
         guard let draft = store.activeCardioDraft else { return }
+        liveSensors.beginWorkout(sessionID: draft.id, activity: draft.modality.rawValue)
         motion.onSample = { store.appendCardioMetricSample($0) }
         motion.onDataGap = { store.markCardioDataGap($0) }
         motion.start(modality: draft.modality, from: draft.startedAt)
@@ -104,8 +113,15 @@ struct CardioSessionView: View {
 
     private func finish(_ status: WorkoutCompletionStatus) {
         motion.stop()
+        liveSensors.endWorkout()
+        WorkoutActivityController.shared.end()
         _ = store.finishCardioSession(status: status)
         dismiss()
+    }
+
+    private func updateLiveActivity() {
+        guard let draft = store.activeCardioDraft else { return }
+        WorkoutActivityController.shared.startOrUpdate(.cardio(draft: draft, heartRate: liveSensors.latestValidity == .valid ? liveSensors.latestSample?.heartRateBPM : nil))
     }
 
     private func durationText(_ seconds: TimeInterval) -> String {

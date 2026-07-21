@@ -11,6 +11,17 @@ struct LiveSourceDescriptor: Identifiable, Codable, Equatable {
     var name: String
 }
 
+@MainActor
+protocol WatchLiveSource: AnyObject {
+    var isPairedAndInstalled: Bool { get }
+    var isReachable: Bool { get }
+    var onEnvelope: ((WatchMetricEnvelope) -> Void)? { get set }
+    var onEvent: ((WatchWorkoutEventEnvelope) -> Void)? { get set }
+    var onStatusChange: (() -> Void)? { get set }
+    func activate()
+    func send(command: MirroredWorkoutEvent, sessionID: UUID, activity: String)
+}
+
 enum LiveConnectionState: String, Codable, Equatable {
     case none
     case scanning

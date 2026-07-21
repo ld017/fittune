@@ -5,7 +5,12 @@ struct FitTuneApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var store = AppStore()
     @State private var healthKit = HealthKitService()
-    @State private var liveSensors = LiveSensorCoordinator()
+    @State private var liveSensors: LiveSensorCoordinator
+
+    init() {
+        let watchBridge = WatchWorkoutBridge()
+        _liveSensors = State(initialValue: LiveSensorCoordinator(watchSource: watchBridge))
+    }
 
     var body: some Scene {
         WindowGroup {

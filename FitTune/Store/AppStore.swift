@@ -194,6 +194,27 @@ final class AppStore {
         persist()
     }
 
+    func clearImportedHealthData() {
+        restingHeartRateSamples.removeAll()
+        recoveryCheckIns = recoveryCheckIns.map { checkIn in
+            var cleaned = checkIn
+            cleaned.sleep = removingImportedValue(from: cleaned.sleep)
+            cleaned.soreness = removingImportedValue(from: cleaned.soreness)
+            cleaned.stress = removingImportedValue(from: cleaned.stress)
+            cleaned.motivation = removingImportedValue(from: cleaned.motivation)
+            return cleaned
+        }
+        persist()
+    }
+
+    private func removingImportedValue(from value: RecoveryDimensionValue) -> RecoveryDimensionValue {
+        guard value.provenance == .appleHealth || value.provenance == .huaweiHealth else { return value }
+        if let manual = value.manualValue {
+            return RecoveryDimensionValue(manualValue: manual, resolvedValue: manual, provenance: .manual)
+        }
+        return RecoveryDimensionValue(provenance: .unavailable)
+    }
+
     func startCardioSession(modality: CardioModality, intensity: CardioIntensity) {
         guard activeCardioDraft == nil, activeWorkoutDraft == nil else { return }
         activeCardioDraft = CardioSessionDraft(modality: modality, intensity: intensity)

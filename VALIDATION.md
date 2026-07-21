@@ -172,3 +172,26 @@
 
 - App 版本：`0.6.0`，build `6`。
 - 模拟器截图：`Screenshots/FitTune-v0.6-resumable-rest-simulator.png`、`Screenshots/FitTune-v0.6-exit-options-simulator.png`。
+# FitTune v1.0 最终验证记录（2026-07-22）
+
+## 交付范围
+
+- 主应用版本 `1.0.0 (10)`，Bundle ID 保持 `com.codex.fittune`，支持覆盖安装并迁移 v0.6 快照。
+- iOS 主应用包含 Live Activity 扩展；Apple Watch 目标、WatchConnectivity 桥和 HealthKit 训练采集代码已编译。
+- 实时来源保持单设备占用：Apple Watch 或标准 BLE 心率设备二选一；华为健康属于延迟导入，不占实时连接位。
+- 所有传感器和权限缺失均降级为估算或不可用，不阻塞训练。
+
+## 自动验证
+
+- `swift test`：包含迁移、计划快照、动作库、恢复、热量、休息、e1RM、HealthKit 去重、实时来源、摘要与导出。
+- 固定基准文件位于 `FitTuneTests/Fixtures/`，每份包含算法版本、依据、预期值和容差。
+- iPhone Simulator Debug/Release 构建以及 `FitTuneWatch` watchsimulator SDK 目标构建分别执行。
+- 项目文件通过 `plutil -lint`；源代码通过 `git diff --check`。
+
+## 已知平台限制
+
+- 当前 Mac 有 watchOS SDK，但未安装与 Xcode 匹配的 watchOS Simulator runtime。为保证 iPhone 包可构建和覆盖安装，Watch App 暂未嵌入 iOS 包；Watch 目标可独立编译。购买 Apple Watch 后，安装对应 Xcode watchOS 组件并恢复 `Embed Watch Content` 即可随 iPhone App 分发。
+- FIT 3 是否能向 Apple 健康写入睡眠、静息心率、步数等内容由华为健康版本、地区和用户授权决定。FitTune 只读取实际到达 Apple 健康的数据。
+- 真机的锁屏实时活动、后台定位/运动和健康权限仍需在目标 iPhone 上逐项确认；模拟器通过不能替代权限弹窗验收。
+
+---

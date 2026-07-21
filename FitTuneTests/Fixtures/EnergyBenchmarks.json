@@ -1,0 +1,1 @@
+{"algorithmVersion":"1.0-energy-1","basis":"Measured daily active energy is authoritative; known workouts and walking are de-duplicated.","resting":1700,"strength":200,"cardio":150,"walking":100,"measuredActive":600,"expectedTotal":2300,"tolerance":0.001}

@@ -44,6 +44,7 @@ struct ProfileView: View {
     @State private var showEmptyTrashAlert = false
     @State private var exportURLs: [URL] = []
     @State private var exportError: String?
+    @State private var showClearImportedHealthAlert = false
 
     var body: some View {
         ZStack {
@@ -94,6 +95,12 @@ struct ProfileView: View {
             Button("取消", role: .cancel) {}
             Button("移入回收站", role: .destructive) { store.clearRecordObjectsToTrash() }
         } message: { Text("训练、心肺、体重、身体组成与恢复记录会从趋势中移除，但仍可在回收站恢复。") }
+        .alert("清除导入的健康数据？", isPresented: $showClearImportedHealthAlert) {
+            Button("取消", role: .cancel) {}
+            Button("清除", role: .destructive) { store.clearImportedHealthData() }
+        } message: {
+            Text("将删除本机保存的静息心率和 Apple 健康/华为健康导入值；手动恢复评分与训练记录保留。")
+        }
         .sheet(isPresented: $showRecords) { recordsSheet }
     }
 
@@ -192,6 +199,8 @@ struct ProfileView: View {
                 }
             }
             if let exportError { Text(exportError).font(.caption).foregroundStyle(FitTheme.danger) }
+            Button("清除已导入的健康数据", role: .destructive) { showClearImportedHealthAlert = true }
+                .foregroundStyle(FitTheme.danger)
         }
         .fitCard()
     }
@@ -263,17 +272,23 @@ struct ProfileView: View {
                 Section("力量训练") {
                     if store.workoutHistory.isEmpty { Text("暂无记录").foregroundStyle(.secondary) }
                     ForEach(store.workoutHistory) { item in
-                        recordRow(title: item.sessionName, detail: "\(item.completedAt.formatted(date: .abbreviated, time: .shortened)) · \(item.sets.count) 组") {
-                            store.deleteWorkout(id: item.id)
-                        }
+                        recordRow(
+                            title: item.sessionName,
+                            detail: "\(item.completedAt.formatted(date: .abbreviated, time: .shortened)) · \(item.sets.count) 组",
+                            clearMetrics: item.metricSamples?.isEmpty == false ? { store.clearWorkoutMetrics(id: item.id) } : nil,
+                            delete: { store.deleteWorkout(id: item.id) }
+                        )
                     }
                 }
                 Section("有氧训练") {
                     if store.cardioWorkouts.isEmpty { Text("暂无记录").foregroundStyle(.secondary) }
                     ForEach(store.cardioWorkouts) { item in
-                        recordRow(title: item.modality.title, detail: "\(item.date.formatted(date: .abbreviated, time: .shortened)) · \(item.durationMinutes) 分钟") {
-                            store.deleteCardioWorkout(id: item.id)
-                        }
+                        recordRow(
+                            title: item.modality.title,
+                            detail: "\(item.date.formatted(date: .abbreviated, time: .shortened)) · \(item.durationMinutes) 分钟",
+                            clearMetrics: item.metricSamples?.isEmpty == false ? { store.clearCardioMetrics(id: item.id) } : nil,
+                            delete: { store.deleteCardioWorkout(id: item.id) }
+                        )
                     }
                 }
                 Section("体重") {
@@ -324,8 +339,16 @@ struct ProfileView: View {
         }
     }
 
-    private func recordRow(title: String, detail: String, delete: @escaping () -> Void) -> some View {
-        HStack { VStack(alignment: .leading) { Text(title); Text(detail).font(.caption).foregroundStyle(.secondary) }; Spacer(); Button(role: .destructive, action: delete) { Image(systemName: "trash") } }
+    private func recordRow(title: String, detail: String, clearMetrics: (() -> Void)? = nil, delete: @escaping () -> Void) -> some View {
+        HStack {
+            VStack(alignment: .leading) { Text(title); Text(detail).font(.caption).foregroundStyle(.secondary) }
+            Spacer()
+            if let clearMetrics {
+                Button(role: .destructive, action: clearMetrics) { Image(systemName: "waveform.path.badge.minus") }
+                    .accessibilityLabel("仅清除 \(title) 的心率与设备曲线")
+            }
+            Button(role: .destructive, action: delete) { Image(systemName: "trash") }
+        }
     }
 
     private func restoreRow(title: String, restore: @escaping () -> Void, permanentlyDelete: @escaping () -> Void) -> some View {

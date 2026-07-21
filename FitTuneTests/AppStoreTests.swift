@@ -263,6 +263,30 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.readinessAssessment.score, restored.currentRecoveryAssessment?.score)
     }
 
+    func testClearingImportedHealthDataKeepsManualRecoveryAndWorkoutRecords() {
+        let defaults = makeDefaults()
+        let store = AppStore(defaults: defaults)
+        let manual = RecoveryCheckIn(
+            date: .now,
+            sleep: .init(manualValue: 4, provenance: .manual),
+            soreness: .init(manualValue: 3, provenance: .manual),
+            stress: .init(manualValue: 3, provenance: .manual),
+            motivation: .init(manualValue: 4, provenance: .manual)
+        )
+        store.updateRecoveryCheckIn(manual)
+        store.importRestingHeartRate(.init(date: .now, bpm: 61, source: .appleHealth, sourceName: "健康", externalID: "rhr-1"))
+        store.workoutHistory = [WorkoutRecord(sessionName: "胸", startedAt: .now, completedAt: .now, readinessScore: 80, sets: [])]
+
+        store.clearImportedHealthData()
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertTrue(restored.restingHeartRateSamples.isEmpty)
+        XCTAssertEqual(restored.recoveryCheckIns.map(\.id), [manual.id])
+        XCTAssertEqual(restored.recoveryCheckIns.first?.sleep.manualValue, 4)
+        XCTAssertEqual(restored.recoveryCheckIns.first?.sleep.provenance, .manual)
+        XCTAssertEqual(restored.workoutHistory.count, 1)
+    }
+
     func testValidLiveHeartRateExtendsRestOnlyOnceAtSixtySecondMilestone() {
         let store = AppStore(defaults: makeDefaults())
         store.finishOnboarding(with: testProfile(goal: .hypertrophy, split: .fullBody))

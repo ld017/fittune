@@ -1,0 +1,1 @@
+{"algorithmVersion":"1.0-e1rm-1","basis":"Epley estimate using completed reps plus RIR, capped at 12 estimated maximum reps.","loadKg":100,"reps":5,"rir":2,"expectedKg":123.3333333333,"tolerance":0.01}

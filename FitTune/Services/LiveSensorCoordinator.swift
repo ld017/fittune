@@ -82,11 +82,15 @@ final class LiveSensorCoordinator {
     private(set) var machine = LiveSensorCoordinatorStateMachine()
     private(set) var latestSample: WorkoutMetricSample?
     private(set) var latestValidity: LiveMetricValidity = .missing
+    private(set) var latestWatchEvent: WatchWorkoutEventEnvelope?
     private(set) var statusMessage = "未连接实时设备，训练仍可使用估算模式"
     private let bluetoothSource: BluetoothHeartRateSource
+    private let watchSource: (any WatchLiveSource)?
+    private(set) var activeSessionID: UUID?
 
-    init(bluetoothSource: BluetoothHeartRateSource = BluetoothHeartRateSource()) {
+    init(bluetoothSource: BluetoothHeartRateSource = BluetoothHeartRateSource(), watchSource: (any WatchLiveSource)? = nil) {
         self.bluetoothSource = bluetoothSource
+        self.watchSource = watchSource
         bluetoothSource.onDiscovery = { [weak self] descriptor in
             Task { @MainActor in self?.machine.discover(descriptor) }
         }
@@ -105,12 +109,35 @@ final class LiveSensorCoordinator {
         bluetoothSource.onMeasurement = { [weak self] measurement, date, sourceName in
             Task { @MainActor in self?.receive(measurement, at: date, sourceName: sourceName) }
         }
+        watchSource?.onEnvelope = { [weak self] envelope in self?.receive(envelope) }
+        watchSource?.onEvent = { [weak self] event in self?.receive(event) }
+        watchSource?.onStatusChange = { [weak self] in self?.refreshWatchAvailability() }
+        refreshWatchAvailability()
     }
 
     var state: LiveConnectionState { machine.state }
     var activeLiveSource: LiveSourceDescriptor? { machine.activeLiveSource }
     var pendingSwitch: LiveSourceDescriptor? { machine.pendingSwitch }
     var discoveredSources: [LiveSourceDescriptor] { machine.discoveredSources }
+    var watchIsPaired: Bool { watchSource?.isPairedAndInstalled == true }
+    var watchIsReachable: Bool { watchSource?.isReachable == true }
+
+    func refreshWatchAvailability() {
+        watchSource?.activate()
+        if watchSource?.isPairedAndInstalled == true {
+            machine.discover(LiveSourceDescriptor(id: "apple-watch", kind: .appleWatch, name: "Apple Watch"))
+        }
+    }
+
+    func beginWorkout(sessionID: UUID, activity: String) {
+        activeSessionID = sessionID
+        if activeLiveSource?.kind == .appleWatch { watchSource?.send(command: .started, sessionID: sessionID, activity: activity) }
+    }
+
+    func endWorkout() {
+        if let activeSessionID, activeLiveSource?.kind == .appleWatch { watchSource?.send(command: .ended, sessionID: activeSessionID, activity: "") }
+        activeSessionID = nil
+    }
 
     func scanBluetooth() {
         machine.beginScanning()
@@ -151,8 +178,14 @@ final class LiveSensorCoordinator {
             bluetoothSource.connect(identifier: source.id)
             statusMessage = "正在连接 \(source.name)"
         case .appleWatch:
-            statusMessage = "Apple Watch 配套端就绪后可作为唯一实时来源"
-            machine.markEstimated()
+            watchSource?.activate()
+            if watchSource?.isPairedAndInstalled == true {
+                machine.didConnect(source)
+                statusMessage = watchSource?.isReachable == true ? "Apple Watch 已作为唯一实时来源" : "Apple Watch 已选择，等待手表连接"
+            } else {
+                machine.markEstimated()
+                statusMessage = "未检测到已安装 FitTune 的 Apple Watch"
+            }
         }
     }
 
@@ -172,5 +205,33 @@ final class LiveSensorCoordinator {
         latestSample = sample
         if let source = machine.activeLiveSource { machine.didConnect(source) }
         statusMessage = "实时心率 \(measurement.bpm) bpm · \(sourceName)"
+    }
+
+    private func receive(_ envelope: WatchMetricEnvelope) {
+        guard activeLiveSource?.kind == .appleWatch,
+              activeSessionID == nil || activeSessionID == envelope.sessionID else { return }
+        let validity = LiveMetricValidator.validate(envelope.sample, previous: latestSample, contactDetected: nil, now: envelope.sample.timestamp)
+        latestValidity = validity
+        guard validity == .valid else {
+            machine.markEstimated()
+            statusMessage = "Watch 样本异常或中断，当前改用估算"
+            return
+        }
+        activeSessionID = envelope.sessionID
+        latestSample = envelope.sample
+        if let source = machine.activeLiveSource { machine.didConnect(source) }
+        statusMessage = envelope.sample.heartRateBPM.map { "实时心率 \(Int($0.rounded())) bpm · Apple Watch" } ?? "Apple Watch 实时运动数据"
+    }
+
+    private func receive(_ envelope: WatchWorkoutEventEnvelope) {
+        guard activeLiveSource?.kind == .appleWatch,
+              activeSessionID == envelope.sessionID else { return }
+        latestWatchEvent = envelope
+        switch envelope.event {
+        case .paused: statusMessage = "Apple Watch 已暂停训练"
+        case .resumed: statusMessage = "Apple Watch 已继续训练"
+        case .ended: statusMessage = "Apple Watch 请求保存并结束"
+        case .started: statusMessage = "Apple Watch 已开始同步"
+        }
     }
 }

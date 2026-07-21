@@ -1,0 +1,1 @@
+{"algorithmVersion":"1.0-health-dedup-1","basis":"A HealthKit external UUID is unique within a source; a second UUID remains a separate sample.","existingExternalID":"same-uuid","duplicateExternalID":"same-uuid","newExternalID":"new-uuid","expectedCount":2,"tolerance":0}

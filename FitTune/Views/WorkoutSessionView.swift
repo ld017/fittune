@@ -30,9 +30,16 @@ struct WorkoutSessionView: View {
             if store.activeWorkoutDraft == nil, let initialSession {
                 store.startWorkout(initialSession)
             }
+            if let draft = store.activeWorkoutDraft { liveSensors.beginWorkout(sessionID: draft.id, activity: "strength") }
             appendLatestLiveSample()
+            updateLiveActivity()
         }
-        .onChange(of: liveSensors.latestSample?.id) { _, _ in appendLatestLiveSample() }
+        .onChange(of: liveSensors.latestSample?.id) { _, _ in appendLatestLiveSample(); updateLiveActivity() }
+        .onChange(of: liveSensors.latestWatchEvent) { _, event in
+            guard event?.sessionID == store.activeWorkoutDraft?.id, event?.event == .ended else { return }
+            saveAndExit(status: .partial)
+        }
+        .onChange(of: store.activeWorkoutDraft?.updatedAt) { _, _ in updateLiveActivity() }
         .confirmationDialog("离开当前训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
             Button("继续未完成训练") { showExitDialog = false }
             Button("保存并结束") { saveAndExit(status: .partial) }
@@ -43,6 +50,8 @@ struct WorkoutSessionView: View {
         .alert("确认放弃本次训练？", isPresented: $showDiscardConfirmation) {
             Button("返回训练", role: .cancel) {}
             Button("放弃且不保存", role: .destructive) {
+                liveSensors.endWorkout()
+                WorkoutActivityController.shared.end()
                 store.discardWorkoutDraft()
                 dismiss()
             }
@@ -483,8 +492,15 @@ struct WorkoutSessionView: View {
     }
 
     private func saveAndExit(status: WorkoutCompletionStatus) {
+        liveSensors.endWorkout()
+        WorkoutActivityController.shared.end()
         store.saveActiveWorkout(status: status)
         dismiss()
+    }
+
+    private func updateLiveActivity() {
+        guard let draft = store.activeWorkoutDraft else { return }
+        WorkoutActivityController.shared.startOrUpdate(.strength(draft: draft, heartRate: liveSensors.latestValidity == .valid ? liveSensors.latestSample?.heartRateBPM : nil))
     }
 
     private func doubleBinding(_ keyPath: WritableKeyPath<WorkoutDraft, Double>, marksLoadOverride: Bool = false) -> Binding<Double> {

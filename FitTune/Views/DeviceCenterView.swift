@@ -17,10 +17,16 @@ struct DeviceCenterView: View {
             }
 
             Section("Apple Watch") {
-                HStack {
-                    Label("Apple Watch 实时训练", systemImage: "applewatch")
-                    Spacer()
-                    Text("未检测").font(.caption).foregroundStyle(.secondary)
+                Button {
+                    sensors.refreshWatchAvailability()
+                    if let watch = sensors.discoveredSources.first(where: { $0.kind == .appleWatch }) { sensors.select(watch) }
+                } label: {
+                    HStack {
+                        Label("Apple Watch 实时训练", systemImage: "applewatch")
+                        Spacer()
+                        Text(sensors.watchIsPaired ? (sensors.watchIsReachable ? "可用" : "已配对") : "未检测")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Text("购买并配对 Apple Watch 后，可在此选择为唯一实时来源。华为健康的事后同步不占用实时连接位。")
                     .font(.caption)
@@ -54,6 +60,7 @@ struct DeviceCenterView: View {
             }
         }
         .navigationTitle("设备与实时数据")
+        .onAppear { sensors.refreshWatchAvailability() }
         .alert("切换实时设备？", isPresented: Binding(
             get: { sensors.pendingSwitch != nil },
             set: { if !$0 { sensors.cancelSwitch() } }
