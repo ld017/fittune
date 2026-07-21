@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WorkoutSessionView: View {
     @Environment(AppStore.self) private var store
+    @Environment(LiveSensorCoordinator.self) private var liveSensors
     @Environment(\.dismiss) private var dismiss
 
     private let initialSession: TrainingSession?
@@ -29,7 +30,9 @@ struct WorkoutSessionView: View {
             if store.activeWorkoutDraft == nil, let initialSession {
                 store.startWorkout(initialSession)
             }
+            appendLatestLiveSample()
         }
+        .onChange(of: liveSensors.latestSample?.id) { _, _ in appendLatestLiveSample() }
         .confirmationDialog("离开当前训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
             Button("继续未完成训练") { showExitDialog = false }
             Button("保存并结束") { saveAndExit(status: .partial) }
@@ -90,9 +93,9 @@ struct WorkoutSessionView: View {
             Spacer()
             VStack(spacing: 2) {
                 Text(draft.session.name).font(.headline)
-                Text("实时自动缓存")
+                Text(liveSensors.latestSample?.heartRateBPM.map { "实时心率 \(Int($0.rounded())) bpm" } ?? "实时自动缓存 · 心率估算")
                     .font(.caption2.bold())
-                    .foregroundStyle(FitTheme.accent)
+                    .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accent : FitTheme.warning)
             }
             Spacer()
             Text("\(draft.results.count) 组")
@@ -339,6 +342,9 @@ struct WorkoutSessionView: View {
                     Button("跳过计时") { store.advanceDraftToNextSet() }
                         .buttonStyle(.bordered)
                 }
+                Text(liveSensors.statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accentBlue : FitTheme.warning)
                 Button { store.advanceDraftToNextSet() } label: {
                     Label("开始下一组", systemImage: "play.fill")
                 }
@@ -465,6 +471,11 @@ struct WorkoutSessionView: View {
             rest.reasons.append("用户主动延长 \(seconds) 秒")
             draft.restRecommendation = rest
         }
+    }
+
+    private func appendLatestLiveSample() {
+        guard let sample = liveSensors.latestSample else { return }
+        store.appendLiveMetricSample(sample, validity: liveSensors.latestValidity)
     }
 
     private func formatSeconds(_ value: Int) -> String {

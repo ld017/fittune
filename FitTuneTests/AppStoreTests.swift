@@ -263,6 +263,31 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.readinessAssessment.score, restored.currentRecoveryAssessment?.score)
     }
 
+    func testValidLiveHeartRateExtendsRestOnlyOnceAtSixtySecondMilestone() {
+        let store = AppStore(defaults: makeDefaults())
+        store.finishOnboarding(with: testProfile(goal: .hypertrophy, split: .fullBody))
+        let session = store.plan!.sessions[0]
+        store.startWorkout(session)
+        store.updateWorkoutDraft {
+            $0.loadKg = 100
+            $0.reps = 8
+            $0.rir = 1
+        }
+        store.completeCurrentDraftSet()
+        let baselineRest = store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds
+        let start = Date(timeIntervalSince1970: 5_000_000)
+        store.updateWorkoutDraft { $0.restStartedAt = start }
+        let provenance = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
+        store.appendLiveMetricSample(.init(timestamp: start, heartRateBPM: 170, provenance: provenance), validity: .valid, now: start)
+        store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(60), heartRateBPM: 162, provenance: provenance), validity: .valid, now: start.addingTimeInterval(60))
+        let firstUpdate = store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds
+        store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(61), heartRateBPM: 161, provenance: provenance), validity: .valid, now: start.addingTimeInterval(61))
+
+        XCTAssertEqual(firstUpdate, min(600, baselineRest + 60))
+        XCTAssertEqual(store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds, firstUpdate)
+        XCTAssertEqual(store.activeWorkoutDraft!.metricSamples?.count, 3)
+    }
+
     func testSummaryRevisionAppendPreservesOriginalSets() {
         let store = AppStore(defaults: makeDefaults())
         let exerciseID = UUID()

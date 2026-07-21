@@ -39,6 +39,8 @@
 		B0000000000000000000001E /* LiveSensorCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */; };
 		B0000000000000000000001F /* BluetoothHeartRateParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */; };
 		B00000000000000000000020 /* DeviceCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000023 /* DeviceCenterView.swift */; };
+		B00000000000000000000021 /* LiveAdaptationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000024 /* LiveAdaptationEngine.swift */; };
+		B00000000000000000000022 /* LiveAdaptationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000025 /* LiveAdaptationEngineTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +89,8 @@
 		C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSensorCoordinatorTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateParserTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000023 /* DeviceCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCenterView.swift; sourceTree = "<group>"; };
+		C00000000000000000000024 /* LiveAdaptationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAdaptationEngine.swift; sourceTree = "<group>"; };
+		C00000000000000000000025 /* LiveAdaptationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAdaptationEngineTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +146,7 @@
 			children = (
 				C00000000000000000000003 /* TrainingEngine.swift */,
 				C0000000000000000000001A /* RecoveryEngine.swift */,
+				C00000000000000000000024 /* LiveAdaptationEngine.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -202,6 +207,7 @@
 				C0000000000000000000001D /* HealthImportMergeTests.swift */,
 				C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */,
 				C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */,
+				C00000000000000000000025 /* LiveAdaptationEngineTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -344,6 +350,7 @@
 				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
 				B00000000000000000000017 /* RecoveryEngine.swift in Sources */,
+				B00000000000000000000021 /* LiveAdaptationEngine.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,
 				B00000000000000000000019 /* HealthImportModels.swift in Sources */,
@@ -374,6 +381,7 @@
 				B0000000000000000000001A /* HealthImportMergeTests.swift in Sources */,
 				B0000000000000000000001E /* LiveSensorCoordinatorTests.swift in Sources */,
 				B0000000000000000000001F /* BluetoothHeartRateParserTests.swift in Sources */,
+				B00000000000000000000022 /* LiveAdaptationEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

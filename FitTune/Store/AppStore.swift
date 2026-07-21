@@ -442,6 +442,59 @@ final class AppStore {
         persist()
     }
 
+    func appendLiveMetricSample(
+        _ sample: WorkoutMetricSample,
+        validity: LiveMetricValidity,
+        now: Date = .now
+    ) {
+        guard validity == .valid, var draft = activeWorkoutDraft else { return }
+        var samples = draft.metricSamples ?? []
+        guard !samples.contains(where: { $0.id == sample.id }) else { return }
+        samples.append(sample)
+        draft.metricSamples = samples
+        draft.averageHeartRate = samples.compactMap(\.heartRateBPM).reduce(0, +) / Double(max(1, samples.compactMap(\.heartRateBPM).count))
+
+        if draft.phase == .resting,
+           let restStartedAt = draft.restStartedAt,
+           let recommendation = draft.recommendation,
+           let restRecommendation = draft.restRecommendation {
+            let elapsed = max(0, Int(now.timeIntervalSince(restStartedAt)))
+            let milestone = elapsed >= 120 ? 120 : (elapsed >= 60 ? 60 : 0)
+            if milestone > 0, !draft.liveRecoveryMilestonesApplied.contains(milestone) {
+                let recent = samples.filter { $0.timestamp >= restStartedAt.addingTimeInterval(-180) }
+                let peak = recent.compactMap(\.heartRateBPM).max()
+                let exerciseName = draft.currentExercise.name
+                let calibrationCount = workoutHistory.filter { record in
+                    record.sets.contains { $0.exerciseName == exerciseName }
+                }.count
+                let live = LiveAdaptationEngine.adapt(
+                    baseRecommendation: recommendation,
+                    baseRest: restRecommendation,
+                    currentLoadKg: draft.results.last?.loadKg ?? draft.loadKg,
+                    liveSignal: LiveHeartRateSignal(
+                        peakHeartRate: peak,
+                        currentHeartRate: sample.heartRateBPM,
+                        secondsAfterSet: milestone,
+                        validity: validity,
+                        sourceName: sample.provenance.sourceName
+                    ),
+                    calibrationSessions: calibrationCount,
+                    hasPain: draft.hasPain,
+                    painAlertThresholdReached: draft.hasPain,
+                    maximumHeartRateAlert: safetySettings.maximumHeartRateAlert
+                )
+                draft.recommendation?.nextLoadKg = live.nextLoadKg
+                draft.recommendation?.adjustment = live.adjustment
+                draft.recommendation?.reason = live.reasons.joined(separator: "；")
+                draft.restRecommendation = live.rest
+                draft.liveRecoveryMilestonesApplied.insert(milestone)
+            }
+        }
+        draft.updatedAt = now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
     func completeCurrentDraftSet() {
         guard var draft = activeWorkoutDraft,
               draft.phase == .training,
@@ -495,6 +548,7 @@ final class AppStore {
             readiness: readinessAssessment
         )
         draft.restStartedAt = .now
+        draft.liveRecoveryMilestonesApplied = []
         draft.phase = draft.setNumber >= exercise.sets ? .exerciseComplete : .resting
         draft.userOverrodeSuggestedLoad = false
         draft.updatedAt = .now

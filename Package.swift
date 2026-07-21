@@ -18,6 +18,7 @@ let package = Package(
                 "Models/HealthMetricModels.swift",
                 "Engine/TrainingEngine.swift",
                 "Engine/RecoveryEngine.swift",
+                "Engine/LiveAdaptationEngine.swift",
                 "Services/HealthImportModels.swift",
                 "Services/LiveSensorSource.swift",
                 "Services/LiveSensorCoordinator.swift",

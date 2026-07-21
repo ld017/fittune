@@ -985,6 +985,7 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var planSnapshot: PlanSnapshot? = nil
     var changeEvents: [WorkoutChangeEvent]? = nil
     var metricSamples: [WorkoutMetricSample]? = nil
+    var liveRecoveryMilestonesApplied: Set<Int> = []
 
     var currentExercise: ExercisePrescription { session.exercises[exerciseIndex] }
 
