@@ -2,6 +2,38 @@ import XCTest
 @testable import FitTune
 
 final class TrainingEngineTests: XCTestCase {
+    func testGeneratedPlanUsesRIRZeroForAllWorkingPrescriptions() {
+        let plan = TrainingEngine.generatePlan(for: profile(goal: .hypertrophy, experience: .intermediate))
+
+        XCTAssertFalse(plan.sessions.flatMap(\.exercises).isEmpty)
+        XCTAssertTrue(plan.sessions.flatMap(\.exercises).allSatisfy { $0.targetRIR == 0 })
+    }
+
+    func testAutomaticWarmupRampsLoadAndReducesRepetitions() {
+        let warmups = TrainingEngine.warmupPrescription(workingLoadKg: 100, workingReps: 5, setCount: 3)
+
+        XCTAssertEqual(warmups.count, 3)
+        XCTAssertEqual(warmups.map(\.rir), [5, 5, 5])
+        XCTAssertTrue(zip(warmups, warmups.dropFirst()).allSatisfy { $0.loadKg < $1.loadKg })
+        XCTAssertTrue(zip(warmups, warmups.dropFirst()).allSatisfy { $0.reps >= $1.reps })
+        XCTAssertLessThan(warmups.last?.loadKg ?? 100, 100)
+    }
+
+    func testOnlyWorkingSetsContributeToStrengthProgressEffect() {
+        let exerciseID = UUID()
+        let date = Date(timeIntervalSince1970: 1_721_563_200)
+        let working = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 2, loadKg: 80, reps: 8, rir: 0, completedAt: date, setKind: .working)
+        let warmup = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 1, loadKg: 40, reps: 20, rir: 0, completedAt: date, setKind: .warmup)
+        let base = WorkoutRecord(sessionName: "胸", startedAt: date, completedAt: date.addingTimeInterval(3600), readinessScore: 80, sets: [working], sessionRPE: 8)
+        let withWarmup = WorkoutRecord(sessionName: "胸", startedAt: date, completedAt: date.addingTimeInterval(3600), readinessScore: 80, sets: [warmup, working], sessionRPE: 8)
+
+        let baseEffect = TrainingEngine.evaluateStrengthWorkout(base)
+        let warmupEffect = TrainingEngine.evaluateStrengthWorkout(withWarmup)
+
+        XCTAssertEqual(warmupEffect.strengthScore, baseEffect.strengthScore)
+        XCTAssertEqual(warmupEffect.hypertrophyScore, baseEffect.hypertrophyScore)
+        XCTAssertEqual(warmupEffect.fatigueScore, baseEffect.fatigueScore)
+    }
     func testLowReadinessProducesConservativeAdjustment() {
         let input = ReadinessInput(sleepHours: 4.5, soreness: 5, stress: 5, motivation: 1)
         let assessment = TrainingEngine.assessReadiness(input)

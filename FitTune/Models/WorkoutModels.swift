@@ -1,5 +1,11 @@
 import Foundation
 
+struct WarmupSetSuggestion: Codable, Equatable {
+    var loadKg: Double
+    var reps: Int
+    var rir: Int = 5
+}
+
 struct PlanSnapshot: Identifiable, Codable, Equatable {
     var id: UUID
     var createdAt: Date

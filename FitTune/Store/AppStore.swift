@@ -441,7 +441,7 @@ final class AppStore {
             draft.loadKg = suggested
         }
         draft.reps = exercise.repLower
-        draft.rir = exercise.targetRIR
+        draft.rir = draft.currentSetKind.defaultRIR
         draft.techniqueQuality = 4
         draft.hasPain = false
         draft.phase = .training
@@ -480,6 +480,21 @@ final class AppStore {
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
         draft.warmupSetsByExercise[exercise.id] = min(exercise.sets, max(0, requestedSets))
+        draft.rir = draft.currentSetKind.defaultRIR
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func setDraftCurrentSetKind(_ kind: SetKind) {
+        guard var draft = activeWorkoutDraft,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count else { return }
+        let exerciseID = draft.session.exercises[draft.exerciseIndex].id
+        var kinds = draft.setKindsByExercise[exerciseID] ?? [:]
+        kinds[draft.setNumber] = kind
+        draft.setKindsByExercise[exerciseID] = kinds
+        draft.rir = kind.defaultRIR
         draft.updatedAt = .now
         activeWorkoutDraft = draft
         persist()
@@ -762,7 +777,7 @@ final class AppStore {
 
     private func learnWorkingLoads(from record: WorkoutRecord) {
         guard var currentPlan = plan else { return }
-        for set in record.sets.reversed() where set.loadKg > 0 {
+        for set in record.sets.reversed() where set.resolvedSetKind == .working && set.loadKg > 0 {
             for sessionIndex in currentPlan.sessions.indices {
                 if let exerciseIndex = currentPlan.sessions[sessionIndex].exercises.firstIndex(where: { $0.name == set.exerciseName }) {
                     currentPlan.sessions[sessionIndex].exercises[exerciseIndex].suggestedLoadKg = set.loadKg

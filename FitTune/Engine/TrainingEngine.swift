@@ -39,6 +39,28 @@ enum TrainingEngine {
         )
     }
 
+    static func warmupPrescription(workingLoadKg: Double, workingReps: Int, setCount: Int) -> [WarmupSetSuggestion] {
+        guard setCount > 0 else { return [] }
+        let count = min(4, setCount)
+        let percentageTemplates: [Int: [Double]] = [
+            1: [0.60],
+            2: [0.45, 0.70],
+            3: [0.40, 0.60, 0.80],
+            4: [0.30, 0.50, 0.70, 0.85]
+        ]
+        let percentages = percentageTemplates[count] ?? [0.60]
+        return percentages.enumerated().map { index, percentage in
+            let rawLoad = max(0, workingLoadKg * percentage)
+            let roundedLoad = (rawLoad / 2.5).rounded() * 2.5
+            let extraReps = max(0, (count - index - 1) * 2)
+            return WarmupSetSuggestion(
+                loadKg: min(workingLoadKg, roundedLoad),
+                reps: max(1, workingReps + extraReps),
+                rir: 5
+            )
+        }
+    }
+
     static func recommendNextSet(
         prescription: ExercisePrescription,
         result: SetResult,
@@ -633,7 +655,7 @@ enum TrainingEngine {
     }
 
     static func evaluateStrengthWorkout(_ record: WorkoutRecord) -> TrainingEffect {
-        let sets = record.sets
+        let sets = record.sets.filter { $0.resolvedSetKind == .working }
         let averageTechnique = average(sets.map { Double($0.techniqueQuality ?? record.sessionQuality ?? 3) })
         let nearFailure = sets.filter { $0.rir <= 1 || ($0.feeling?.rpe ?? 0) >= 9 }.count
         let durationMinutes = max(1, record.completedAt.timeIntervalSince(record.startedAt) / 60)
@@ -827,7 +849,6 @@ enum TrainingEngine {
         var sets = cautious ? 2 : (experience == .advanced ? 4 : 3)
         var lower = 6
         var upper = 10
-        var rir = cautious ? 4 : 2
 
         switch goal {
         case .maxStrength:
@@ -835,22 +856,18 @@ enum TrainingEngine {
                 lower = 3
                 upper = 6
                 sets = cautious ? 2 : (experience == .advanced ? 4 : 3)
-                rir = cautious ? 4 : 3
             } else {
                 lower = 6
                 upper = 10
                 sets = cautious ? 2 : 3
-                rir = 3
             }
         case .hypertrophy:
             lower = priority ? 6 : 8
             upper = priority ? 10 : 15
-            rir = cautious ? 3 : 2
         case .balanced:
             lower = 6
             upper = 12
             sets = cautious ? 2 : 3
-            rir = cautious ? 4 : 3
         }
 
         return ExercisePrescription(
@@ -859,7 +876,7 @@ enum TrainingEngine {
             sets: sets,
             repLower: lower,
             repUpper: upper,
-            targetRIR: rir,
+            targetRIR: 0,
             isPriority: priority,
             suggestedLoadKg: nil,
             equipmentKind: option.equipment

@@ -36,6 +36,40 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.activeWorkoutDraft?.rir, 1)
     }
 
+    func testWarmupSetsDefaultToRIRFiveThenWorkingSetDefaultsToZero() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(name: "深蹲", pattern: .squat, sets: 4, repLower: 5, repUpper: 8, targetRIR: 0, isPriority: true)
+        store.startWorkout(TrainingSession(name: "腿", focus: "腿", exercises: [exercise]))
+
+        store.setDraftWarmupSets(2)
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .warmup)
+        XCTAssertEqual(store.activeWorkoutDraft?.rir, 5)
+
+        store.completeCurrentDraftSet()
+        store.advanceDraftToNextSet()
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .warmup)
+        XCTAssertEqual(store.activeWorkoutDraft?.rir, 5)
+
+        store.completeCurrentDraftSet()
+        store.advanceDraftToNextSet()
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .working)
+        XCTAssertEqual(store.activeWorkoutDraft?.rir, 0)
+    }
+
+    func testSetKindCanRepresentBackoffDropAndAMRAPWithoutChangingPlannedSets() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(name: "卧推", pattern: .horizontalPush, sets: 3, repLower: 6, repUpper: 10, targetRIR: 0, isPriority: true)
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+
+        store.setDraftCurrentSetKind(.backoff)
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .backoff)
+        XCTAssertEqual(store.activeWorkoutDraft?.session.exercises[0].sets, 3)
+        store.setDraftCurrentSetKind(.drop)
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .drop)
+        store.setDraftCurrentSetKind(.amrap)
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetKind, .amrap)
+    }
+
     func testPermanentWorkoutDeletionCannotBeRestored() {
         let store = AppStore(defaults: makeDefaults())
         let record = WorkoutRecord(

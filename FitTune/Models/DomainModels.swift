@@ -597,6 +597,13 @@ struct TrainingPlan: Codable, Equatable {
 enum SetKind: String, Codable, Equatable {
     case warmup
     case working
+    case backoff
+    case drop
+    case amrap
+
+    var defaultRIR: Int {
+        self == .warmup ? 5 : 0
+    }
 }
 
 struct SetResult: Identifiable, Codable, Equatable {
@@ -909,6 +916,7 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var exerciseIndex: Int
     var setNumber: Int
     var warmupSetsByExercise: [UUID: Int] = [:]
+    var setKindsByExercise: [UUID: [Int: SetKind]] = [:]
     var loadKg: Double
     var reps: Int
     var rir: Int
@@ -933,7 +941,10 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     }
 
     var currentSetKind: SetKind {
-        setNumber <= currentWarmupSets ? .warmup : .working
+        if let explicit = setKindsByExercise[currentExercise.id]?[setNumber] {
+            return explicit
+        }
+        return setNumber <= currentWarmupSets ? .warmup : .working
     }
 
     var workingSetOrdinal: Int {
