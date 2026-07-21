@@ -25,6 +25,8 @@
 		B00000000000000000000010 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C00000000000000000000010 /* HealthKit.framework */; };
 		B00000000000000000000011 /* Charts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C00000000000000000000011 /* Charts.framework */; };
 		B00000000000000000000012 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000015 /* AppStoreTests.swift */; };
+		B00000000000000000000013 /* WorkoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000016 /* WorkoutModels.swift */; };
+		B00000000000000000000014 /* HealthMetricModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* HealthMetricModels.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +61,8 @@
 		C00000000000000000000013 /* FitTune.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitTune.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00000000000000000000014 /* FitTuneTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FitTuneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00000000000000000000015 /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000016 /* WorkoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModels.swift; sourceTree = "<group>"; };
+		C00000000000000000000017 /* HealthMetricModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMetricModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +107,8 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000002 /* DomainModels.swift */,
+				C00000000000000000000016 /* WorkoutModels.swift */,
+				C00000000000000000000017 /* HealthMetricModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -298,6 +304,8 @@
 			files = (
 				B00000000000000000000001 /* FitTuneApp.swift in Sources */,
 				B00000000000000000000002 /* DomainModels.swift in Sources */,
+				B00000000000000000000013 /* WorkoutModels.swift in Sources */,
+				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,

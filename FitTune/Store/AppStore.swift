@@ -23,6 +23,8 @@ final class AppStore {
     var deletedBodyCompositionHistory: [BodyCompositionEntry] = []
     var dailyTrainingChoice: DailyTrainingChoice?
     var activeWorkoutDraft: WorkoutDraft?
+    var recoveryCheckIns: [RecoveryCheckIn] = []
+    var safetySettings = PersonalSafetySettings()
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -127,6 +129,31 @@ final class AppStore {
             recoveryHistory.append(entry)
         }
         recoveryHistory.sort { $0.date < $1.date }
+        persist()
+    }
+
+    func updateRecoveryCheckIn(_ checkIn: RecoveryCheckIn) {
+        if let index = recoveryCheckIns.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: checkIn.date) }) {
+            recoveryCheckIns[index] = checkIn
+        } else {
+            recoveryCheckIns.append(checkIn)
+        }
+        recoveryCheckIns.sort { $0.date < $1.date }
+        persist()
+    }
+
+    func updateSafetySettings(_ settings: PersonalSafetySettings) {
+        safetySettings = settings
+        persist()
+    }
+
+    func appendSummaryRevision(_ revision: SummaryRevision, toWorkoutID workoutID: UUID) {
+        guard let index = workoutHistory.firstIndex(where: { $0.id == workoutID }) else { return }
+        var revisions = workoutHistory[index].summaryRevisions ?? []
+        guard !revisions.contains(where: { $0.id == revision.id }) else { return }
+        revisions.append(revision)
+        workoutHistory[index].summaryRevisions = revisions
+        workoutHistory[index].summary = revision.summary
         persist()
     }
 
@@ -780,7 +807,9 @@ final class AppStore {
             deletedCardioHistory: deletedCardioHistory,
             deletedRecoveryHistory: deletedRecoveryHistory,
             deletedBodyCompositionHistory: deletedBodyCompositionHistory,
-            activeWorkoutDraft: activeWorkoutDraft
+            activeWorkoutDraft: activeWorkoutDraft,
+            recoveryCheckIns: recoveryCheckIns,
+            safetySettings: safetySettings
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -819,6 +848,8 @@ final class AppStore {
         deletedRecoveryHistory = snapshot.deletedRecoveryHistory ?? []
         deletedBodyCompositionHistory = snapshot.deletedBodyCompositionHistory ?? []
         activeWorkoutDraft = snapshot.activeWorkoutDraft
+        recoveryCheckIns = snapshot.recoveryCheckIns ?? []
+        safetySettings = snapshot.safetySettings ?? PersonalSafetySettings()
         if needsSchemaMigration {
             persist()
         }

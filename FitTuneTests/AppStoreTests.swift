@@ -166,4 +166,80 @@ final class AppStoreTests: XCTestCase {
         let migrated = try decoder.decode(AppSnapshot.self, from: migratedData)
         XCTAssertEqual(migrated.resolvedSchemaVersion, AppSnapshot.currentSchemaVersion)
     }
+
+    func testRecoveryCheckInAndSafetySettingsPersistAcrossStoreRecreation() {
+        let defaults = makeDefaults()
+        let store = AppStore(defaults: defaults)
+        let checkIn = RecoveryCheckIn(
+            date: Date(timeIntervalSince1970: 1_721_563_200),
+            sleep: RecoveryDimensionValue(manualValue: 80, resolvedValue: 80, provenance: .manual),
+            soreness: RecoveryDimensionValue(manualValue: 20, resolvedValue: 20, provenance: .manual),
+            stress: RecoveryDimensionValue(manualValue: 35, resolvedValue: 35, provenance: .manual),
+            motivation: RecoveryDimensionValue(manualValue: 90, resolvedValue: 90, provenance: .manual)
+        )
+        let safety = PersonalSafetySettings(
+            avoidedRegions: [.shoulders],
+            disabledExerciseIDs: ["dumbbell-front-raise"],
+            painAlertThreshold: 2,
+            maximumHeartRateAlert: 185
+        )
+
+        store.updateRecoveryCheckIn(checkIn)
+        store.updateSafetySettings(safety)
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertEqual(restored.recoveryCheckIns, [checkIn])
+        XCTAssertEqual(restored.safetySettings, safety)
+    }
+
+    func testSummaryRevisionAppendPreservesOriginalSets() {
+        let store = AppStore(defaults: makeDefaults())
+        let exerciseID = UUID()
+        let originalSet = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 1, loadKg: 80, reps: 8, rir: 0)
+        let record = WorkoutRecord(sessionName: "胸", startedAt: .now, completedAt: .now, readinessScore: 80, sets: [originalSet])
+        store.workoutHistory = [record]
+        let provenance = MetricProvenance(source: .huaweiHealth, sourceName: "华为健康", confidence: .measured, coverage: 0.85)
+        let revision = SummaryRevision(
+            reason: "华为健康事后同步",
+            summary: WorkoutSummary(
+                generatedAt: .now,
+                algorithmVersion: "1.0.0",
+                activeEnergyKcal: MetricRange(value: 280, lowerBound: 260, upperBound: 300, provenance: provenance)
+            )
+        )
+
+        store.appendSummaryRevision(revision, toWorkoutID: record.id)
+
+        XCTAssertEqual(store.workoutHistory[0].sets, [originalSet])
+        XCTAssertEqual(store.workoutHistory[0].summaryRevisions?.last?.reason, "华为健康事后同步")
+    }
+
+    func testDraftV1ContextPersistsAcrossStoreRecreation() {
+        let defaults = makeDefaults()
+        let store = AppStore(defaults: defaults)
+        let exercise = ExercisePrescription(name: "卧推", pattern: .horizontalPush, sets: 3, repLower: 6, repUpper: 10, targetRIR: 0, isPriority: true)
+        let session = TrainingSession(name: "胸", focus: "胸", exercises: [exercise])
+        store.startWorkout(session)
+        let provenance = MetricProvenance(source: .phoneEstimate, sourceName: "iPhone 估算", confidence: .estimated, coverage: 0.5)
+        store.updateWorkoutDraft {
+            $0.planSnapshot = PlanSnapshot(
+                sourcePlanRuleVersion: "1.0",
+                sourceSessionID: session.id,
+                planTitle: "四分化",
+                sessionName: session.name,
+                goal: .hypertrophy,
+                split: .chestBackShouldersLegs,
+                equipment: .fullGym,
+                exercises: session.exercises
+            )
+            $0.changeEvents = [WorkoutChangeEvent(kind: .exerciseAdded, exerciseName: "卧推", detail: "测试")]
+            $0.metricSamples = [WorkoutMetricSample(timestamp: .now, heartRateBPM: 130, provenance: provenance)]
+        }
+
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertEqual(restored.activeWorkoutDraft?.planSnapshot?.sessionName, "胸")
+        XCTAssertEqual(restored.activeWorkoutDraft?.changeEvents?.count, 1)
+        XCTAssertEqual(restored.activeWorkoutDraft?.metricSamples?.first?.heartRateBPM, 130)
+    }
 }

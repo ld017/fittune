@@ -12,7 +12,13 @@ let package = Package(
             name: "FitTune",
             path: "FitTune",
             exclude: ["App", "Resources", "Services", "Views"],
-            sources: ["Models/DomainModels.swift", "Engine/TrainingEngine.swift", "Store/AppStore.swift"]
+            sources: [
+                "Models/DomainModels.swift",
+                "Models/WorkoutModels.swift",
+                "Models/HealthMetricModels.swift",
+                "Engine/TrainingEngine.swift",
+                "Store/AppStore.swift"
+            ]
         ),
         .testTarget(
             name: "FitTuneTests",

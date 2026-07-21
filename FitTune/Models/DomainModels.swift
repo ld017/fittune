@@ -712,6 +712,11 @@ struct WorkoutRecord: Identifiable, Codable, Equatable {
     var energyLowerBoundKcal: Double? = nil
     var energyUpperBoundKcal: Double? = nil
     var externalID: String? = nil
+    var planSnapshot: PlanSnapshot? = nil
+    var changeEvents: [WorkoutChangeEvent]? = nil
+    var metricSamples: [WorkoutMetricSample]? = nil
+    var summary: WorkoutSummary? = nil
+    var summaryRevisions: [SummaryRevision]? = nil
 
     var resolvedCompletionStatus: WorkoutCompletionStatus {
         completionStatus ?? .completed
@@ -917,6 +922,9 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var restStartedAt: Date? = nil
     var phase: WorkoutDraftPhase = .training
     var userOverrodeSuggestedLoad = false
+    var planSnapshot: PlanSnapshot? = nil
+    var changeEvents: [WorkoutChangeEvent]? = nil
+    var metricSamples: [WorkoutMetricSample]? = nil
 
     var currentExercise: ExercisePrescription { session.exercises[exerciseIndex] }
 
@@ -985,6 +993,8 @@ struct AppSnapshot: Codable {
     var deletedRecoveryHistory: [RecoveryEntry]? = nil
     var deletedBodyCompositionHistory: [BodyCompositionEntry]? = nil
     var activeWorkoutDraft: WorkoutDraft? = nil
+    var recoveryCheckIns: [RecoveryCheckIn]? = nil
+    var safetySettings: PersonalSafetySettings? = nil
     var schemaVersion: Int? = currentSchemaVersion
 
     var resolvedSchemaVersion: Int { schemaVersion ?? 6 }
