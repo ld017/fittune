@@ -31,7 +31,7 @@ struct WorkoutSessionView: View {
             }
         }
         .confirmationDialog("离开当前训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
-            Button("继续未完成训练", role: .cancel) {}
+            Button("继续未完成训练") { showExitDialog = false }
             Button("保存并结束") { saveAndExit(status: .partial) }
             Button("放弃训练", role: .destructive) { showDiscardConfirmation = true }
         } message: {
