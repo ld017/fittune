@@ -33,6 +33,12 @@
 		B00000000000000000000018 /* RecoveryEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* RecoveryEngineTests.swift */; };
 		B00000000000000000000019 /* HealthImportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001C /* HealthImportModels.swift */; };
 		B0000000000000000000001A /* HealthImportMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001D /* HealthImportMergeTests.swift */; };
+		B0000000000000000000001B /* LiveSensorSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* LiveSensorSource.swift */; };
+		B0000000000000000000001C /* LiveSensorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001F /* LiveSensorCoordinator.swift */; };
+		B0000000000000000000001D /* BluetoothHeartRateSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000020 /* BluetoothHeartRateSource.swift */; };
+		B0000000000000000000001E /* LiveSensorCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */; };
+		B0000000000000000000001F /* BluetoothHeartRateParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */; };
+		B00000000000000000000020 /* DeviceCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000023 /* DeviceCenterView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +81,12 @@
 		C0000000000000000000001B /* RecoveryEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryEngineTests.swift; sourceTree = "<group>"; };
 		C0000000000000000000001C /* HealthImportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthImportModels.swift; sourceTree = "<group>"; };
 		C0000000000000000000001D /* HealthImportMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthImportMergeTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000001E /* LiveSensorSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSensorSource.swift; sourceTree = "<group>"; };
+		C0000000000000000000001F /* LiveSensorCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSensorCoordinator.swift; sourceTree = "<group>"; };
+		C00000000000000000000020 /* BluetoothHeartRateSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateSource.swift; sourceTree = "<group>"; };
+		C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSensorCoordinatorTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateParserTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000023 /* DeviceCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCenterView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +159,9 @@
 			children = (
 				C00000000000000000000005 /* HealthKitService.swift */,
 				C0000000000000000000001C /* HealthImportModels.swift */,
+				C0000000000000000000001E /* LiveSensorSource.swift */,
+				C0000000000000000000001F /* LiveSensorCoordinator.swift */,
+				C00000000000000000000020 /* BluetoothHeartRateSource.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -164,6 +179,7 @@
 				C0000000000000000000000D /* ProfileView.swift */,
 				C00000000000000000000018 /* ExerciseLibraryView.swift */,
 				C00000000000000000000019 /* CustomExerciseEditorView.swift */,
+				C00000000000000000000023 /* DeviceCenterView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -184,6 +200,8 @@
 				C00000000000000000000015 /* AppStoreTests.swift */,
 				C0000000000000000000001B /* RecoveryEngineTests.swift */,
 				C0000000000000000000001D /* HealthImportMergeTests.swift */,
+				C00000000000000000000021 /* LiveSensorCoordinatorTests.swift */,
+				C00000000000000000000022 /* BluetoothHeartRateParserTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -329,6 +347,9 @@
 				B00000000000000000000004 /* AppStore.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,
 				B00000000000000000000019 /* HealthImportModels.swift in Sources */,
+				B0000000000000000000001B /* LiveSensorSource.swift in Sources */,
+				B0000000000000000000001C /* LiveSensorCoordinator.swift in Sources */,
+				B0000000000000000000001D /* BluetoothHeartRateSource.swift in Sources */,
 				B00000000000000000000006 /* DesignSystem.swift in Sources */,
 				B00000000000000000000007 /* RootView.swift in Sources */,
 				B00000000000000000000008 /* OnboardingView.swift in Sources */,
@@ -339,6 +360,7 @@
 				B0000000000000000000000D /* ProfileView.swift in Sources */,
 				B00000000000000000000015 /* ExerciseLibraryView.swift in Sources */,
 				B00000000000000000000016 /* CustomExerciseEditorView.swift in Sources */,
+				B00000000000000000000020 /* DeviceCenterView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,6 +372,8 @@
 				B00000000000000000000012 /* AppStoreTests.swift in Sources */,
 				B00000000000000000000018 /* RecoveryEngineTests.swift in Sources */,
 				B0000000000000000000001A /* HealthImportMergeTests.swift in Sources */,
+				B0000000000000000000001E /* LiveSensorCoordinatorTests.swift in Sources */,
+				B0000000000000000000001F /* BluetoothHeartRateParserTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -420,6 +444,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重、睡眠、静息心率、步数、能量和训练数据，以生成恢复与训练建议。";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于连接标准蓝牙心率设备，在训练中读取实时心率。";
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -449,6 +475,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = FitTune;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取体重、睡眠、静息心率、步数、能量和训练数据，以生成恢复与训练建议。";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于连接标准蓝牙心率设备，在训练中读取实时心率。";
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

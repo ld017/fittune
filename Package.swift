@@ -19,6 +19,9 @@ let package = Package(
                 "Engine/TrainingEngine.swift",
                 "Engine/RecoveryEngine.swift",
                 "Services/HealthImportModels.swift",
+                "Services/LiveSensorSource.swift",
+                "Services/LiveSensorCoordinator.swift",
+                "Services/BluetoothHeartRateSource.swift",
                 "Store/AppStore.swift"
             ]
         ),

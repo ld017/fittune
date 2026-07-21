@@ -52,6 +52,18 @@ struct ProfileView: View {
                     goalSettings
                     scheduleSettings
                     energyProfileSettings
+                    NavigationLink {
+                        DeviceCenterView()
+                    } label: {
+                        HStack {
+                            Label("设备与实时数据", systemImage: "applewatch.radiowaves.left.and.right")
+                                .font(.headline)
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(FitTheme.secondaryText)
+                        }
+                        .fitCard()
+                    }
+                    .buttonStyle(.plain)
                     recordManagementCard
                     algorithmInfo
                     resetButton
