@@ -794,6 +794,7 @@ final class AppStore {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let snapshot = try? decoder.decode(AppSnapshot.self, from: data) else { return }
+        let needsSchemaMigration = snapshot.resolvedSchemaVersion < AppSnapshot.currentSchemaVersion
         profile = snapshot.profile
         plan = snapshot.plan
         // Preserve the user's customized plan while marking it as running on the
@@ -818,5 +819,8 @@ final class AppStore {
         deletedRecoveryHistory = snapshot.deletedRecoveryHistory ?? []
         deletedBodyCompositionHistory = snapshot.deletedBodyCompositionHistory ?? []
         activeWorkoutDraft = snapshot.activeWorkoutDraft
+        if needsSchemaMigration {
+            persist()
+        }
     }
 }

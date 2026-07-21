@@ -145,4 +145,25 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNil(store.activeWorkoutDraft)
         XCTAssertEqual(store.workoutHistory.first?.id, record?.id)
     }
+
+    func testV06SnapshotRestoresAllRecordKindsAndPersistsCurrentSchema() throws {
+        let defaults = makeDefaults()
+        defaults.set(try V06SnapshotFixture.data(), forKey: "FitTune.snapshot.v1")
+
+        let store = AppStore(defaults: defaults)
+
+        XCTAssertEqual(store.workoutHistory.first?.id, V06SnapshotFixture.completedWorkoutID)
+        XCTAssertEqual(store.cardioWorkouts.first?.durationMinutes, 30)
+        XCTAssertEqual(store.weightHistory.first?.kilograms, 75)
+        XCTAssertEqual(store.deletedWorkoutHistory.first?.id, V06SnapshotFixture.deletedWorkoutID)
+        XCTAssertEqual(store.activeWorkoutDraft?.id, V06SnapshotFixture.draftID)
+        XCTAssertEqual(store.activeWorkoutDraft?.setNumber, 2)
+        XCTAssertEqual(store.activeWorkoutDraft?.results.count, 1)
+
+        let migratedData = try XCTUnwrap(defaults.data(forKey: "FitTune.snapshot.v1"))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let migrated = try decoder.decode(AppSnapshot.self, from: migratedData)
+        XCTAssertEqual(migrated.resolvedSchemaVersion, AppSnapshot.currentSchemaVersion)
+    }
 }
