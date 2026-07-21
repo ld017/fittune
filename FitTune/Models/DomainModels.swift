@@ -429,9 +429,34 @@ struct ExerciseOption: Identifiable, Hashable {
     var pattern: MovementPattern
     var equipment: EquipmentKind
     var category: ExerciseCategory? = nil
+    var stableID: String? = nil
+    var aliases: [String] = []
+    var secondaryCategories: [ExerciseCategory] = []
+    var isCompound: Bool? = nil
 
-    var id: String { "\(pattern.rawValue)-\(name)" }
+    var id: String { stableID ?? "\(pattern.rawValue)-\(name)" }
     var resolvedCategory: ExerciseCategory { category ?? ExerciseCategory(pattern: pattern) }
+    var resolvedIsCompound: Bool {
+        isCompound ?? [
+            .squat, .hinge, .horizontalPush, .horizontalPull,
+            .verticalPush, .verticalPull, .singleLeg
+        ].contains(pattern)
+    }
+}
+
+extension String {
+    var normalizedExerciseName: String {
+        var value = replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+        while let opening = value.firstIndex(of: "("),
+              let closing = value[opening...].firstIndex(of: ")") {
+            value.removeSubrange(opening...closing)
+        }
+        return value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .joined()
+            .lowercased()
+    }
 }
 
 enum ExerciseCategory: String, CaseIterable, Codable, Identifiable {

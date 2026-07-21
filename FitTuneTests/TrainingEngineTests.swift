@@ -502,6 +502,23 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertLessThanOrEqual(rest.upperSeconds, 180)
     }
 
+    func testExerciseCatalogHasUniqueIDsAndNames() {
+        let items = TrainingEngine.allExerciseOptions
+
+        XCTAssertEqual(Set(items.map(\.id)).count, items.count)
+        XCTAssertEqual(Set(items.map { $0.name.normalizedExerciseName }).count, items.count)
+    }
+
+    func testCatalogHasNoCombinedExercises() {
+        XCTAssertFalse(TrainingEngine.allExerciseOptions.contains { $0.name.contains(" + ") })
+    }
+
+    func testLegacyAliasesResolveToSpecificCanonicalEquipment() {
+        XCTAssertEqual(TrainingEngine.canonicalExercise(named: "蝴蝶机夹胸（肘垫）")?.name, "蝴蝶机夹胸")
+        XCTAssertEqual(TrainingEngine.canonicalExercise(named: "器械推肩")?.equipment, .selectorizedMachine)
+        XCTAssertEqual(TrainingEngine.canonicalExercise(named: "绳索夹胸")?.equipment, .cable)
+    }
+
     func testWorkoutDraftRoundTripsProgress() throws {
         let exercise = ExercisePrescription(
             name: "杠铃卧推",

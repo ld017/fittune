@@ -382,13 +382,24 @@ enum TrainingEngine {
     }
 
     static func exerciseAlternatives(for pattern: MovementPattern) -> [ExerciseOption] {
-        exerciseLibrary.filter { $0.pattern == pattern }
+        exerciseCatalog.filter { $0.pattern == pattern }
     }
 
-    static var allExerciseOptions: [ExerciseOption] { exerciseLibrary }
+    static var allExerciseOptions: [ExerciseOption] { exerciseCatalog }
+
+    static func canonicalExercise(named name: String) -> ExerciseOption? {
+        let key = name.normalizedExerciseName
+        return exerciseCatalog.first { option in
+            option.name.normalizedExerciseName == key
+                || option.aliases.contains { $0.normalizedExerciseName == key }
+        }
+    }
 
     static func exerciseOption(named name: String, pattern: MovementPattern) -> ExerciseOption? {
-        exerciseLibrary.first { $0.name == name && $0.pattern == pattern }
+        if let canonical = canonicalExercise(named: name), canonical.pattern == pattern {
+            return canonical
+        }
+        return exerciseCatalog.first { $0.name == name && $0.pattern == pattern }
     }
 
     static func makePrescription(for option: ExerciseOption, profile: UserProfile, priority: Bool = false) -> ExercisePrescription {
@@ -1070,6 +1081,54 @@ enum TrainingEngine {
         ExerciseOption(name: "单臂绳索下压", pattern: .arms, equipment: .cable, category: .arms),
         ExerciseOption(name: "牧师凳弯举机", pattern: .arms, equipment: .selectorizedMachine, category: .arms)
     ]
+
+    private static let exerciseCatalog: [ExerciseOption] = {
+        var catalog: [ExerciseOption] = []
+        var indexByName: [String: Int] = [:]
+
+        for raw in exerciseLibrary where !raw.name.contains(" + ") {
+            var option = raw
+            if option.equipment == .machineCable {
+                option.equipment = option.name.contains("绳索")
+                    ? .cable
+                    : .selectorizedMachine
+            }
+            let key = option.name.normalizedExerciseName
+            guard !key.isEmpty else { continue }
+
+            if let index = indexByName[key] {
+                var existing = catalog[index]
+                if existing.name != raw.name, !existing.aliases.contains(raw.name) {
+                    existing.aliases.append(raw.name)
+                }
+                if existing.equipment == .machineCable {
+                    existing.equipment = option.equipment
+                }
+                if existing.category == nil {
+                    existing.category = option.category
+                }
+                existing.stableID = "\(existing.resolvedCategory.rawValue).\(existing.equipment.rawValue).\(existing.pattern.rawValue).\(key)"
+                catalog[index] = existing
+            } else {
+                option.stableID = "\(option.resolvedCategory.rawValue).\(option.equipment.rawValue).\(option.pattern.rawValue).\(key)"
+                indexByName[key] = catalog.count
+                catalog.append(option)
+            }
+        }
+
+        return catalog.sorted {
+            if $0.resolvedCategory.rawValue != $1.resolvedCategory.rawValue {
+                return $0.resolvedCategory.rawValue < $1.resolvedCategory.rawValue
+            }
+            if $0.pattern.rawValue != $1.pattern.rawValue {
+                return $0.pattern.rawValue < $1.pattern.rawValue
+            }
+            if $0.equipment.rawValue != $1.equipment.rawValue {
+                return $0.equipment.rawValue < $1.equipment.rawValue
+            }
+            return $0.name < $1.name
+        }
+    }()
 
     private static func average(_ values: [Double]) -> Double {
         guard !values.isEmpty else { return 0 }
