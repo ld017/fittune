@@ -413,6 +413,49 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(TrainingEngine.allExerciseOptions.filter { $0.resolvedCategory == .chest }.count, 15)
     }
 
+    func testWorkoutDraftRoundTripsProgress() throws {
+        let exercise = ExercisePrescription(
+            name: "杠铃卧推",
+            pattern: .horizontalPush,
+            sets: 5,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 2,
+            isPriority: true,
+            equipmentKind: .barbell
+        )
+        let session = TrainingSession(name: "胸部训练", focus: "胸", exercises: [exercise])
+        let draft = WorkoutDraft(
+            sourceSessionID: session.id,
+            session: session,
+            exerciseIndex: 0,
+            setNumber: 4,
+            warmupSetsByExercise: [exercise.id: 2],
+            loadKg: 80,
+            reps: 8,
+            rir: 1,
+            techniqueQuality: 4,
+            hasPain: false
+        )
+
+        let restored = try JSONDecoder().decode(WorkoutDraft.self, from: JSONEncoder().encode(draft))
+
+        XCTAssertEqual(restored, draft)
+        XCTAssertEqual(restored.currentSetKind, .working)
+        XCTAssertEqual(restored.workingSetOrdinal, 2)
+        XCTAssertEqual(restored.totalWorkingSets, 3)
+    }
+
+    func testLegacySetWithoutKindResolvesAsWorking() throws {
+        let json = #"{"id":"00000000-0000-0000-0000-000000000001","exerciseID":"00000000-0000-0000-0000-000000000002","exerciseName":"卧推","setNumber":1,"loadKg":60,"reps":8,"rir":2,"completedAt":"2026-07-21T10:00:00Z"}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let result = try decoder.decode(SetResult.self, from: Data(json.utf8))
+
+        XCTAssertEqual(result.resolvedSetKind, .working)
+    }
+
     private var readyAssessment: ReadinessAssessment {
         TrainingEngine.assessReadiness(ReadinessInput(sleepHours: 8, soreness: 1, stress: 1, motivation: 5))
     }

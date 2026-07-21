@@ -569,6 +569,11 @@ struct TrainingPlan: Codable, Equatable {
     var cardioSessions: [CardioSession]? = nil
 }
 
+enum SetKind: String, Codable, Equatable {
+    case warmup
+    case working
+}
+
 struct SetResult: Identifiable, Codable, Equatable {
     var id = UUID()
     var exerciseID: UUID
@@ -581,6 +586,9 @@ struct SetResult: Identifiable, Codable, Equatable {
     var movementPattern: MovementPattern? = nil
     var techniqueQuality: Int? = nil
     var feeling: SetFeeling? = nil
+    var setKind: SetKind? = nil
+
+    var resolvedSetKind: SetKind { setKind ?? .working }
 }
 
 enum SetFeeling: String, CaseIterable, Codable, Identifiable {
@@ -801,7 +809,7 @@ struct RecoveryEntry: Identifiable, Codable, Equatable {
     var readinessScore: Int
 }
 
-enum LoadAdjustment: String, Equatable {
+enum LoadAdjustment: String, Codable, Equatable {
     case increase
     case hold
     case decrease
@@ -823,7 +831,7 @@ enum LoadAdjustment: String, Equatable {
     }
 }
 
-struct SetRecommendation: Equatable {
+struct SetRecommendation: Codable, Equatable {
     var nextLoadKg: Double
     var adjustment: LoadAdjustment
     var reason: String
@@ -833,7 +841,7 @@ struct SetRecommendation: Equatable {
     var continuation: TrainingContinuation
 }
 
-enum TrainingContinuation: String, Equatable {
+enum TrainingContinuation: String, Codable, Equatable {
     case continueTraining
     case stopExercise
     case stopWorkout
@@ -844,6 +852,63 @@ enum TrainingContinuation: String, Equatable {
         case .stopExercise: "建议结束本动作"
         case .stopWorkout: "建议结束本次训练"
         }
+    }
+}
+
+enum WorkoutDraftPhase: String, Codable, Equatable {
+    case training
+    case resting
+    case exerciseComplete
+}
+
+struct RestRecommendation: Codable, Equatable {
+    var lowerSeconds: Int
+    var recommendedSeconds: Int
+    var upperSeconds: Int
+    var confidence: String
+    var reasons: [String]
+    var inputsUsed: [String]
+}
+
+struct WorkoutDraft: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var sourceSessionID: UUID
+    var session: TrainingSession
+    var startedAt: Date = .now
+    var updatedAt: Date = .now
+    var exerciseIndex: Int
+    var setNumber: Int
+    var warmupSetsByExercise: [UUID: Int] = [:]
+    var loadKg: Double
+    var reps: Int
+    var rir: Int
+    var techniqueQuality: Int
+    var hasPain: Bool
+    var averageHeartRate = 0.0
+    var measuredActiveEnergyKcal = 0.0
+    var results: [SetResult] = []
+    var recommendation: SetRecommendation? = nil
+    var restRecommendation: RestRecommendation? = nil
+    var restStartedAt: Date? = nil
+    var phase: WorkoutDraftPhase = .training
+    var userOverrodeSuggestedLoad = false
+
+    var currentExercise: ExercisePrescription { session.exercises[exerciseIndex] }
+
+    var currentWarmupSets: Int {
+        min(currentExercise.sets, max(0, warmupSetsByExercise[currentExercise.id] ?? 0))
+    }
+
+    var currentSetKind: SetKind {
+        setNumber <= currentWarmupSets ? .warmup : .working
+    }
+
+    var workingSetOrdinal: Int {
+        max(0, setNumber - currentWarmupSets)
+    }
+
+    var totalWorkingSets: Int {
+        max(0, currentExercise.sets - currentWarmupSets)
     }
 }
 
@@ -892,4 +957,5 @@ struct AppSnapshot: Codable {
     var deletedCardioHistory: [CardioMetricEntry]? = nil
     var deletedRecoveryHistory: [RecoveryEntry]? = nil
     var deletedBodyCompositionHistory: [BodyCompositionEntry]? = nil
+    var activeWorkoutDraft: WorkoutDraft? = nil
 }
