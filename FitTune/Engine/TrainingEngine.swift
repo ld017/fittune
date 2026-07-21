@@ -48,93 +48,33 @@ enum TrainingEngine {
         priorRecord: WorkoutRecord? = nil
     ) -> SetRecommendation {
         let step = max(increment, 0.5)
-        let technique = result.techniqueQuality ?? 4
         var factor = 1.0
         var action = LoadAdjustment.hold
-        var reasons = ["次数、RIR 与动作质量均处于目标范围"]
-        var restSeconds = prescription.isPriority ? 180 : 120
-        var remainingSets = max(0, prescription.sets - result.setNumber)
-        var continuation = TrainingContinuation.continueTraining
+        var reasons = ["完成次数与 RIR 处于目标范围"]
+        let remainingSets = max(0, prescription.sets - result.setNumber)
 
-        if technique <= 2 || result.reps < prescription.repLower || result.rir < prescription.targetRIR - 1 {
+        if result.reps < prescription.repLower || result.rir < prescription.targetRIR - 1 {
             factor = 0.925
             action = .decrease
-            reasons = [technique <= 2
-                ? "动作质量偏低，先减重以恢复稳定幅度与控制。"
-                : "完成次数或实际 RIR 低于目标，先减少疲劳并保持动作质量。"]
-            restSeconds = max(restSeconds, 210)
-        } else if result.reps >= prescription.repUpper && result.rir > prescription.targetRIR + 1 && technique >= 4 {
+            reasons = ["完成次数或实际 RIR 低于目标，建议保守减重"]
+        } else if result.reps >= prescription.repUpper && result.rir > prescription.targetRIR + 1 {
             factor = 1.025
             action = .increase
-            reasons = ["已达到次数上限、保留额外余力，且动作质量良好"]
+            reasons = ["已达到次数上限且保留额外余力"]
         }
 
         if readiness.level == .low && action != .decrease {
             factor = min(factor, readiness.loadMultiplier)
             action = .decrease
             reasons.append("今天恢复信号偏低，采用保守重量")
-            restSeconds += 30
         } else if readiness.level == .moderate && action == .increase {
             factor = 1
             action = .hold
             reasons.append("恢复状态一般，暂不在组间加重")
         }
 
-        switch result.feeling {
-        case .veryEasy, .easy:
-            restSeconds = max(90, restSeconds - 30)
-            reasons.append("本组 RPE ≤7，余力充足")
-        case .moderate, .good:
-            reasons.append("本组约 RPE 8，与目标强度相符")
-        case .hard:
-            restSeconds = max(restSeconds, 180)
-            remainingSets = min(remainingSets, 2)
-            if action == .increase { action = .hold; factor = 1 }
-            reasons.append("本组约 RPE 9，延长休息并限制剩余组数")
-        case .veryHard:
-            restSeconds = max(restSeconds, 240)
-            remainingSets = min(remainingSets, 1)
-            action = .decrease
-            factor = min(factor, 0.925)
-            reasons.append("本组约 RPE 9.5，下一组减重且不再堆积组数")
-        case .maximal, .exhausted:
-            restSeconds = max(restSeconds, 240)
-            remainingSets = min(remainingSets, 1)
-            action = .decrease
-            factor = min(factor, 0.90)
-            reasons.append("本组 RPE 10 / 已力竭，不建议继续堆积疲劳")
-        case .techniqueBreakdown:
-            restSeconds = max(restSeconds, 240)
-            remainingSets = 0
-            action = .decrease
-            factor = min(factor, 0.90)
-            continuation = .stopExercise
-            reasons.append("动作已明显变形，按技术性停止处理")
-        case .pain:
-            remainingSets = 0
-            continuation = .stopWorkout
-            reasons.append("出现疼痛或异常不适，立即停止训练")
-        case nil:
-            break
-        }
-
-        if let priorRecord, (priorRecord.sessionQuality ?? 3) <= 2 {
-            restSeconds += 30
-            reasons.append("上次同动作质量偏低")
-        }
-
-        let hardSets = exerciseHistory.filter {
-            $0.rir == 0 || ($0.techniqueQuality ?? 4) <= 2 || ($0.feeling?.rpe ?? 0) >= 9.5
-        }.count
-        if hardSets >= 2 {
-            continuation = .stopExercise
-            remainingSets = 0
-            reasons.append("连续两组出现极限或动作质量下降")
-        }
-        if hardSets >= 3 || (readiness.level == .low && (result.feeling?.rpe ?? 0) >= 9.5) {
-            continuation = .stopWorkout
-            remainingSets = 0
-            reasons.append("恢复较差且疲劳信号持续，建议结束本次训练")
+        if priorRecord != nil || !exerciseHistory.isEmpty {
+            reasons.append("已结合本动作训练历史")
         }
 
         var rounded = result.loadKg
@@ -151,10 +91,69 @@ enum TrainingEngine {
             nextLoadKg: max(0, rounded),
             adjustment: action,
             reason: reasons.joined(separator: "；") + "。",
-            confidence: result.rir <= 4 && result.techniqueQuality != nil && result.feeling != nil ? "高" : "中",
-            restSeconds: min(restSeconds, 300),
+            confidence: result.rir <= 4 && (priorRecord != nil || !exerciseHistory.isEmpty) ? "高" : "中",
+            restSeconds: prescription.isPriority ? 180 : 120,
             suggestedRemainingSets: remainingSets,
-            continuation: continuation
+            continuation: .continueTraining
+        )
+    }
+
+    static func recommendRest(
+        current: SetResult,
+        previous: SetResult?,
+        setKind: SetKind,
+        pattern: MovementPattern,
+        historicalE1RM: Double?,
+        readiness: ReadinessAssessment
+    ) -> RestRecommendation {
+        let compoundPatterns: Set<MovementPattern> = [
+            .squat, .hinge, .horizontalPush, .horizontalPull,
+            .verticalPush, .verticalPull, .singleLeg
+        ]
+        let isCompound = compoundPatterns.contains(pattern)
+        let relativeLoad = historicalE1RM.flatMap { $0 > 0 ? current.loadKg / $0 : nil }
+        var lower = setKind == .warmup ? 60 : (isCompound ? 120 : 90)
+        var upper = setKind == .warmup ? 120 : (isCompound ? 240 : 180)
+        var recommended = setKind == .warmup ? 90 : (isCompound ? 180 : 120)
+        var reasons = [setKind == .warmup ? "热身组采用较短基准休息" : (isCompound ? "复合正式组采用较长基准休息" : "孤立正式组采用中等基准休息")]
+        var inputs = ["组类型", "动作模式", "完成次数", "RIR", "今日恢复"]
+
+        if setKind == .working && ((relativeLoad ?? 0) >= 0.80 || current.reps <= 6) {
+            lower = 180
+            upper = 300
+            recommended = 240
+            reasons.append("低次数或估计负荷不低于历史 e1RM 的 80%")
+            if relativeLoad != nil { inputs.append("历史 e1RM") }
+        }
+        if current.rir == 0 {
+            recommended += 60
+            reasons.append("RIR 0，增加 60 秒")
+        } else if current.rir == 1 {
+            recommended += 30
+            reasons.append("RIR 1，增加 30 秒")
+        }
+        if let previous,
+           current.loadKg <= previous.loadKg,
+           Double(current.reps) < Double(previous.reps) * 0.90 {
+            recommended += 30
+            reasons.append("次数较前组下降超过 10%，增加 30 秒")
+            inputs.append("前组表现")
+        }
+        if readiness.level == .low {
+            recommended += 30
+            reasons.append("今日恢复偏低，增加 30 秒")
+        }
+
+        recommended = min(300, max(lower, recommended))
+        upper = min(300, max(upper, recommended))
+        let confidence = historicalE1RM == nil ? "中" : "中高"
+        return RestRecommendation(
+            lowerSeconds: lower,
+            recommendedSeconds: recommended,
+            upperSeconds: upper,
+            confidence: confidence,
+            reasons: reasons,
+            inputsUsed: Array(Set(inputs)).sorted()
         )
     }
 

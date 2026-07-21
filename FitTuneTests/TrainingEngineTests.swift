@@ -293,7 +293,7 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertEqual(measured.activeEnergyKcal, 321)
     }
 
-    func testRepeatedExhaustedSetsStopCurrentExerciseAndExtendRest() {
+    func testRepeatedRIRZeroSetsRemainAdvisoryAndExtendRest() {
         let exercise = ExercisePrescription(
             name: "杠铃深蹲",
             pattern: .squat,
@@ -313,10 +313,18 @@ final class TrainingEngineTests: XCTestCase {
             increment: 2.5,
             exerciseHistory: [first, second]
         )
+        let rest = TrainingEngine.recommendRest(
+            current: second,
+            previous: first,
+            setKind: .working,
+            pattern: .squat,
+            historicalE1RM: 120,
+            readiness: readyAssessment
+        )
 
-        XCTAssertEqual(recommendation.continuation, .stopExercise)
-        XCTAssertEqual(recommendation.suggestedRemainingSets, 0)
-        XCTAssertGreaterThanOrEqual(recommendation.restSeconds, 240)
+        XCTAssertEqual(recommendation.continuation, .continueTraining)
+        XCTAssertEqual(recommendation.suggestedRemainingSets, 2)
+        XCTAssertGreaterThanOrEqual(rest.recommendedSeconds, 240)
         XCTAssertLessThan(recommendation.nextLoadKg, second.loadKg)
     }
 
@@ -411,6 +419,87 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(TrainingEngine.allExerciseOptions.filter { $0.equipment == .smithMachine }.count, 8)
         XCTAssertGreaterThanOrEqual(TrainingEngine.allExerciseOptions.filter { $0.equipment == .cable }.count, 8)
         XCTAssertGreaterThanOrEqual(TrainingEngine.allExerciseOptions.filter { $0.resolvedCategory == .chest }.count, 15)
+    }
+
+    func testRIRZeroDoesNotReduceUserPlannedSetsOrForceStop() {
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 5,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 2,
+            isPriority: true
+        )
+        let prior = [
+            SetResult(exerciseID: exercise.id, exerciseName: exercise.name, setNumber: 2, loadKg: 80, reps: 8, rir: 0, techniqueQuality: 2, feeling: .maximal),
+            SetResult(exerciseID: exercise.id, exerciseName: exercise.name, setNumber: 3, loadKg: 80, reps: 7, rir: 0, techniqueQuality: 2, feeling: .maximal)
+        ]
+        let result = SetResult(exerciseID: exercise.id, exerciseName: exercise.name, setNumber: 4, loadKg: 80, reps: 6, rir: 0, techniqueQuality: 2, feeling: .maximal)
+        let readiness = ReadinessAssessment(score: 70, level: .moderate, summary: "测试", loadMultiplier: 0.95, setReduction: 1)
+
+        let advice = TrainingEngine.recommendNextSet(
+            prescription: exercise,
+            result: result,
+            readiness: readiness,
+            increment: 2.5,
+            exerciseHistory: prior + [result]
+        )
+
+        XCTAssertEqual(advice.suggestedRemainingSets, 1)
+        XCTAssertEqual(advice.continuation, .continueTraining)
+    }
+
+    func testTechniqueAndFeelingDoNotChangeNextLoad() {
+        let exercise = ExercisePrescription(name: "卧推", pattern: .horizontalPush, sets: 5, repLower: 6, repUpper: 10, targetRIR: 2, isPriority: true)
+        let readiness = ReadinessAssessment(score: 80, level: .ready, summary: "测试", loadMultiplier: 1, setReduction: 0)
+        let first = SetResult(exerciseID: exercise.id, exerciseName: exercise.name, setNumber: 2, loadKg: 80, reps: 8, rir: 1, techniqueQuality: 5, feeling: .easy)
+        let second = SetResult(exerciseID: exercise.id, exerciseName: exercise.name, setNumber: 2, loadKg: 80, reps: 8, rir: 1, techniqueQuality: 1, feeling: .pain)
+
+        let firstAdvice = TrainingEngine.recommendNextSet(prescription: exercise, result: first, readiness: readiness, increment: 2.5)
+        let secondAdvice = TrainingEngine.recommendNextSet(prescription: exercise, result: second, readiness: readiness, increment: 2.5)
+
+        XCTAssertEqual(firstAdvice.nextLoadKg, secondAdvice.nextLoadKg)
+        XCTAssertEqual(firstAdvice.adjustment, secondAdvice.adjustment)
+    }
+
+    func testRestRecommendationExtendsForRIRZeroRepDropAndLowReadiness() {
+        let exerciseID = UUID()
+        let previous = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 3, loadKg: 80, reps: 10, rir: 2)
+        let current = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 4, loadKg: 80, reps: 8, rir: 0)
+        let readiness = ReadinessAssessment(score: 40, level: .low, summary: "测试", loadMultiplier: 0.9, setReduction: 1)
+
+        let rest = TrainingEngine.recommendRest(
+            current: current,
+            previous: previous,
+            setKind: .working,
+            pattern: .horizontalPush,
+            historicalE1RM: 100,
+            readiness: readiness
+        )
+
+        XCTAssertEqual(rest.recommendedSeconds, 300)
+        XCTAssertTrue(rest.reasons.contains("RIR 0，增加 60 秒"))
+        XCTAssertTrue(rest.reasons.contains("次数较前组下降超过 10%，增加 30 秒"))
+        XCTAssertTrue(rest.reasons.contains("今日恢复偏低，增加 30 秒"))
+        XCTAssertTrue((rest.lowerSeconds...rest.upperSeconds).contains(rest.recommendedSeconds))
+    }
+
+    func testWarmupRestNeverUsesWorkingSetHeavyLoadRange() {
+        let result = SetResult(exerciseID: UUID(), exerciseName: "深蹲", setNumber: 2, loadKg: 100, reps: 5, rir: 1)
+        let readiness = ReadinessAssessment(score: 85, level: .ready, summary: "测试", loadMultiplier: 1, setReduction: 0)
+
+        let rest = TrainingEngine.recommendRest(
+            current: result,
+            previous: nil,
+            setKind: .warmup,
+            pattern: .squat,
+            historicalE1RM: 110,
+            readiness: readiness
+        )
+
+        XCTAssertEqual(rest.lowerSeconds, 60)
+        XCTAssertLessThanOrEqual(rest.upperSeconds, 180)
     }
 
     func testWorkoutDraftRoundTripsProgress() throws {
