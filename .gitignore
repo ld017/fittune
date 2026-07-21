@@ -2,6 +2,7 @@
 .build/
 build/
 DerivedData/
+.worktrees/
 *.xcuserstate
 xcuserdata/
 *.zip
