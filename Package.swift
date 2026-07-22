@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "FitTune",
             path: "FitTune",
-            exclude: ["App", "Resources", "Models/WorkoutActivityAttributes.swift", "Services/HealthKitService.swift", "Services/MotionLocationSource.swift", "Services/WatchWorkoutBridge.swift", "Services/WorkoutActivityController.swift", "Views"],
+            exclude: ["App", "Resources", "Models/WorkoutActivityAttributes.swift", "Services/HealthKitService.swift", "Services/HealthDataSyncCoordinator.swift", "Services/MotionLocationSource.swift", "Services/WatchWorkoutBridge.swift", "Services/WorkoutActivityController.swift", "Views"],
             sources: [
                 "Models/DomainModels.swift",
                 "Models/ExerciseCatalogModels.swift",

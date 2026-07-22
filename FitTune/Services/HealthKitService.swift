@@ -2,6 +2,23 @@ import Foundation
 import HealthKit
 import Observation
 
+private final class DailyHealthSampleBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [DailyHealthSample] = []
+
+    func append(_ sample: DailyHealthSample) {
+        lock.lock()
+        values.append(sample)
+        lock.unlock()
+    }
+
+    func snapshot() -> [DailyHealthSample] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
+}
+
 @MainActor
 @Observable
 final class HealthKitService {
@@ -15,9 +32,122 @@ final class HealthKitService {
     var state: SyncState = .idle
 
     private let store = HKHealthStore()
+    private var dailyObserverQueries: [HKObserverQuery] = []
 
     var isAvailable: Bool {
         HKHealthStore.isHealthDataAvailable()
+    }
+
+    func requestDailyReadAuthorization() async -> [DailyHealthMetric: Bool] {
+        guard isAvailable else {
+            return Dictionary(uniqueKeysWithValues: DailyHealthMetric.allCases.map { ($0, false) })
+        }
+        let identifiers: [HKQuantityTypeIdentifier] = [
+            .restingHeartRate, .heartRate, .stepCount, .distanceWalkingRunning,
+            .activeEnergyBurned, .bodyMass
+        ]
+        var readTypes = Set<HKObjectType>(identifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
+        readTypes.insert(HKObjectType.workoutType())
+        if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { readTypes.insert(sleep) }
+
+        let success: Bool = await withCheckedContinuation { continuation in
+            store.requestAuthorization(toShare: [], read: readTypes) { granted, _ in
+                continuation.resume(returning: granted)
+            }
+        }
+        return Dictionary(uniqueKeysWithValues: DailyHealthMetric.allCases.map { ($0, success) })
+    }
+
+    func fetchDailyHealthSamples(
+        day: Date,
+        timeZone: TimeZone,
+        completion: @escaping ([DailyHealthSample]) -> Void
+    ) {
+        guard isAvailable else { completion([]); return }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let group = DispatchGroup()
+        let imported = DailyHealthSampleBox()
+
+        let cumulative: [(HKQuantityTypeIdentifier, DailyHealthMetric, HKUnit)] = [
+            (.stepCount, .steps, .count()),
+            (.distanceWalkingRunning, .walkingDistanceKm, .meterUnit(with: .kilo)),
+            (.activeEnergyBurned, .activeEnergyKcal, .kilocalorie())
+        ]
+        for (identifier, metric, unit) in cumulative {
+            guard let type = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
+            group.enter()
+            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, _ in
+                if let value = statistics?.sumQuantity()?.doubleValue(for: unit) {
+                    imported.append(DailyHealthSample(
+                        externalID: "healthkit-day:\(metric.rawValue):\(Int(start.timeIntervalSince1970))",
+                        metric: metric,
+                        value: value,
+                        sampleDate: min(.now, end.addingTimeInterval(-1)),
+                        updatedAt: .now,
+                        source: .appleHealth,
+                        sourceName: "Apple 健康"
+                    ))
+                }
+                group.leave()
+            }
+            store.execute(query)
+        }
+
+        if let restingType = HKObjectType.quantityType(forIdentifier: .restingHeartRate) {
+            group.enter()
+            let query = HKSampleQuery(sampleType: restingType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                for sample in samples as? [HKQuantitySample] ?? [] {
+                    let kind = HealthSourceClassifier.classify(
+                        sourceName: sample.sourceRevision.source.name,
+                        bundleIdentifier: sample.sourceRevision.source.bundleIdentifier,
+                        productType: sample.sourceRevision.productType
+                    )
+                    imported.append(DailyHealthSample(
+                        externalID: sample.uuid.uuidString,
+                        metric: .restingHeartRate,
+                        value: sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
+                        sampleDate: sample.startDate,
+                        updatedAt: .now,
+                        source: Self.metricSource(for: kind),
+                        sourceName: sample.sourceRevision.source.name
+                    ))
+                }
+                group.leave()
+            }
+            store.execute(query)
+        }
+
+        group.notify(queue: .main) { completion(imported.snapshot()) }
+    }
+
+    func startDailyObservation(onChange: @escaping () -> Void) {
+        stopDailyObservation()
+        let observed: [(HKSampleType?, HKUpdateFrequency)] = [
+            (HKObjectType.quantityType(forIdentifier: .restingHeartRate), .immediate),
+            (HKObjectType.quantityType(forIdentifier: .stepCount), .hourly),
+            (HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning), .hourly),
+            (HKObjectType.quantityType(forIdentifier: .activeEnergyBurned), .hourly),
+            (HKObjectType.workoutType(), .immediate)
+        ]
+        for (type, frequency) in observed {
+            guard let type else { continue }
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, _ in
+                onChange()
+                completion()
+            }
+            dailyObserverQueries.append(query)
+            store.execute(query)
+            store.enableBackgroundDelivery(for: type, frequency: frequency) { _, _ in }
+        }
+    }
+
+    func stopDailyObservation() {
+        dailyObserverQueries.forEach(store.stop)
+        dailyObserverQueries.removeAll()
     }
 
     func fetchLatestBodyWeight(completion: @escaping (Double?) -> Void) {

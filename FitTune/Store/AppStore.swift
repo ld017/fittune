@@ -197,6 +197,9 @@ final class AppStore {
 
     func clearImportedHealthData() {
         restingHeartRateSamples.removeAll()
+        dailyHealthSnapshots.removeAll()
+        dailyActiveEnergy.removeAll()
+        dailySteps.removeAll()
         recoveryCheckIns = recoveryCheckIns.map { checkIn in
             var cleaned = checkIn
             cleaned.sleep = removingImportedValue(from: cleaned.sleep)

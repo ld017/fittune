@@ -3,6 +3,7 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppStore.self) private var store
     @Environment(HealthKitService.self) private var healthKit
+    @Environment(HealthDataSyncCoordinator.self) private var healthSync
 
     @State private var sleepHours = 7.5
     @State private var sleepQuality = 3
@@ -225,6 +226,11 @@ struct TodayView: View {
                 MetricChip(value: "\(Int(energy.strengthKcal.rounded()))", label: "力量 kcal", tint: FitTheme.accentBlue)
                 MetricChip(value: "\(Int(energy.cardioKcal.rounded()))", label: "有氧 kcal", tint: FitTheme.warning)
             }
+            if let distance = healthSync.snapshot.walkingDistanceKm.value {
+                Label("步行/跑步距离 \(distance.formatted(.number.precision(.fractionLength(1)))) km", systemImage: "figure.walk")
+                    .font(.caption.bold())
+                    .foregroundStyle(FitTheme.accentBlue)
+            }
             HStack(spacing: 8) {
                 MetricChip(value: "\(Int(energy.walkingStepsKcal.rounded()))", label: "步行 kcal", tint: FitTheme.accent)
                 MetricChip(value: "\(energy.steps)", label: "今日步数", tint: FitTheme.accentBlue)
@@ -238,6 +244,17 @@ struct TodayView: View {
             Text("总消耗合理区间 \(Int(report.total.lowerBound.rounded()))–\(Int(report.total.upperBound.rounded())) kcal · \(report.active.provenance.sourceName) · \(confidenceTitle(report.active.provenance.confidence))可信度")
                 .font(.caption.bold())
                 .foregroundStyle(FitTheme.accentBlue)
+            HStack {
+                Label(healthStatusText, systemImage: healthSync.isRefreshing ? "arrow.triangle.2.circlepath" : "heart.text.square")
+                    .font(.caption)
+                    .foregroundStyle(healthSync.snapshot.activeEnergyKcal.syncState == .current ? FitTheme.accent : FitTheme.warning)
+                Spacer()
+                Button("立即刷新") {
+                    Task { await healthSync.refreshToday(reason: .manual) }
+                }
+                .font(.caption.bold())
+                .disabled(healthSync.isRefreshing)
+            }
             let restingMethod = store.profile.flatMap { TrainingEngine.restingEnergyEstimate(profile: $0, weightKg: store.latestWeight)?.method }
             Text(energy.restingKcal == nil
                  ? "请到“我的”补充身体参数。运动消耗仍可独立记录。"
@@ -246,6 +263,20 @@ struct TodayView: View {
                 .foregroundStyle(FitTheme.secondaryText)
         }
         .fitCard(padding: 18)
+    }
+
+    private var healthStatusText: String {
+        let value = healthSync.snapshot.activeEnergyKcal
+        let time = value.sampleDate?.formatted(date: .omitted, time: .shortened) ?? "暂无样本"
+        return switch value.syncState {
+        case .current: "\(value.provenance.sourceName) · 更新于 \(time)"
+        case .delayed: "\(value.provenance.sourceName) · 延迟同步 · \(time)"
+        case .permissionMissing: "主动热量权限未开启，继续使用估算"
+        case .syncing: "正在同步 Apple 健康"
+        case .failed: "同步失败，继续使用估算"
+        case .estimated: "当前使用手机估算"
+        case .unavailable: "暂无全天主动热量，继续使用估算"
+        }
     }
 
     private func confidenceTitle(_ confidence: DataConfidence) -> String {

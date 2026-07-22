@@ -82,6 +82,7 @@
 		B00000000000000000000041 /* DailyHealthSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000044 /* DailyHealthSnapshot.swift */; };
 		B00000000000000000000042 /* DailyHealthSnapshotReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */; };
 		B00000000000000000000043 /* DailyHealthSnapshotReducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */; };
+		B00000000000000000000044 /* HealthDataSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000047 /* HealthDataSyncCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -214,6 +215,7 @@
 		C00000000000000000000044 /* DailyHealthSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshot.swift; sourceTree = "<group>"; };
 		C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshotReducer.swift; sourceTree = "<group>"; };
 		C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshotReducerTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000047 /* HealthDataSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthDataSyncCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -313,6 +315,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000005 /* HealthKitService.swift */,
+				C00000000000000000000047 /* HealthDataSyncCoordinator.swift */,
 				C0000000000000000000001C /* HealthImportModels.swift */,
 				C0000000000000000000001E /* LiveSensorSource.swift */,
 				C0000000000000000000001F /* LiveSensorCoordinator.swift */,
@@ -638,6 +641,7 @@
 				B00000000000000000000036 /* WorkoutActivityAttributes.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,
+				B00000000000000000000044 /* HealthDataSyncCoordinator.swift in Sources */,
 				B00000000000000000000019 /* HealthImportModels.swift in Sources */,
 				B0000000000000000000001B /* LiveSensorSource.swift in Sources */,
 				B0000000000000000000001C /* LiveSensorCoordinator.swift in Sources */,

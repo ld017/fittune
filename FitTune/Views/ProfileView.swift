@@ -14,6 +14,7 @@ private enum TrashRecord {
 
 struct ProfileView: View {
     @Environment(AppStore.self) private var store
+    @Environment(HealthDataSyncCoordinator.self) private var healthSync
 
     @State private var goal: TrainingGoal = .recomposition
     @State private var secondaryGoal: SecondaryGoal = .none
@@ -187,6 +188,17 @@ struct ProfileView: View {
             Text("健康与训练数据默认保存在本机。JSON 是完整备份；CSV 用于表格分析，不等同于完整备份。")
                 .font(.subheadline).foregroundStyle(FitTheme.secondaryText)
             NavigationLink("个人安全阈值与伤病部位") { SafetySettingsView() }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Apple 健康读取状态").font(.subheadline.bold())
+                healthPermissionRow("静息心率", metric: .restingHeartRate, state: healthSync.snapshot.restingHeartRate.syncState)
+                healthPermissionRow("步数", metric: .steps, state: healthSync.snapshot.steps.syncState)
+                healthPermissionRow("步行/跑步距离", metric: .walkingDistanceKm, state: healthSync.snapshot.walkingDistanceKm.syncState)
+                healthPermissionRow("全天主动热量", metric: .activeEnergyKcal, state: healthSync.snapshot.activeEnergyKcal.syncState)
+                Button("立即刷新健康数据") {
+                    Task { await healthSync.refreshToday(reason: .manual) }
+                }
+                .disabled(healthSync.isRefreshing)
+            }
             Button("生成 JSON + CSV 导出文件") {
                 do { exportURLs = try store.makeExportFiles(); exportError = nil }
                 catch { exportError = error.localizedDescription }
@@ -203,6 +215,28 @@ struct ProfileView: View {
                 .foregroundStyle(FitTheme.danger)
         }
         .fitCard()
+    }
+
+    private func healthPermissionRow(_ title: String, metric: DailyHealthMetric, state: HealthSyncState) -> some View {
+        HStack {
+            Text(title).font(.caption)
+            Spacer()
+            Text(healthSync.permissions[metric] == false ? "未授权" : syncStateTitle(state))
+                .font(.caption.bold())
+                .foregroundStyle(state == .current ? FitTheme.accent : FitTheme.warning)
+        }
+    }
+
+    private func syncStateTitle(_ state: HealthSyncState) -> String {
+        switch state {
+        case .current: "已更新"
+        case .delayed: "延迟"
+        case .permissionMissing: "未授权"
+        case .syncing: "同步中"
+        case .estimated: "估算"
+        case .failed: "失败"
+        case .unavailable: "暂无数据"
+        }
     }
 
     private var energyProfileSettings: some View {
