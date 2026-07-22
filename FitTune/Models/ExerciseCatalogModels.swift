@@ -16,3 +16,17 @@ enum TrainingPhase: String, CaseIterable, Codable, Identifiable, Hashable {
     }
 }
 
+enum MuscleGroup: String, CaseIterable, Codable, Hashable, Identifiable {
+    case chest, back, shoulders, quadriceps, posteriorChain
+    case calves, biceps, triceps, forearmsGrip, core
+
+    var id: String { rawValue }
+}
+
+enum ExerciseDifficulty: String, CaseIterable, Codable, Hashable {
+    case beginner, intermediate, advanced
+}
+
+enum Laterality: String, CaseIterable, Codable, Hashable {
+    case bilateral, unilateral, alternating
+}

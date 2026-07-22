@@ -18,6 +18,7 @@ let package = Package(
                 "Models/WorkoutModels.swift",
                 "Models/HealthMetricModels.swift",
                 "Engine/TrainingEngine.swift",
+                "Engine/ExerciseCatalog.swift",
                 "Engine/RecoveryEngine.swift",
                 "Engine/LiveAdaptationEngine.swift",
                 "Engine/SummaryEngine.swift",

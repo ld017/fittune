@@ -1213,7 +1213,10 @@ final class AppStore {
         safetySettings = snapshot.safetySettings ?? PersonalSafetySettings()
         customExercises = (snapshot.customExercises ?? []).filter { $0.source == .custom }
         let validExerciseIDs = Set(TrainingEngine.allExercises.map(\.id) + customExercises.map(\.id))
-        favoriteExerciseIDs = (snapshot.favoriteExerciseIDs ?? []).intersection(validExerciseIDs)
+        favoriteExerciseIDs = Set((snapshot.favoriteExerciseIDs ?? []).compactMap { identifier in
+            if validExerciseIDs.contains(identifier) { return identifier }
+            return ExerciseCatalog.resolve(idOrAlias: identifier)?.id
+        })
         restingHeartRateSamples = snapshot.restingHeartRateSamples ?? []
         activeCardioDraft = snapshot.activeCardioDraft
         if needsSchemaMigration {

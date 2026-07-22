@@ -266,6 +266,28 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNil(restored.workoutHistory[0].planSnapshot?.exercises[0].phase)
     }
 
+    func testLegacyFavoriteIdentifierMigratesToCanonicalCatalogIdentifier() throws {
+        let defaults = makeDefaults()
+        let legacyID = "chest.selectorizedMachine.chestIsolation.蝴蝶机夹胸"
+        let snapshot = AppSnapshot(
+            profile: nil,
+            plan: nil,
+            readiness: ReadinessInput(),
+            workoutHistory: [],
+            weightHistory: [],
+            favoriteExerciseIDs: [legacyID],
+            schemaVersion: 12
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        defaults.set(try encoder.encode(snapshot), forKey: "FitTune.snapshot.v1")
+
+        let restored = AppStore(defaults: defaults)
+        let canonical = try XCTUnwrap(ExerciseCatalog.resolve(idOrAlias: legacyID))
+
+        XCTAssertEqual(restored.favoriteExerciseIDs, [canonical.id])
+    }
+
     func testRecoveryCheckInAndSafetySettingsPersistAcrossStoreRecreation() {
         let defaults = makeDefaults()
         let store = AppStore(defaults: defaults)

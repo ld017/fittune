@@ -294,6 +294,13 @@ enum EquipmentKind: String, CaseIterable, Codable, Identifiable {
     case selectorizedMachine
     case cable
     case bodyweightBand
+    case kettlebell
+    case landmine
+    case plateLoadedMachine
+    case butterflyMachine
+    case romanChair
+    case resistanceBand
+    case bodyweight
 
     var id: String { rawValue }
 
@@ -306,6 +313,13 @@ enum EquipmentKind: String, CaseIterable, Codable, Identifiable {
         case .selectorizedMachine: "固定器械"
         case .cable: "绳索"
         case .bodyweightBand: "徒手 / 弹力带"
+        case .kettlebell: "壶铃"
+        case .landmine: "地雷管"
+        case .plateLoadedMachine: "片装式器械"
+        case .butterflyMachine: "蝴蝶机 / 反向飞鸟机"
+        case .romanChair: "罗马椅 / 山羊挺身架"
+        case .resistanceBand: "弹力带"
+        case .bodyweight: "徒手"
         }
     }
 }
@@ -441,6 +455,11 @@ struct ExerciseOption: Identifiable, Hashable, Codable {
     var aliases: [String] = []
     var secondaryCategories: [ExerciseCategory] = []
     var isCompound: Bool? = nil
+    var primaryMuscles: Set<MuscleGroup>? = nil
+    var secondaryMuscles: Set<MuscleGroup>? = nil
+    var difficulty: ExerciseDifficulty? = nil
+    var laterality: Laterality? = nil
+    var suitablePhases: Set<TrainingPhase>? = nil
 
     var id: String { stableID ?? "\(pattern.rawValue)-\(name)" }
     var resolvedCategory: ExerciseCategory { category ?? ExerciseCategory(pattern: pattern) }
