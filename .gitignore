@@ -3,6 +3,7 @@
 build/
 DerivedData/
 .worktrees/
+.superpowers/
 *.xcuserstate
 xcuserdata/
 *.zip
