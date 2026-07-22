@@ -277,7 +277,7 @@ final class AppStoreTests: XCTestCase {
         let exercise = ExercisePrescription(
             name: "卧推",
             pattern: .horizontalPush,
-            sets: 4,
+            sets: 2,
             repLower: 6,
             repUpper: 10,
             targetRIR: 0,
@@ -326,6 +326,8 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertEqual(restored.plan?.ruleVersion, TrainingEngine.ruleVersion)
         XCTAssertEqual(restored.plan?.sessions[0].exercises[0].phase, .primary)
+        XCTAssertEqual(restored.plan?.sessions[0].exercises[0].resolvedWorkingSets, 4)
+        XCTAssertEqual(restored.workoutHistory[0].planSnapshot?.exercises[0].sets, 2)
         XCTAssertEqual(restored.workoutHistory[0].planSnapshot?.sourcePlanRuleVersion, historicalRuleVersion)
         XCTAssertNil(restored.workoutHistory[0].planSnapshot?.exercises[0].phase)
     }
