@@ -34,6 +34,14 @@ struct WorkoutSummaryView: View {
                 MetricChip(value: presentation.summary.maximumHeartRate.map { "\(Int($0.rounded()))" } ?? "—", label: "最大 bpm", tint: FitTheme.danger)
                 MetricChip(value: presentation.summary.dataCoverage.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", label: "数据覆盖", tint: FitTheme.accentBlue)
             }
+            if let source = presentation.summary.heartRateSourceName {
+                Text("心率来源：\(source) · \(confidenceText(presentation.summary.heartRateConfidence ?? .estimated))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let zones = presentation.summary.heartRateZones {
+                Text(zones.sorted(by: { $0.key < $1.key }).map { "\($0.key) \(Int(($0.value * 100).rounded()))%" }.joined(separator: " · "))
+                    .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+            }
         }
         .fitCard(padding: 20)
     }
@@ -75,6 +83,14 @@ struct WorkoutSummaryView: View {
             ForEach(value.muscleLoad.sorted(by: { $0.value > $1.value }).prefix(4), id: \.key) { item in
                 LabeledContent(item.key, value: "\(Int(item.value.rounded())) kg·次")
                     .font(.caption)
+            }
+            if let decisions = value.heartRateDecisions, !decisions.isEmpty {
+                Divider()
+                Text("心率恢复与建议").font(.subheadline.bold())
+                ForEach(decisions) { decision in
+                    Text("\(decision.secondsAfterSet) 秒恢复 \(Int(decision.recoveryBPM.rounded())) bpm · \(decision.effect)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .fitCard()

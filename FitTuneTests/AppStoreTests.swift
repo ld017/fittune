@@ -454,6 +454,9 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(firstUpdate, min(600, baselineRest + 60))
         XCTAssertEqual(store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds, firstUpdate)
         XCTAssertEqual(store.activeWorkoutDraft!.metricSamples?.count, 3)
+        XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.count, 1)
+        XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.first?.recoveryBPM, 8)
+        XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.first?.secondsAfterSet, 60)
     }
 
     func testSummaryRevisionAppendPreservesOriginalSets() {

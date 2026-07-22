@@ -197,6 +197,18 @@ struct StrengthSummaryMetrics: Codable, Equatable {
     var relativeStrength: Double?
     var e1RMConfidence: DataConfidence
     var muscleLoad: [String: Double]
+    var heartRateDecisions: [HeartRateDecisionEvent]? = nil
+}
+
+struct HeartRateDecisionEvent: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var setResultID: UUID
+    var secondsAfterSet: Int
+    var peakBPM: Double
+    var currentBPM: Double
+    var recoveryBPM: Double
+    var sourceName: String
+    var effect: String
 }
 
 struct CardioSummaryMetrics: Codable, Equatable {
@@ -221,6 +233,10 @@ struct WorkoutSummary: Codable, Equatable {
     var strength: StrengthSummaryMetrics? = nil
     var cardio: CardioSummaryMetrics? = nil
     var heartRateCurve: [WorkoutMetricSample]? = nil
+    var heartRateSourceName: String? = nil
+    var heartRateConfidence: DataConfidence? = nil
+    var heartRateZones: [String: Double]? = nil
+    var heartRateGapCount: Int? = nil
 
     init(
         generatedAt: Date,
@@ -233,7 +249,11 @@ struct WorkoutSummary: Codable, Equatable {
         dataCoverage: Double? = nil,
         strength: StrengthSummaryMetrics? = nil,
         cardio: CardioSummaryMetrics? = nil,
-        heartRateCurve: [WorkoutMetricSample]? = nil
+        heartRateCurve: [WorkoutMetricSample]? = nil,
+        heartRateSourceName: String? = nil,
+        heartRateConfidence: DataConfidence? = nil,
+        heartRateZones: [String: Double]? = nil,
+        heartRateGapCount: Int? = nil
     ) {
         self.generatedAt = generatedAt
         self.algorithmVersion = algorithmVersion
@@ -246,6 +266,10 @@ struct WorkoutSummary: Codable, Equatable {
         self.strength = strength
         self.cardio = cardio
         self.heartRateCurve = heartRateCurve
+        self.heartRateSourceName = heartRateSourceName
+        self.heartRateConfidence = heartRateConfidence
+        self.heartRateZones = heartRateZones
+        self.heartRateGapCount = heartRateGapCount
     }
 }
 

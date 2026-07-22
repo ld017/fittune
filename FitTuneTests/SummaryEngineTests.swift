@@ -19,6 +19,8 @@ final class SummaryEngineTests: XCTestCase {
 
         XCTAssertEqual(summary.averageHeartRate, 125)
         XCTAssertEqual(summary.maximumHeartRate, 150)
+        XCTAssertEqual(summary.heartRateSourceName, "H10")
+        XCTAssertEqual(summary.heartRateConfidence, .measured)
         XCTAssertEqual(summary.strength?.workingSetCount, 2)
         XCTAssertEqual(summary.strength?.warmupSetCount, 1)
         XCTAssertEqual(summary.strength?.failureRate, 1)

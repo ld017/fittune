@@ -804,6 +804,7 @@ struct WorkoutRecord: Identifiable, Codable, Equatable {
     var metricSamples: [WorkoutMetricSample]? = nil
     var summary: WorkoutSummary? = nil
     var summaryRevisions: [SummaryRevision]? = nil
+    var heartRateDecisionLog: [HeartRateDecisionEvent]? = nil
 
     var resolvedCompletionStatus: WorkoutCompletionStatus {
         completionStatus ?? .completed
@@ -1020,6 +1021,7 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var changeEvents: [WorkoutChangeEvent]? = nil
     var metricSamples: [WorkoutMetricSample]? = nil
     var liveRecoveryMilestonesApplied: Set<Int> = []
+    var heartRateDecisionLog: [HeartRateDecisionEvent]? = nil
     /// `nil` means a pre-schema-14 draft whose `sets` value includes warmups.
     var usesSeparateWarmups: Bool? = nil
 

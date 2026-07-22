@@ -64,6 +64,11 @@ final class AppStore {
             ?? profile?.bodyWeightKg
     }
 
+    private var resolvedMaximumHeartRate: Double? {
+        if let measured = profile?.measuredMaxHeartRate { return measured }
+        return profile?.ageYears.map { 208 - 0.7 * Double($0) }
+    }
+
     var nextSession: TrainingSession? {
         guard let session = scheduledSession else { return nil }
         return adaptedSession(session)
@@ -271,7 +276,7 @@ final class AppStore {
         record.completionStatus = status
         record.dataGapReason = draft.dataGapReason
         record.metricSamples = draft.metricSamples
-        record.summary = SummaryEngine.cardioSummary(for: record)
+        record.summary = SummaryEngine.cardioSummary(for: record, maximumHeartRate: resolvedMaximumHeartRate)
         cardioWorkouts.insert(record, at: 0)
         activeCardioDraft = nil
         persist()
@@ -306,14 +311,15 @@ final class AppStore {
     func clearWorkoutMetrics(id: UUID) {
         guard let index = workoutHistory.firstIndex(where: { $0.id == id }) else { return }
         workoutHistory[index].metricSamples = []
-        workoutHistory[index].summary = SummaryEngine.strengthSummary(for: workoutHistory[index], bodyWeightKg: latestWeight ?? 70)
+        workoutHistory[index].heartRateDecisionLog = []
+        workoutHistory[index].summary = SummaryEngine.strengthSummary(for: workoutHistory[index], bodyWeightKg: latestWeight ?? 70, maximumHeartRate: resolvedMaximumHeartRate)
         persist()
     }
 
     func clearCardioMetrics(id: UUID) {
         guard let index = cardioWorkouts.firstIndex(where: { $0.id == id }) else { return }
         cardioWorkouts[index].metricSamples = []
-        cardioWorkouts[index].summary = SummaryEngine.cardioSummary(for: cardioWorkouts[index])
+        cardioWorkouts[index].summary = SummaryEngine.cardioSummary(for: cardioWorkouts[index], maximumHeartRate: resolvedMaximumHeartRate)
         persist()
     }
 
@@ -798,6 +804,19 @@ final class AppStore {
                 draft.recommendation?.adjustment = live.adjustment
                 draft.recommendation?.reason = live.reasons.joined(separator: "；")
                 draft.restRecommendation = live.rest
+                if let peak, let current = sample.heartRateBPM, let result = draft.results.last {
+                    var log = draft.heartRateDecisionLog ?? []
+                    log.append(HeartRateDecisionEvent(
+                        setResultID: result.id,
+                        secondsAfterSet: milestone,
+                        peakBPM: peak,
+                        currentBPM: current,
+                        recoveryBPM: max(0, peak - current),
+                        sourceName: sample.provenance.sourceName,
+                        effect: live.reasons.last ?? "心率未改变建议"
+                    ))
+                    draft.heartRateDecisionLog = log
+                }
                 draft.liveRecoveryMilestonesApplied.insert(milestone)
             }
         }
@@ -1097,7 +1116,8 @@ final class AppStore {
         record.planSnapshot = draft.planSnapshot
         record.changeEvents = draft.changeEvents
         record.metricSamples = draft.metricSamples
-        record.summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: weight)
+        record.heartRateDecisionLog = draft.heartRateDecisionLog
+        record.summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: weight, maximumHeartRate: resolvedMaximumHeartRate)
         finishWorkoutDraft(with: record)
         if let summary = record.summary {
             presentedSummary = WorkoutSummaryPresentation(title: record.sessionName, date: record.completedAt, summary: summary)

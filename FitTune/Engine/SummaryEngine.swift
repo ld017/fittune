@@ -1,9 +1,9 @@
 import Foundation
 
 enum SummaryEngine {
-    static let algorithmVersion = "1.0-summary-1"
+    static let algorithmVersion = "1.1.1-summary-hr-1"
 
-    static func strengthSummary(for record: WorkoutRecord, bodyWeightKg: Double) -> WorkoutSummary {
+    static func strengthSummary(for record: WorkoutRecord, bodyWeightKg: Double, maximumHeartRate: Double? = nil) -> WorkoutSummary {
         let samples = record.metricSamples ?? []
         let heartRates = samples.compactMap(\.heartRateBPM)
         let working = record.sets.filter { $0.resolvedSetKind == .working }
@@ -23,7 +23,8 @@ enum SummaryEngine {
             bestE1RMKg: bestE1RM,
             relativeStrength: bestE1RM.flatMap { bodyWeightKg > 0 ? $0 / bodyWeightKg : nil },
             e1RMConfidence: bestE1RM == nil ? .unavailable : .derived,
-            muscleLoad: muscleLoad(for: working)
+            muscleLoad: muscleLoad(for: working),
+            heartRateDecisions: record.heartRateDecisionLog
         )
         let duration = max(1, record.completedAt.timeIntervalSince(record.startedAt))
         return WorkoutSummary(
@@ -36,11 +37,15 @@ enum SummaryEngine {
             trainingEffect: record.effect.map { metricRange(value: Double(max($0.strengthScore, $0.hypertrophyScore)), spread: 0.15, source: .historicalModel, name: "训练效果规则", confidence: .derived) },
             dataCoverage: min(1, Double(heartRates.count) / max(1, duration / 5)),
             strength: strength,
-            heartRateCurve: samples
+            heartRateCurve: samples,
+            heartRateSourceName: dominantHeartRateSource(samples),
+            heartRateConfidence: heartRateConfidence(samples),
+            heartRateZones: heartRateZones(samples, maximumHeartRate: maximumHeartRate),
+            heartRateGapCount: heartRateGapCount(samples)
         )
     }
 
-    static func cardioSummary(for record: CardioWorkoutRecord) -> WorkoutSummary {
+    static func cardioSummary(for record: CardioWorkoutRecord, maximumHeartRate: Double? = nil) -> WorkoutSummary {
         let samples = record.metricSamples ?? []
         let heartRates = samples.compactMap(\.heartRateBPM)
         let cadences = samples.compactMap(\.cadence)
@@ -69,8 +74,44 @@ enum SummaryEngine {
             trainingEffect: record.effect.map { metricRange(value: Double($0.aerobicScore), spread: 0.15, source: .historicalModel, name: "有氧效果规则", confidence: .derived) },
             dataCoverage: min(1, Double(heartRates.count) / max(1, duration / 5)),
             cardio: cardio,
-            heartRateCurve: samples
+            heartRateCurve: samples,
+            heartRateSourceName: dominantHeartRateSource(samples),
+            heartRateConfidence: heartRateConfidence(samples),
+            heartRateZones: heartRateZones(samples, maximumHeartRate: maximumHeartRate),
+            heartRateGapCount: heartRateGapCount(samples)
         )
+    }
+
+    private static func dominantHeartRateSource(_ samples: [WorkoutMetricSample]) -> String? {
+        let names = samples.filter { $0.heartRateBPM != nil }.map { $0.provenance.sourceName }
+        return Dictionary(grouping: names, by: { $0 }).max(by: { $0.value.count < $1.value.count })?.key
+    }
+
+    private static func heartRateConfidence(_ samples: [WorkoutMetricSample]) -> DataConfidence? {
+        let values = samples.filter { $0.heartRateBPM != nil }.map { $0.provenance.confidence }
+        guard !values.isEmpty else { return nil }
+        if values.contains(.estimated) { return .estimated }
+        if values.contains(.derived) { return .derived }
+        return .measured
+    }
+
+    private static func heartRateGapCount(_ samples: [WorkoutMetricSample]) -> Int? {
+        let dates = samples.filter { $0.heartRateBPM != nil }.map(\.timestamp).sorted()
+        guard !dates.isEmpty else { return nil }
+        return zip(dates, dates.dropFirst()).filter { $1.timeIntervalSince($0) > 15 }.count
+    }
+
+    private static func heartRateZones(_ samples: [WorkoutMetricSample], maximumHeartRate: Double?) -> [String: Double]? {
+        guard let maximumHeartRate, maximumHeartRate > 0 else { return nil }
+        let values = samples.compactMap(\.heartRateBPM)
+        guard !values.isEmpty else { return nil }
+        var counts: [String: Int] = [:]
+        for bpm in values {
+            let ratio = bpm / maximumHeartRate
+            let zone = ratio < 0.60 ? "Z1" : ratio < 0.70 ? "Z2" : ratio < 0.80 ? "Z3" : ratio < 0.90 ? "Z4" : "Z5"
+            counts[zone, default: 0] += 1
+        }
+        return counts.mapValues { Double($0) / Double(values.count) }
     }
 
     private static func average(_ values: [Double]) -> Double? {
