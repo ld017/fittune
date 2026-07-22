@@ -4,6 +4,7 @@ build/
 DerivedData/
 .worktrees/
 .superpowers/
+.worktrees/
 *.xcuserstate
 xcuserdata/
 *.zip
