@@ -17,6 +17,8 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
     private(set) var isRunning = false
     private(set) var isPaused = false
     private(set) var status = "等待 iPhone"
+    private(set) var startedAt: Date?
+    private var sequence = 0
 
     override init() {
         super.init()
@@ -28,8 +30,17 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
     }
 
     func start(sessionID: UUID, activity: String) {
-        guard !isRunning else { return }
+        if let currentSessionID = self.sessionID {
+            if currentSessionID == sessionID {
+                sendAcknowledgement(sessionID: sessionID, accepted: true, reason: "already-started")
+            } else {
+                sendAcknowledgement(sessionID: sessionID, accepted: false, reason: "另一场训练正在进行")
+            }
+            return
+        }
         self.sessionID = sessionID
+        startedAt = .now
+        sequence = 0
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = activityType(activity)
         configuration.locationType = [.running, .walking, .cycling].contains(configuration.activityType) ? .outdoor : .indoor
@@ -47,6 +58,14 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
                 Task { @MainActor in
                     self?.isRunning = success
                     self?.status = success ? "实时采集中" : (error?.localizedDescription ?? "无法开始")
+                    if success {
+                        self?.sendAcknowledgement(sessionID: sessionID, accepted: true, reason: "started")
+                        self?.sendEvent("started")
+                    } else {
+                        self?.sendAcknowledgement(sessionID: sessionID, accepted: false, reason: error?.localizedDescription ?? "无法开始采集")
+                        self?.sessionID = nil
+                        self?.startedAt = nil
+                    }
                 }
             }
         } catch { status = error.localizedDescription }
@@ -55,31 +74,50 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
     func pause() { workoutSession?.pause(); isPaused = true; sendEvent("paused") }
     func resume() { workoutSession?.resume(); isPaused = false; sendEvent("resumed") }
     func end() {
+        let endingSessionID = sessionID
         workoutSession?.end()
         builder?.endCollection(withEnd: .now) { [weak self] _, _ in
             Task { @MainActor in _ = try? await self?.builder?.finishWorkout() }
         }
         isRunning = false; isPaused = false; status = "训练已结束"; sendEvent("ended")
+        if let endingSessionID { sendAcknowledgement(sessionID: endingSessionID, accepted: true, reason: "ended") }
+        sessionID = nil
+        startedAt = nil
+        sequence = 0
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: (any Error)?) {}
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { handle(message) }
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        handle(message, replyHandler: replyHandler)
+    }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) { handle(applicationContext) }
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) { handle(userInfo) }
 
-    nonisolated private func handle(_ message: [String: Any]) {
+    nonisolated private func handle(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)? = nil) {
         guard message["type"] as? String == "command",
               let command = message["command"] as? String,
               let idText = message["sessionID"] as? String,
               let id = UUID(uuidString: idText) else { return }
         let activity = message["activity"] as? String ?? "strength"
         Task { @MainActor in
+            let response: [String: Any]
             switch command {
-            case "started": self.start(sessionID: id, activity: activity)
-            case "paused": self.pause()
-            case "resumed": self.resume()
-            case "ended": self.end()
-            default: break
+            case "started":
+                if let current = self.sessionID, current != id {
+                    response = self.acknowledgementMessage(sessionID: id, accepted: false, reason: "另一场训练正在进行")
+                } else {
+                    self.start(sessionID: id, activity: activity)
+                    response = self.acknowledgementMessage(sessionID: id, accepted: true, reason: "start-command-accepted")
+                }
+            case "paused", "resumed", "ended" where self.sessionID != id:
+                response = self.acknowledgementMessage(sessionID: id, accepted: false, reason: "场次不匹配")
+            case "paused": self.pause(); response = self.acknowledgementMessage(sessionID: id, accepted: true, reason: "paused")
+            case "resumed": self.resume(); response = self.acknowledgementMessage(sessionID: id, accepted: true, reason: "resumed")
+            case "ended": self.end(); response = self.acknowledgementMessage(sessionID: id, accepted: true, reason: "ended")
+            default: response = self.acknowledgementMessage(sessionID: id, accepted: false, reason: "未知命令")
             }
+            replyHandler?(response)
         }
     }
 
@@ -105,7 +143,8 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
 
     private func sendMetric() {
         guard let sessionID else { return }
-        var message: [String: Any] = ["type": "metric", "sessionID": sessionID.uuidString, "timestamp": Date().timeIntervalSince1970]
+        sequence += 1
+        var message: [String: Any] = ["type": "metric", "sessionID": sessionID.uuidString, "sequence": sequence, "timestamp": Date().timeIntervalSince1970, "source": "appleWatch"]
         if let heartRate { message["heartRate"] = heartRate }
         if let activeEnergyKcal { message["activeEnergyKcal"] = activeEnergyKcal }
         if let distanceMeters { message["distanceMeters"] = distanceMeters }
@@ -116,7 +155,24 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
     private func sendEvent(_ event: String) {
         guard let sessionID else { return }
         let message: [String: Any] = ["type": "event", "event": event, "sessionID": sessionID.uuidString]
-        connectivity?.sendMessage(message, replyHandler: nil)
+        if connectivity?.isReachable == true { connectivity?.sendMessage(message, replyHandler: nil) }
+        else { connectivity?.transferUserInfo(message) }
+    }
+
+    private func sendAcknowledgement(sessionID: UUID, accepted: Bool, reason: String) {
+        let message = acknowledgementMessage(sessionID: sessionID, accepted: accepted, reason: reason)
+        if connectivity?.isReachable == true { connectivity?.sendMessage(message, replyHandler: nil) }
+        else { connectivity?.transferUserInfo(message) }
+    }
+
+    private func acknowledgementMessage(sessionID: UUID, accepted: Bool, reason: String) -> [String: Any] {
+        [
+            "type": "acknowledgement",
+            "sessionID": sessionID.uuidString,
+            "accepted": accepted,
+            "reason": reason,
+            "timestamp": Date().timeIntervalSince1970
+        ]
     }
 
     private func activityType(_ text: String) -> HKWorkoutActivityType {

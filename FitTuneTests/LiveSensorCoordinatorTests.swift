@@ -11,6 +11,30 @@ final class LiveSensorCoordinatorTests: XCTestCase {
         XCTAssertEqual(watch.activateCount, 1)
     }
 
+    @MainActor
+    func testWatchStartAcknowledgementAndTimeoutFallbackAreSessionScoped() {
+        let watch = ReentrantWatchSource()
+        watch.isPairedAndInstalled = true
+        watch.isReachable = true
+        let coordinator = LiveSensorCoordinator(watchSource: watch)
+        let descriptor = LiveSourceDescriptor(id: "apple-watch", kind: .appleWatch, name: "Apple Watch")
+        coordinator.select(descriptor)
+        let sessionID = UUID()
+
+        coordinator.beginWorkout(sessionID: sessionID, activity: "strength")
+        XCTAssertEqual(coordinator.watchStartState, .waitingForAcknowledgement)
+        watch.onAcknowledgement?(WatchWorkoutAcknowledgement(sessionID: UUID(), accepted: true, reason: "wrong"))
+        XCTAssertEqual(coordinator.watchStartState, .waitingForAcknowledgement)
+        watch.onAcknowledgement?(WatchWorkoutAcknowledgement(sessionID: sessionID, accepted: true, reason: "started"))
+        XCTAssertEqual(coordinator.watchStartState, .streaming)
+
+        let secondSession = UUID()
+        coordinator.beginWorkout(sessionID: secondSession, activity: "strength")
+        coordinator.watchStartTimedOut(sessionID: secondSession)
+        XCTAssertEqual(coordinator.watchStartState, .estimatedFallback)
+        XCTAssertEqual(coordinator.state, .estimated)
+    }
+
     func testNewDiscoveryCannotReplaceActiveSourceWithoutConfirmation() {
         var coordinator = LiveSensorCoordinatorStateMachine()
         let watch = LiveSourceDescriptor(id: "watch", kind: .appleWatch, name: "Apple Watch")
@@ -63,6 +87,7 @@ private final class ReentrantWatchSource: WatchLiveSource {
     var isReachable = false
     var onEnvelope: ((WatchMetricEnvelope) -> Void)?
     var onEvent: ((WatchWorkoutEventEnvelope) -> Void)?
+    var onAcknowledgement: ((WatchWorkoutAcknowledgement) -> Void)?
     var onStatusChange: (() -> Void)?
     var activateCount = 0
 

@@ -1,6 +1,14 @@
 import Foundation
 import Observation
 
+enum WatchWorkoutStartState: String, Codable, Equatable {
+    case idle
+    case waitingForAcknowledgement
+    case streaming
+    case estimatedFallback
+    case rejected
+}
+
 struct LiveSensorCoordinatorStateMachine: Equatable {
     private(set) var state: LiveConnectionState = .none
     private(set) var activeLiveSource: LiveSourceDescriptor?
@@ -87,6 +95,8 @@ final class LiveSensorCoordinator {
     private let bluetoothSource: BluetoothHeartRateSource
     private let watchSource: (any WatchLiveSource)?
     private(set) var activeSessionID: UUID?
+    private(set) var watchStartState: WatchWorkoutStartState = .idle
+    private var watchStreamState: WatchMetricStreamState?
 
     init(bluetoothSource: BluetoothHeartRateSource = BluetoothHeartRateSource(), watchSource: (any WatchLiveSource)? = nil) {
         self.bluetoothSource = bluetoothSource
@@ -111,6 +121,7 @@ final class LiveSensorCoordinator {
         }
         watchSource?.onEnvelope = { [weak self] envelope in self?.receive(envelope) }
         watchSource?.onEvent = { [weak self] event in self?.receive(event) }
+        watchSource?.onAcknowledgement = { [weak self] acknowledgement in self?.receive(acknowledgement) }
         watchSource?.onStatusChange = { [weak self] in self?.refreshWatchAvailability() }
         watchSource?.activate()
         refreshWatchAvailability()
@@ -131,12 +142,35 @@ final class LiveSensorCoordinator {
 
     func beginWorkout(sessionID: UUID, activity: String) {
         activeSessionID = sessionID
-        if activeLiveSource?.kind == .appleWatch { watchSource?.send(command: .started, sessionID: sessionID, activity: activity) }
+        watchStreamState = WatchMetricStreamState(sessionID: sessionID)
+        guard activeLiveSource?.kind == .appleWatch,
+              watchSource?.isPairedAndInstalled == true else {
+            watchStartState = .estimatedFallback
+            machine.markEstimated()
+            statusMessage = "未使用实时手表，当前按训练记录估算"
+            return
+        }
+        watchStartState = .waitingForAcknowledgement
+        statusMessage = watchSource?.isReachable == true ? "正在让 Apple Watch 自动开始训练" : "手表暂不可达，已排队等待自动开始"
+        watchSource?.send(command: .started, sessionID: sessionID, activity: activity)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            self?.watchStartTimedOut(sessionID: sessionID)
+        }
     }
 
     func endWorkout() {
         if let activeSessionID, activeLiveSource?.kind == .appleWatch { watchSource?.send(command: .ended, sessionID: activeSessionID, activity: "") }
         activeSessionID = nil
+        watchStreamState = nil
+        watchStartState = .idle
+    }
+
+    func watchStartTimedOut(sessionID: UUID) {
+        guard activeSessionID == sessionID, watchStartState == .waitingForAcknowledgement else { return }
+        watchStartState = .estimatedFallback
+        machine.markEstimated()
+        statusMessage = "Apple Watch 未确认开始，训练继续使用估算；连接恢复后会自动接续"
     }
 
     func scanBluetooth() {
@@ -210,6 +244,11 @@ final class LiveSensorCoordinator {
     private func receive(_ envelope: WatchMetricEnvelope) {
         guard activeLiveSource?.kind == .appleWatch,
               activeSessionID == nil || activeSessionID == envelope.sessionID else { return }
+        if watchStreamState == nil { watchStreamState = WatchMetricStreamState(sessionID: envelope.sessionID) }
+        guard watchStreamState?.ingest(envelope, now: .now) == .accepted else {
+            statusMessage = "已忽略错误场次、重复、过期或累计值异常的 Watch 数据"
+            return
+        }
         let validity = LiveMetricValidator.validate(envelope.sample, previous: latestSample, contactDetected: nil, now: envelope.sample.timestamp)
         latestValidity = validity
         guard validity == .valid else {
@@ -218,9 +257,24 @@ final class LiveSensorCoordinator {
             return
         }
         activeSessionID = envelope.sessionID
+        watchStartState = .streaming
         latestSample = envelope.sample
         if let source = machine.activeLiveSource { machine.didConnect(source) }
         statusMessage = envelope.sample.heartRateBPM.map { "实时心率 \(Int($0.rounded())) bpm · Apple Watch" } ?? "Apple Watch 实时运动数据"
+    }
+
+    private func receive(_ acknowledgement: WatchWorkoutAcknowledgement) {
+        guard activeLiveSource?.kind == .appleWatch,
+              activeSessionID == acknowledgement.sessionID else { return }
+        if acknowledgement.accepted {
+            watchStartState = .streaming
+            if let source = machine.activeLiveSource { machine.didConnect(source) }
+            statusMessage = "Apple Watch 已自动开始并确认实时采集"
+        } else {
+            watchStartState = .rejected
+            machine.markEstimated()
+            statusMessage = "Apple Watch 未开始：\(acknowledgement.reason)；本次继续使用估算"
+        }
     }
 
     private func receive(_ envelope: WatchWorkoutEventEnvelope) {

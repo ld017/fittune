@@ -7,6 +7,7 @@ import WatchConnectivity
 final class WatchWorkoutBridge: NSObject, WatchLiveSource, WCSessionDelegate {
     var onEnvelope: ((WatchMetricEnvelope) -> Void)?
     var onEvent: ((WatchWorkoutEventEnvelope) -> Void)?
+    var onAcknowledgement: ((WatchWorkoutAcknowledgement) -> Void)?
     var onStatusChange: (() -> Void)?
     private let session: WCSession?
 
@@ -27,8 +28,16 @@ final class WatchWorkoutBridge: NSObject, WatchLiveSource, WCSessionDelegate {
 
     func send(command: MirroredWorkoutEvent, sessionID: UUID, activity: String) {
         let message: [String: Any] = ["type": "command", "command": command.rawValue, "sessionID": sessionID.uuidString, "activity": activity]
-        if session?.isReachable == true { session?.sendMessage(message, replyHandler: nil) }
-        else { try? session?.updateApplicationContext(message) }
+        // Application context is idempotent fallback state; the reachable path
+        // adds a prompt acknowledgement without relying on it for delivery.
+        try? session?.updateApplicationContext(message)
+        if session?.isReachable == true {
+            session?.sendMessage(message) { [weak self] reply in
+                self?.decode(reply)
+            }
+        } else {
+            session?.transferUserInfo(message)
+        }
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: (any Error)?) {
@@ -41,10 +50,15 @@ final class WatchWorkoutBridge: NSObject, WatchLiveSource, WCSessionDelegate {
     }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { decode(message) }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) { decode(applicationContext) }
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) { decode(userInfo) }
 
     nonisolated private func decode(_ message: [String: Any]) {
         if let event = WatchMessageDecoder.event(from: message) {
             Task { @MainActor in self.onEvent?(event) }
+            return
+        }
+        if let acknowledgement = WatchMessageDecoder.acknowledgement(from: message) {
+            Task { @MainActor in self.onAcknowledgement?(acknowledgement) }
             return
         }
         guard message["type"] as? String == "metric",
@@ -62,6 +76,7 @@ final class WatchWorkoutBridge: NSObject, WatchLiveSource, WCSessionDelegate {
             swimmingStrokeCount: message["strokeCount"] as? Double,
             provenance: source
         )
-        Task { @MainActor in self.onEnvelope?(WatchMetricEnvelope(sessionID: sessionID, sample: sample)) }
+        let sequence = (message["sequence"] as? NSNumber)?.intValue
+        Task { @MainActor in self.onEnvelope?(WatchMetricEnvelope(sessionID: sessionID, sequence: sequence, sample: sample)) }
     }
 }

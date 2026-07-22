@@ -460,7 +460,11 @@ final class AppStore {
         var updated = workoutHistory[index]
         updated.externalID = wearable.externalID
         if let heartRate = wearable.averageHeartRate { updated.averageHeartRate = heartRate }
-        if let energy = wearable.activeEnergyKcal, energy > 0 {
+        let liveCumulativeEnergy = updated.metricSamples?.compactMap(\.activeEnergyKcal).max()
+        if let energy = WatchMetricMerger.reconciledActiveEnergy(
+            liveCumulativeKcal: liveCumulativeEnergy,
+            finalizedHealthKitKcal: wearable.activeEnergyKcal
+        ), energy > 0 {
             updated.measuredActiveEnergyKcal = energy
             updated.activeEnergyKcal = energy
             updated.energyMethod = "Apple Watch / 设备实测（同步更新）"

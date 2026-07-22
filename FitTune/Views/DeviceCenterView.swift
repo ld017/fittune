@@ -53,7 +53,9 @@ struct DeviceCenterView: View {
 
             Section("数据质量") {
                 LabeledContent("连接状态", value: sensors.state.rawValue)
+                LabeledContent("Watch 开训", value: sensors.watchStartState.rawValue)
                 LabeledContent("最近样本", value: sensors.latestValidity.rawValue)
+                LabeledContent("样本时间", value: sensors.latestSample?.timestamp.formatted(date: .omitted, time: .standard) ?? "暂无")
                 Text("心率过期、突跳或接触不良时会被排除，训练继续运行并明确降级为估算。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
