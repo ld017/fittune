@@ -7,6 +7,9 @@ struct FitTuneWorkoutAttributes: ActivityAttributes {
         var progress: String
         var heartRate: Int?
         var restEndsAt: Date?
+        var isCardio: Bool
+        var distanceMeters: Double?
+        var cadence: Double?
     }
 
     var sessionID: UUID

@@ -24,6 +24,12 @@ struct FitTuneApp: App {
                 .environment(healthSync)
                 .environment(liveSensors)
                 .preferredColorScheme(.dark)
+                .onOpenURL { url in
+                    guard let link = WorkoutActivitySnapshot.parseActionURL(url),
+                          link.action == .nextSet,
+                          store.activeWorkoutDraft?.id == link.sessionID else { return }
+                    store.advanceDraftToNextSet()
+                }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .inactive || phase == .background {
                         store.checkpointActiveWorkout()
@@ -35,6 +41,8 @@ struct FitTuneApp: App {
                     store.ingestDailyHealthSnapshot(snapshot)
                 }
                 .task {
+                    let validIDs = Set([store.activeWorkoutDraft?.id, store.activeCardioDraft?.id].compactMap { $0 })
+                    WorkoutActivityController.shared.reconcile(validSessionIDs: validIDs)
                     await healthSync.requestAuthorizationAndStart()
                     store.ingestDailyHealthSnapshot(healthSync.snapshot)
                 }
