@@ -73,6 +73,8 @@
 		B00000000000000000000038 /* WorkoutLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003B /* WorkoutLifecycleTests.swift */; };
 		B00000000000000000000039 /* ExerciseCatalogModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003C /* ExerciseCatalogModels.swift */; };
 		B0000000000000000000003A /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003D /* ExerciseCatalog.swift */; };
+		B0000000000000000000003B /* ExerciseReplacementEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003E /* ExerciseReplacementEngine.swift */; };
+		B0000000000000000000003C /* ExerciseReplacementEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -196,6 +198,8 @@
 		C0000000000000000000003B /* WorkoutLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLifecycleTests.swift; sourceTree = "<group>"; };
 		C0000000000000000000003C /* ExerciseCatalogModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalogModels.swift; sourceTree = "<group>"; };
 		C0000000000000000000003D /* ExerciseCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalog.swift; sourceTree = "<group>"; };
+		C0000000000000000000003E /* ExerciseReplacementEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseReplacementEngine.swift; sourceTree = "<group>"; };
+		C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseReplacementEngineTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -269,6 +273,7 @@
 			children = (
 				C00000000000000000000003 /* TrainingEngine.swift */,
 				C0000000000000000000003D /* ExerciseCatalog.swift */,
+				C0000000000000000000003E /* ExerciseReplacementEngine.swift */,
 				C0000000000000000000001A /* RecoveryEngine.swift */,
 				C00000000000000000000024 /* LiveAdaptationEngine.swift */,
 				C00000000000000000000029 /* SummaryEngine.swift */,
@@ -353,6 +358,7 @@
 				C00000000000000000000032 /* DataExportServiceTests.swift */,
 				C00000000000000000000037 /* WatchMetricMergeTests.swift */,
 				C0000000000000000000003B /* WorkoutLifecycleTests.swift */,
+				C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -598,6 +604,7 @@
 				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
 				B0000000000000000000003A /* ExerciseCatalog.swift in Sources */,
+				B0000000000000000000003B /* ExerciseReplacementEngine.swift in Sources */,
 				B00000000000000000000017 /* RecoveryEngine.swift in Sources */,
 				B00000000000000000000021 /* LiveAdaptationEngine.swift in Sources */,
 				B00000000000000000000026 /* SummaryEngine.swift in Sources */,
@@ -653,6 +660,7 @@
 				B0000000000000000000002F /* DataExportServiceTests.swift in Sources */,
 				B00000000000000000000034 /* WatchMetricMergeTests.swift in Sources */,
 				B00000000000000000000038 /* WorkoutLifecycleTests.swift in Sources */,
+				B0000000000000000000003C /* ExerciseReplacementEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
