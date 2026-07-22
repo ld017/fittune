@@ -14,6 +14,7 @@ let package = Package(
             exclude: ["App", "Resources", "Models/WorkoutActivityAttributes.swift", "Services/HealthKitService.swift", "Services/MotionLocationSource.swift", "Services/WatchWorkoutBridge.swift", "Services/WorkoutActivityController.swift", "Views"],
             sources: [
                 "Models/DomainModels.swift",
+                "Models/ExerciseCatalogModels.swift",
                 "Models/WorkoutModels.swift",
                 "Models/HealthMetricModels.swift",
                 "Engine/TrainingEngine.swift",

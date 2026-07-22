@@ -2,6 +2,51 @@ import XCTest
 @testable import FitTune
 
 final class DomainModelTests: XCTestCase {
+    func testTrainingPhasesHaveStableUserFacingTitles() {
+        XCTAssertEqual(TrainingPhase.primary.title, "主项")
+        XCTAssertEqual(TrainingPhase.accessory.title, "辅助项")
+        XCTAssertEqual(TrainingPhase.finisher.title, "收尾")
+    }
+
+    func testLegacyPrescriptionResolvesPhaseWithoutRequiringStoredField() throws {
+        let json = """
+        {
+          "id": "10000000-0000-0000-0000-000000000010",
+          "name": "绳索侧平举",
+          "pattern": "shoulderIsolation",
+          "sets": 3,
+          "repLower": 10,
+          "repUpper": 15,
+          "targetRIR": 0,
+          "isPriority": false
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(ExercisePrescription.self, from: Data(json.utf8))
+
+        XCTAssertNil(decoded.phase)
+        XCTAssertEqual(decoded.resolvedPhase, .accessory)
+    }
+
+    func testExplicitTrainingPhaseRoundTrips() throws {
+        let prescription = ExercisePrescription(
+            name: "农夫行走",
+            pattern: .conditioning,
+            sets: 3,
+            repLower: 30,
+            repUpper: 60,
+            targetRIR: 0,
+            isPriority: false,
+            phase: .finisher
+        )
+
+        XCTAssertEqual(try roundTrip(prescription).phase, .finisher)
+    }
+
+    func testCurrentSnapshotSchemaIsThirteen() {
+        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 13)
+    }
+
     func testLegacySnapshotWithoutSchemaVersionResolvesVersionSix() throws {
         let json = """
         {
@@ -71,9 +116,11 @@ final class DomainModelTests: XCTestCase {
             exercises: []
         )
         let change = WorkoutChangeEvent(timestamp: date, kind: .exerciseAdded, exerciseName: "哑铃飞鸟", detail: "用户添加")
+        let reorder = WorkoutChangeEvent(timestamp: date, kind: .exerciseReordered, exerciseName: "哑铃飞鸟", detail: "移至收尾")
 
         XCTAssertEqual(try roundTrip(planSnapshot), planSnapshot)
         XCTAssertEqual(try roundTrip(change), change)
+        XCTAssertEqual(try roundTrip(reorder), reorder)
     }
 
     func testMetricSampleSummaryAndRevisionRoundTripWithoutLosingSource() throws {

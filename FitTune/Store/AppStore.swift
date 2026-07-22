@@ -1183,6 +1183,9 @@ final class AppStore {
         if plan?.ruleVersion != TrainingEngine.ruleVersion {
             plan?.ruleVersion = TrainingEngine.ruleVersion
         }
+        if needsSchemaMigration {
+            materializeTrainingPhases(in: &plan)
+        }
         readiness = snapshot.readiness
         workoutHistory = snapshot.workoutHistory
         weightHistory = snapshot.weightHistory
@@ -1200,6 +1203,12 @@ final class AppStore {
         deletedRecoveryHistory = snapshot.deletedRecoveryHistory ?? []
         deletedBodyCompositionHistory = snapshot.deletedBodyCompositionHistory ?? []
         activeWorkoutDraft = snapshot.activeWorkoutDraft
+        if needsSchemaMigration, var draft = activeWorkoutDraft {
+            for index in draft.session.exercises.indices {
+                draft.session.exercises[index].phase = draft.session.exercises[index].resolvedPhase
+            }
+            activeWorkoutDraft = draft
+        }
         recoveryCheckIns = snapshot.recoveryCheckIns ?? []
         safetySettings = snapshot.safetySettings ?? PersonalSafetySettings()
         customExercises = (snapshot.customExercises ?? []).filter { $0.source == .custom }
@@ -1210,5 +1219,16 @@ final class AppStore {
         if needsSchemaMigration {
             persist()
         }
+    }
+
+    private func materializeTrainingPhases(in plan: inout TrainingPlan?) {
+        guard var editablePlan = plan else { return }
+        for sessionIndex in editablePlan.sessions.indices {
+            for exerciseIndex in editablePlan.sessions[sessionIndex].exercises.indices {
+                let resolved = editablePlan.sessions[sessionIndex].exercises[exerciseIndex].resolvedPhase
+                editablePlan.sessions[sessionIndex].exercises[exerciseIndex].phase = resolved
+            }
+        }
+        plan = editablePlan
     }
 }

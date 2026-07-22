@@ -208,6 +208,64 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(migrated.resolvedSchemaVersion, AppSnapshot.currentSchemaVersion)
     }
 
+    func testSchemaTwelveMigrationUpdatesEditablePlanButPreservesHistoricalRuleVersion() throws {
+        let defaults = makeDefaults()
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 4,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 0,
+            isPriority: true
+        )
+        let session = TrainingSession(name: "胸", focus: "胸", exercises: [exercise])
+        let plan = TrainingPlan(
+            title: "旧计划",
+            rationale: "迁移测试",
+            sessions: [session],
+            generatedAt: .now,
+            ruleVersion: "0.6-resumable-user-controlled-rest"
+        )
+        let historicalRuleVersion = "0.6-history-snapshot"
+        let historicalSnapshot = PlanSnapshot(
+            sourcePlanRuleVersion: historicalRuleVersion,
+            sourceSessionID: session.id,
+            planTitle: plan.title,
+            sessionName: session.name,
+            goal: .hypertrophy,
+            split: .chestBackShouldersLegs,
+            equipment: .fullGym,
+            exercises: [exercise]
+        )
+        var record = WorkoutRecord(
+            sessionName: session.name,
+            startedAt: .now,
+            completedAt: .now,
+            readinessScore: 80,
+            sets: []
+        )
+        record.planSnapshot = historicalSnapshot
+        let snapshot = AppSnapshot(
+            profile: nil,
+            plan: plan,
+            readiness: ReadinessInput(),
+            workoutHistory: [record],
+            weightHistory: [],
+            schemaVersion: 12
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        defaults.set(try encoder.encode(snapshot), forKey: "FitTune.snapshot.v1")
+
+        let restored = AppStore(defaults: defaults)
+
+        XCTAssertEqual(restored.plan?.ruleVersion, "1.1-plan-edit-health-sync-1")
+        XCTAssertEqual(restored.plan?.sessions[0].exercises[0].phase, .primary)
+        XCTAssertEqual(restored.workoutHistory[0].planSnapshot?.sourcePlanRuleVersion, historicalRuleVersion)
+        XCTAssertNil(restored.workoutHistory[0].planSnapshot?.exercises[0].phase)
+    }
+
     func testRecoveryCheckInAndSafetySettingsPersistAcrossStoreRecreation() {
         let defaults = makeDefaults()
         let store = AppStore(defaults: defaults)

@@ -1,7 +1,7 @@
 import Foundation
 
 enum TrainingEngine {
-    static let ruleVersion = "0.6-resumable-user-controlled-rest"
+    static let ruleVersion = "1.1-plan-edit-health-sync-1"
 
     static func assessReadiness(_ input: ReadinessInput) -> ReadinessAssessment {
         let sleepDuration = min(max(input.sleepHours / 8.0, 0), 1) * 100

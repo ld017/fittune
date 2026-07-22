@@ -543,6 +543,11 @@ struct ExercisePrescription: Identifiable, Codable, Hashable {
     var suggestedLoadKg: Double?
     var equipmentKind: EquipmentKind? = nil
     var suggestedLoadReason: String? = nil
+    var phase: TrainingPhase? = nil
+
+    var resolvedPhase: TrainingPhase {
+        phase ?? (isPriority ? .primary : .accessory)
+    }
 
     var targetText: String {
         "\(sets) 组 × \(repLower)–\(repUpper) 次 · \(targetRIR) RIR"
@@ -1041,7 +1046,7 @@ struct StartingLoadRecommendation: Equatable {
 }
 
 struct AppSnapshot: Codable {
-    static let currentSchemaVersion = 12
+    static let currentSchemaVersion = 13
 
     var profile: UserProfile?
     var plan: TrainingPlan?

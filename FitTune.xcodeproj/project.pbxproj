@@ -71,6 +71,7 @@
 		B00000000000000000000036 /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000039 /* WorkoutActivityAttributes.swift */; };
 		B00000000000000000000037 /* WorkoutActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003A /* WorkoutActivityController.swift */; };
 		B00000000000000000000038 /* WorkoutLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003B /* WorkoutLifecycleTests.swift */; };
+		B00000000000000000000039 /* ExerciseCatalogModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003C /* ExerciseCatalogModels.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -192,6 +193,7 @@
 		C00000000000000000000039 /* WorkoutActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutActivityAttributes.swift; sourceTree = "<group>"; };
 		C0000000000000000000003A /* WorkoutActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutActivityController.swift; sourceTree = "<group>"; };
 		C0000000000000000000003B /* WorkoutLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLifecycleTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000003C /* ExerciseCatalogModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalogModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -252,6 +254,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000002 /* DomainModels.swift */,
+				C0000000000000000000003C /* ExerciseCatalogModels.swift */,
 				C00000000000000000000016 /* WorkoutModels.swift */,
 				C00000000000000000000017 /* HealthMetricModels.swift */,
 				C00000000000000000000039 /* WorkoutActivityAttributes.swift */,
@@ -587,6 +590,7 @@
 			files = (
 				B00000000000000000000001 /* FitTuneApp.swift in Sources */,
 				B00000000000000000000002 /* DomainModels.swift in Sources */,
+				B00000000000000000000039 /* ExerciseCatalogModels.swift in Sources */,
 				B00000000000000000000013 /* WorkoutModels.swift in Sources */,
 				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,

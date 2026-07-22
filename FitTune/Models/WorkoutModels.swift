@@ -97,6 +97,7 @@ enum WorkoutChangeKind: String, Codable, Equatable {
     case exerciseAdded
     case exerciseRemoved
     case exerciseReplaced
+    case exerciseReordered
     case prescriptionChanged
 }
 
