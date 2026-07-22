@@ -34,6 +34,22 @@ final class EnergyEngineTests: XCTestCase {
         XCTAssertEqual(report.active.provenance.source, .phoneEstimate)
     }
 
+    func testFallbackWalkingEnergySubtractsCardioSessionStepsWithoutChangingDailyTotal() {
+        let report = EnergyEngine.dailyReport(
+            resting: estimate(1_600, source: "Mifflin", confidence: .derived),
+            strength: [],
+            cardio: [estimate(250, source: "跑步", confidence: .estimated)],
+            steps: 10_000,
+            cardioWorkoutSteps: 4_000,
+            stepEstimate: estimate(300, source: "全天步数", confidence: .estimated),
+            measuredDailyActive: nil
+        )
+
+        XCTAssertEqual(report.steps, 10_000)
+        XCTAssertEqual(report.walking.value, 180, accuracy: 0.001)
+        XCTAssertEqual(report.active.value, 430, accuracy: 0.001)
+    }
+
     private func estimate(_ value: Double, source: String, confidence: DataConfidence = .measured) -> MetricRange {
         MetricRange(value: value, lowerBound: value * 0.9, upperBound: value * 1.1, provenance: .init(source: confidence == .measured ? .appleHealth : .phoneEstimate, sourceName: source, confidence: confidence, coverage: 1))
     }

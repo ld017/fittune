@@ -13,19 +13,23 @@ struct DailyEnergyReport: Equatable {
 }
 
 enum EnergyEngine {
-    static let algorithmVersion = "1.0-energy-1"
+    static let algorithmVersion = "1.1.1-energy-step-dedup-1"
 
     static func dailyReport(
         resting: MetricRange?,
         strength: [MetricRange],
         cardio: [MetricRange],
         steps: Int,
+        cardioWorkoutSteps: Int = 0,
         stepEstimate: MetricRange?,
         measuredDailyActive: MetricRange?
     ) -> DailyEnergyReport {
         let strengthTotal = sum(strength, label: "力量训练分项")
         let cardioTotal = sum(cardio, label: "有氧训练分项")
-        let walkingEstimate = stepEstimate ?? zero(label: "无步数数据", confidence: .unavailable)
+        let rawWalkingEstimate = stepEstimate ?? zero(label: "无步数数据", confidence: .unavailable)
+        let workoutSteps = min(max(0, cardioWorkoutSteps), max(0, steps))
+        let nonWorkoutRatio = steps > 0 ? Double(max(0, steps - workoutSteps)) / Double(steps) : 0
+        let deduplicatedWalkingEstimate = scaled(rawWalkingEstimate, value: rawWalkingEstimate.value * nonWorkoutRatio)
         let knownActivity = strengthTotal.value + cardioTotal.value
 
         let active: MetricRange
@@ -36,8 +40,8 @@ enum EnergyEngine {
             measured.provenance.algorithmVersion = algorithmVersion
             active = measured
             let residual = max(0, measured.value - knownActivity)
-            let walkingValue = min(walkingEstimate.value, residual)
-            walking = scaled(walkingEstimate, value: walkingValue)
+            let walkingValue = min(rawWalkingEstimate.value, residual)
+            walking = scaled(rawWalkingEstimate, value: walkingValue)
             other = range(
                 value: max(0, residual - walkingValue),
                 lower: 0,
@@ -47,7 +51,7 @@ enum EnergyEngine {
                 confidence: .derived
             )
         } else {
-            walking = walkingEstimate
+            walking = deduplicatedWalkingEstimate
             other = zero(label: "无其他主动能量数据", confidence: .unavailable)
             active = range(
                 value: knownActivity + walking.value,

@@ -127,6 +127,11 @@ final class AppStore {
         }
         let wearableEntry = dailyActiveEnergy.filter { calendar.isDateInToday($0.date) }.max { $0.kilocalories < $1.kilocalories }
         let stepEntry = dailySteps.filter { calendar.isDateInToday($0.date) }.max { $0.steps < $1.steps }
+        let cardioWorkoutSteps = cardioWorkouts
+            .filter { calendar.isDateInToday($0.date) }
+            .reduce(0) { total, record in
+                total + (record.metricSamples?.compactMap(\.steps).max() ?? 0)
+            }
         let resting = profile.flatMap { TrainingEngine.restingEnergyEstimate(profile: $0, weightKg: weight) }.map { EnergyEngine.metricRange(from: $0, source: .historicalModel) }
         let steps = stepEntry.map { entry in
             MetricRange(value: entry.estimatedActiveEnergyKcal, lowerBound: entry.estimatedActiveEnergyKcal * 0.7, upperBound: entry.estimatedActiveEnergyKcal * 1.3, provenance: .init(source: .phoneEstimate, sourceName: "\(entry.source)步数/距离估算", confidence: .estimated, coverage: 1, algorithmVersion: EnergyEngine.algorithmVersion))
@@ -139,6 +144,7 @@ final class AppStore {
             strength: strength,
             cardio: cardio,
             steps: stepEntry?.steps ?? 0,
+            cardioWorkoutSteps: cardioWorkoutSteps,
             stepEstimate: steps,
             measuredDailyActive: wearable
         )
