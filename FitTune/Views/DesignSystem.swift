@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum FitTheme {
     static let background = Color(red: 0.035, green: 0.047, blue: 0.075)
@@ -215,28 +216,84 @@ struct NumericInputControl: View {
     let range: ClosedRange<Double>
     let step: Double
     var unit: String = ""
+    var prominent = false
+    @State private var text = ""
+    @State private var isEditing = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: prominent ? 14 : 10) {
             Text(title).font(.subheadline).foregroundStyle(FitTheme.secondaryText)
             Spacer()
             Button { value = max(range.lowerBound, value - step) } label: {
-                Image(systemName: "minus").frame(width: 34, height: 34).background(FitTheme.elevated, in: Circle())
+                Image(systemName: "minus").frame(width: prominent ? 46 : 34, height: prominent ? 46 : 34).background(FitTheme.elevated, in: Circle())
             }
             .buttonStyle(.plain)
-            TextField("0", value: $value, format: .number.precision(.fractionLength(step < 1 ? 1...1 : 0...1)))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.center)
-                .font(.headline.monospacedDigit())
-                .padding(.vertical, 8)
-                .frame(width: 76)
-                .background(FitTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
-                .onChange(of: value) { _, newValue in value = min(range.upperBound, max(range.lowerBound, newValue)) }
+            .buttonRepeatBehavior(.enabled)
+            SelectableNumericTextField(text: $text, isEditing: $isEditing) { commitText() }
+                .frame(width: prominent ? 122 : 82, height: prominent ? 52 : 40)
+                .background(FitTheme.elevated, in: RoundedRectangle(cornerRadius: prominent ? 14 : 10))
             if !unit.isEmpty { Text(unit).font(.caption).foregroundStyle(FitTheme.secondaryText) }
             Button { value = min(range.upperBound, value + step) } label: {
-                Image(systemName: "plus").frame(width: 34, height: 34).background(FitTheme.accent, in: Circle()).foregroundStyle(FitTheme.background)
+                Image(systemName: "plus").frame(width: prominent ? 46 : 34, height: prominent ? 46 : 34).background(FitTheme.accent, in: Circle()).foregroundStyle(FitTheme.background)
             }
             .buttonStyle(.plain)
+            .buttonRepeatBehavior(.enabled)
+        }
+        .onAppear { syncText() }
+        .onChange(of: value) { _, _ in if !isEditing { syncText() } }
+        .onChange(of: isEditing) { _, editing in if !editing { commitText() } }
+    }
+
+    private func commitText() {
+        value = NumericInputPolicy.commit(text, previous: value, range: range)
+        syncText()
+    }
+
+    private func syncText() {
+        text = value.formatted(.number.precision(.fractionLength(step < 1 ? 1...2 : 0...2)))
+    }
+}
+
+private struct SelectableNumericTextField: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var isEditing: Bool
+    let onCommit: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.delegate = context.coordinator
+        field.keyboardType = .decimalPad
+        field.textAlignment = .center
+        field.font = .monospacedDigitSystemFont(ofSize: 18, weight: .semibold)
+        field.textColor = .label
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        let toolbar = UIToolbar()
+        toolbar.sizeToFit()
+        toolbar.items = [UIBarButtonItem(systemItem: .flexibleSpace), UIBarButtonItem(title: "完成", style: .done, target: context.coordinator, action: #selector(Coordinator.done))]
+        field.inputAccessoryView = toolbar
+        return field
+    }
+
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if field.text != text { field.text = text }
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: SelectableNumericTextField
+        init(parent: SelectableNumericTextField) { self.parent = parent }
+
+        @objc func changed(_ field: UITextField) { parent.text = field.text ?? "" }
+        @objc func done() { parent.onCommit(); parent.isEditing = false; UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            parent.isEditing = true
+            DispatchQueue.main.async { textField.selectAll(nil) }
+        }
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            parent.text = textField.text ?? ""
+            parent.isEditing = false
         }
     }
 }

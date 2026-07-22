@@ -1,5 +1,11 @@
 import SwiftUI
 
+private struct LoadQuickChoice: Identifiable {
+    let label: String
+    let value: Double
+    var id: String { "\(label)-\(value)" }
+}
+
 struct WorkoutSessionView: View {
     @Environment(AppStore.self) private var store
     @Environment(LiveSensorCoordinator.self) private var liveSensors
@@ -275,7 +281,24 @@ struct WorkoutSessionView: View {
             }
             .pickerStyle(.menu)
             divider
-            NumericInputControl(title: "本组重量", value: doubleBinding(\.loadKg, marksLoadOverride: true), range: 0...400, step: store.profile?.loadIncrementKg ?? 2.5, unit: "kg")
+            NumericInputControl(title: "本组重量", value: doubleBinding(\.loadKg, marksLoadOverride: true), range: 0...400, step: store.profile?.loadIncrementKg ?? 2.5, unit: "kg", prominent: true)
+            let choices = quickLoadChoices(for: draft)
+            if !choices.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(choices) { choice in
+                            Button("\(choice.label) \(choice.value.formatted(.number.precision(.fractionLength(0...2))))") {
+                                store.updateWorkoutDraft {
+                                    $0.loadKg = choice.value
+                                    $0.userOverrodeSuggestedLoad = true
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(abs(choice.value - draft.loadKg) < 0.001 ? FitTheme.accent : FitTheme.accentBlue)
+                        }
+                    }
+                }
+            }
             divider
             IntegerInputControl(title: "完成次数", value: intBinding(\.reps), range: 1...100, step: 1, unit: "次")
             divider
@@ -500,6 +523,32 @@ struct WorkoutSessionView: View {
     private func appendLatestLiveSample() {
         guard let sample = liveSensors.latestSample else { return }
         store.appendLiveMetricSample(sample, validity: liveSensors.latestValidity)
+    }
+
+    private func quickLoadChoices(for draft: WorkoutDraft) -> [LoadQuickChoice] {
+        let exercise = draft.currentExercise
+        var choices: [LoadQuickChoice] = []
+        var used: [Double] = []
+        func append(_ label: String, _ value: Double?) {
+            guard let value, value > 0, !used.contains(where: { abs($0 - value) < 0.001 }) else { return }
+            used.append(value)
+            choices.append(LoadQuickChoice(label: label, value: value))
+        }
+        append("建议", draft.recommendation?.nextLoadKg ?? exercise.suggestedLoadKg)
+        append("上组", draft.results.last(where: { $0.exerciseID == exercise.id })?.loadKg)
+        let historical = store.workoutHistory
+            .sorted { $0.completedAt > $1.completedAt }
+            .flatMap { $0.sets.reversed() }
+            .filter { set in
+                if let left = TrainingEngine.canonicalExercise(named: set.exerciseName),
+                   let right = TrainingEngine.canonicalExercise(named: exercise.name) {
+                    return left.id == right.id
+                }
+                return set.exerciseName == exercise.name
+            }
+        append("上次", historical.first?.loadKg)
+        for value in historical.map(\.loadKg) where choices.count < 5 { append("最近", value) }
+        return choices
     }
 
     private func formatSeconds(_ value: Int) -> String {

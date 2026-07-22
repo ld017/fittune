@@ -1,5 +1,12 @@
 import Foundation
 
+enum NumericInputPolicy {
+    static func commit(_ text: String, previous: Double, range: ClosedRange<Double>) -> Double {
+        guard let parsed = Double(text.replacingOccurrences(of: ",", with: ".")) else { return previous }
+        return min(range.upperBound, max(range.lowerBound, parsed))
+    }
+}
+
 enum TrainingGoal: String, CaseIterable, Codable, Identifiable {
     case fatLoss
     case hypertrophy

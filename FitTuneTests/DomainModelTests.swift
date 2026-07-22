@@ -2,6 +2,11 @@ import XCTest
 @testable import FitTune
 
 final class DomainModelTests: XCTestCase {
+    func testNumericInputAllowsTemporaryEmptyAndClampsOnlyWhenCommitted() {
+        XCTAssertEqual(NumericInputPolicy.commit("", previous: 80, range: 0...400), 80)
+        XCTAssertEqual(NumericInputPolicy.commit("82.5", previous: 80, range: 0...400), 82.5)
+        XCTAssertEqual(NumericInputPolicy.commit("999", previous: 80, range: 0...400), 400)
+    }
     func testTrainingPhasesHaveStableUserFacingTitles() {
         XCTAssertEqual(TrainingPhase.primary.title, "主项")
         XCTAssertEqual(TrainingPhase.accessory.title, "辅助项")
