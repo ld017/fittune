@@ -16,6 +16,7 @@ final class EnergyEngineTests: XCTestCase {
         XCTAssertEqual(report.otherActive.value, 150, accuracy: 0.001)
         XCTAssertEqual(report.total.value, 2_300, accuracy: 0.001)
         XCTAssertEqual(report.active.provenance.confidence, .measured)
+        XCTAssertFalse(report.totalIncludesWorkoutAndStepsTwice)
     }
 
     func testMissingWearableAddsNonOverlappingEstimatesAndShowsWideRange() {

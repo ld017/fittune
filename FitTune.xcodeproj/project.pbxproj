@@ -79,6 +79,9 @@
 		B0000000000000000000003E /* PlanEditingEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000041 /* PlanEditingEngineTests.swift */; };
 		B0000000000000000000003F /* PlanEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000042 /* PlanEditorView.swift */; };
 		B00000000000000000000040 /* ExerciseReplacementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000043 /* ExerciseReplacementView.swift */; };
+		B00000000000000000000041 /* DailyHealthSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000044 /* DailyHealthSnapshot.swift */; };
+		B00000000000000000000042 /* DailyHealthSnapshotReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */; };
+		B00000000000000000000043 /* DailyHealthSnapshotReducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -208,6 +211,9 @@
 		C00000000000000000000041 /* PlanEditingEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditingEngineTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000042 /* PlanEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditorView.swift; sourceTree = "<group>"; };
 		C00000000000000000000043 /* ExerciseReplacementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseReplacementView.swift; sourceTree = "<group>"; };
+		C00000000000000000000044 /* DailyHealthSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshot.swift; sourceTree = "<group>"; };
+		C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshotReducer.swift; sourceTree = "<group>"; };
+		C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshotReducerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -269,6 +275,7 @@
 			children = (
 				C00000000000000000000002 /* DomainModels.swift */,
 				C0000000000000000000003C /* ExerciseCatalogModels.swift */,
+				C00000000000000000000044 /* DailyHealthSnapshot.swift */,
 				C00000000000000000000016 /* WorkoutModels.swift */,
 				C00000000000000000000017 /* HealthMetricModels.swift */,
 				C00000000000000000000039 /* WorkoutActivityAttributes.swift */,
@@ -283,6 +290,7 @@
 				C0000000000000000000003D /* ExerciseCatalog.swift */,
 				C0000000000000000000003E /* ExerciseReplacementEngine.swift */,
 				C00000000000000000000040 /* PlanEditingEngine.swift */,
+				C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */,
 				C0000000000000000000001A /* RecoveryEngine.swift */,
 				C00000000000000000000024 /* LiveAdaptationEngine.swift */,
 				C00000000000000000000029 /* SummaryEngine.swift */,
@@ -371,6 +379,7 @@
 				C0000000000000000000003B /* WorkoutLifecycleTests.swift */,
 				C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */,
 				C00000000000000000000041 /* PlanEditingEngineTests.swift */,
+				C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -612,12 +621,14 @@
 				B00000000000000000000001 /* FitTuneApp.swift in Sources */,
 				B00000000000000000000002 /* DomainModels.swift in Sources */,
 				B00000000000000000000039 /* ExerciseCatalogModels.swift in Sources */,
+				B00000000000000000000041 /* DailyHealthSnapshot.swift in Sources */,
 				B00000000000000000000013 /* WorkoutModels.swift in Sources */,
 				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
 				B0000000000000000000003A /* ExerciseCatalog.swift in Sources */,
 				B0000000000000000000003B /* ExerciseReplacementEngine.swift in Sources */,
 				B0000000000000000000003D /* PlanEditingEngine.swift in Sources */,
+				B00000000000000000000042 /* DailyHealthSnapshotReducer.swift in Sources */,
 				B00000000000000000000017 /* RecoveryEngine.swift in Sources */,
 				B00000000000000000000021 /* LiveAdaptationEngine.swift in Sources */,
 				B00000000000000000000026 /* SummaryEngine.swift in Sources */,
@@ -677,6 +688,7 @@
 				B00000000000000000000038 /* WorkoutLifecycleTests.swift in Sources */,
 				B0000000000000000000003C /* ExerciseReplacementEngineTests.swift in Sources */,
 				B0000000000000000000003E /* PlanEditingEngineTests.swift in Sources */,
+				B00000000000000000000043 /* DailyHealthSnapshotReducerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

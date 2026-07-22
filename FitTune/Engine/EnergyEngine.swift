@@ -9,6 +9,7 @@ struct DailyEnergyReport: Equatable {
     var otherActive: MetricRange
     var active: MetricRange
     var total: MetricRange
+    var totalIncludesWorkoutAndStepsTwice: Bool { false }
 }
 
 enum EnergyEngine {

@@ -30,6 +30,7 @@ final class AppStore {
     var restingHeartRateSamples: [RestingHeartRateSample] = []
     var activeCardioDraft: CardioSessionDraft?
     var presentedSummary: WorkoutSummaryPresentation?
+    var dailyHealthSnapshots: [DailyHealthSnapshot] = []
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -488,6 +489,66 @@ final class AppStore {
             dailySteps[index] = entry
         } else {
             dailySteps.append(entry)
+        }
+        persist()
+    }
+
+    func ingestDailyHealthSnapshot(_ snapshot: DailyHealthSnapshot) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: snapshot.timeZoneIdentifier) ?? .current
+        let day = calendar.startOfDay(for: snapshot.day)
+        if let index = dailyHealthSnapshots.firstIndex(where: {
+            $0.timeZoneIdentifier == snapshot.timeZoneIdentifier && calendar.isDate($0.day, inSameDayAs: day)
+        }) {
+            dailyHealthSnapshots[index] = snapshot
+        } else {
+            dailyHealthSnapshots.append(snapshot)
+        }
+        dailyHealthSnapshots.sort { $0.day < $1.day }
+
+        if let bpm = snapshot.restingHeartRate.value {
+            let externalID = "daily-health-rhr:\(snapshot.timeZoneIdentifier):\(day.timeIntervalSince1970)"
+            let entry = RestingHeartRateSample(
+                date: snapshot.restingHeartRate.sampleDate ?? day,
+                bpm: bpm,
+                source: snapshot.restingHeartRate.provenance.source,
+                sourceName: snapshot.restingHeartRate.provenance.sourceName,
+                externalID: externalID
+            )
+            restingHeartRateSamples.removeAll { $0.externalID == externalID }
+            restingHeartRateSamples.append(entry)
+            restingHeartRateSamples.sort { $0.date < $1.date }
+        }
+
+        if let steps = snapshot.steps.value {
+            let distance = snapshot.walkingDistanceKm.value.flatMap { $0 > 0 ? $0 : nil }
+            let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
+            let estimate = distance.map { 0.5 * weight * $0 } ?? Double(steps) * 0.0004 * weight
+            let entry = DailyStepEntry(
+                date: snapshot.steps.sampleDate ?? day,
+                steps: steps,
+                distanceKm: distance,
+                estimatedActiveEnergyKcal: max(0, estimate),
+                source: snapshot.steps.provenance.sourceName
+            )
+            if let index = dailySteps.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
+                dailySteps[index] = entry
+            } else {
+                dailySteps.append(entry)
+            }
+        }
+
+        if let kilocalories = snapshot.activeEnergyKcal.value {
+            let entry = DailyActiveEnergyEntry(
+                date: snapshot.activeEnergyKcal.sampleDate ?? day,
+                kilocalories: kilocalories,
+                source: snapshot.activeEnergyKcal.provenance.sourceName
+            )
+            if let index = dailyActiveEnergy.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
+                dailyActiveEnergy[index] = entry
+            } else {
+                dailyActiveEnergy.append(entry)
+            }
         }
         persist()
     }
@@ -1200,6 +1261,7 @@ final class AppStore {
         safetySettings = PersonalSafetySettings()
         favoriteExerciseIDs = []
         customExercises = []
+        dailyHealthSnapshots = []
         defaults.removeObject(forKey: storageKey)
     }
 
@@ -1262,7 +1324,8 @@ final class AppStore {
             favoriteExerciseIDs: favoriteExerciseIDs,
             customExercises: customExercises,
             restingHeartRateSamples: restingHeartRateSamples,
-            activeCardioDraft: activeCardioDraft
+            activeCardioDraft: activeCardioDraft,
+            dailyHealthSnapshots: dailyHealthSnapshots
         )
     }
 
@@ -1324,6 +1387,7 @@ final class AppStore {
         })
         restingHeartRateSamples = snapshot.restingHeartRateSamples ?? []
         activeCardioDraft = snapshot.activeCardioDraft
+        dailyHealthSnapshots = snapshot.dailyHealthSnapshots ?? []
         if needsSchemaMigration {
             persist()
         }
