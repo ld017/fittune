@@ -3,6 +3,22 @@ import XCTest
 
 final class LiveSensorCoordinatorTests: XCTestCase {
     @MainActor
+    func testPreferredBluetoothHeartRateDevicePersistsAndIsReusedForWorkout() {
+        let suite = "LiveSensorCoordinatorTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let fit3 = LiveSourceDescriptor(id: UUID().uuidString, kind: .bluetooth, name: "HUAWEI WATCH FIT 3")
+        let first = LiveSensorCoordinator(defaults: defaults)
+        first.select(fit3)
+
+        let restored = LiveSensorCoordinator(defaults: defaults)
+        restored.beginWorkout(sessionID: UUID(), activity: "running")
+
+        XCTAssertEqual(restored.preferredLiveSource, fit3)
+        XCTAssertEqual(restored.activeLiveSource, fit3)
+        XCTAssertTrue(restored.statusMessage.contains("自动重连"))
+    }
+    @MainActor
     func testWatchActivationCallbackDoesNotRecursivelyActivateAgain() {
         let watch = ReentrantWatchSource()
 

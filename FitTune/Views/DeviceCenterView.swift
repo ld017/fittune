@@ -46,7 +46,12 @@ struct DeviceCenterView: View {
                         }
                     }
                 }
-                Text("仅连接实现标准 Bluetooth Heart Rate Service 的设备。FIT 3 通常不会向第三方应用广播实时心率，因此不会虚假显示为可直连。")
+                if let preferred = sensors.preferredLiveSource, preferred.kind == .bluetooth {
+                    Label("已记住：\(preferred.name)", systemImage: "arrow.clockwise.heart.fill")
+                        .font(.caption.bold())
+                        .foregroundStyle(.green)
+                }
+                Text("HUAWEI WATCH FIT 3 请先在手表中开启“设置 > 心率广播”。首次在这里选择后，FitTune 会在力量和有氧开始时自动扫描并重连；广播关闭或暂不可用时只降低可信度，不阻止训练。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -87,6 +87,7 @@ struct LiveSensorCoordinatorStateMachine: Equatable {
 @MainActor
 @Observable
 final class LiveSensorCoordinator {
+    private static let preferredSourceKey = "FitTune.preferredLiveSource.v1"
     private(set) var machine = LiveSensorCoordinatorStateMachine()
     private(set) var latestSample: WorkoutMetricSample?
     private(set) var latestValidity: LiveMetricValidity = .missing
@@ -94,15 +95,25 @@ final class LiveSensorCoordinator {
     private(set) var statusMessage = "未连接实时设备，训练仍可使用估算模式"
     private let bluetoothSource: BluetoothHeartRateSource
     private let watchSource: (any WatchLiveSource)?
+    private let defaults: UserDefaults
+    private(set) var preferredLiveSource: LiveSourceDescriptor?
     private(set) var activeSessionID: UUID?
     private(set) var watchStartState: WatchWorkoutStartState = .idle
     private var watchStreamState: WatchMetricStreamState?
 
-    init(bluetoothSource: BluetoothHeartRateSource = BluetoothHeartRateSource(), watchSource: (any WatchLiveSource)? = nil) {
+    init(
+        bluetoothSource: BluetoothHeartRateSource = BluetoothHeartRateSource(),
+        watchSource: (any WatchLiveSource)? = nil,
+        defaults: UserDefaults = .standard
+    ) {
         self.bluetoothSource = bluetoothSource
         self.watchSource = watchSource
+        self.defaults = defaults
+        if let data = defaults.data(forKey: Self.preferredSourceKey) {
+            preferredLiveSource = try? JSONDecoder().decode(LiveSourceDescriptor.self, from: data)
+        }
         bluetoothSource.onDiscovery = { [weak self] descriptor in
-            Task { @MainActor in self?.machine.discover(descriptor) }
+            Task { @MainActor in self?.handleDiscovery(descriptor) }
         }
         bluetoothSource.onConnected = { [weak self] descriptor in
             Task { @MainActor in
@@ -143,6 +154,15 @@ final class LiveSensorCoordinator {
     func beginWorkout(sessionID: UUID, activity: String) {
         activeSessionID = sessionID
         watchStreamState = WatchMetricStreamState(sessionID: sessionID)
+        if machine.activeLiveSource == nil, let preferredLiveSource {
+            _ = machine.requestActivation(preferredLiveSource)
+        }
+        if activeLiveSource?.kind == .bluetooth {
+            watchStartState = .estimatedFallback
+            bluetoothSource.startScanning()
+            statusMessage = "正在自动重连 \(activeLiveSource?.name ?? "蓝牙心率设备")；未收到心率前使用估算"
+            return
+        }
         guard activeLiveSource?.kind == .appleWatch,
               watchSource?.isPairedAndInstalled == true else {
             watchStartState = .estimatedFallback
@@ -184,12 +204,14 @@ final class LiveSensorCoordinator {
             statusMessage = "需要确认后才能切换实时设备"
             return
         }
+        remember(source)
         connectSelectedSource()
     }
 
     func confirmSwitch() {
         bluetoothSource.disconnect()
         machine.confirmPendingSwitch()
+        if let source = machine.activeLiveSource { remember(source) }
         connectSelectedSource()
     }
 
@@ -202,7 +224,25 @@ final class LiveSensorCoordinator {
         machine.stop()
         latestSample = nil
         latestValidity = .missing
+        preferredLiveSource = nil
+        defaults.removeObject(forKey: Self.preferredSourceKey)
         statusMessage = "已断开；将使用手机或历史估算"
+    }
+
+    private func handleDiscovery(_ descriptor: LiveSourceDescriptor) {
+        machine.discover(descriptor)
+        guard preferredLiveSource?.id == descriptor.id else { return }
+        if machine.activeLiveSource == nil { _ = machine.requestActivation(descriptor) }
+        guard machine.activeLiveSource?.id == descriptor.id else { return }
+        bluetoothSource.connect(identifier: descriptor.id)
+        statusMessage = "已找到 \(descriptor.name)，正在自动重连"
+    }
+
+    private func remember(_ source: LiveSourceDescriptor) {
+        preferredLiveSource = source
+        if let data = try? JSONEncoder().encode(source) {
+            defaults.set(data, forKey: Self.preferredSourceKey)
+        }
     }
 
     private func connectSelectedSource() {
