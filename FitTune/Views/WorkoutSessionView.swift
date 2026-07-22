@@ -9,6 +9,8 @@ struct WorkoutSessionView: View {
     @State private var showExitDialog = false
     @State private var showDiscardConfirmation = false
     @State private var showExerciseLibrary = false
+    @State private var showWorkoutEditor = false
+    @State private var replacementExercise: ExercisePrescription?
 
     init(session: TrainingSession? = nil) {
         initialSession = session
@@ -59,6 +61,25 @@ struct WorkoutSessionView: View {
             Text("已完成和未完成的组都不会生成训练记录，此操作无法恢复。")
         }
         .sheet(isPresented: $showExerciseLibrary) { exerciseLibrarySheet }
+        .sheet(isPresented: $showWorkoutEditor) {
+            if let editorDraft = store.makeActiveWorkoutEditorDraft() {
+                PlanEditorView(draft: editorDraft, mode: .activeWorkout)
+            }
+        }
+        .fullScreenCover(item: $replacementExercise) { exercise in
+            ExerciseReplacementView(currentPrescription: exercise, targetPhase: exercise.resolvedPhase) { option, transfer in
+                guard var editor = store.makeActiveWorkoutEditorDraft(),
+                      let updated = try? PlanEditingEngine.replace(
+                        exerciseID: exercise.id,
+                        with: option,
+                        loadTransfer: transfer,
+                        in: editor
+                      ) else { return }
+                editor = updated
+                try? store.commitActiveWorkoutEditorDraft(editor)
+                replacementExercise = nil
+            }
+        }
         .interactiveDismissDisabled()
     }
 
@@ -172,18 +193,7 @@ struct WorkoutSessionView: View {
             }
 
             HStack(spacing: 10) {
-                Menu {
-                    ForEach(EquipmentKind.allCases) { kind in
-                        let options = TrainingEngine.exerciseAlternatives(for: exercise.pattern).filter { $0.equipment == kind }
-                        if !options.isEmpty {
-                            Section(kind.title) {
-                                ForEach(options) { option in
-                                    Button(option.name) { store.replaceDraftCurrentExercise(with: option) }
-                                }
-                            }
-                        }
-                    }
-                } label: {
+                Button { replacementExercise = exercise } label: {
                     Label("更换动作/器械", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
@@ -196,6 +206,14 @@ struct WorkoutSessionView: View {
                 }
                 .buttonStyle(.bordered)
             }
+
+            Button { showWorkoutEditor = true } label: {
+                Label("调整剩余动作与顺序", systemImage: "list.bullet.rectangle")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(FitTheme.accentBlue)
 
             Button(role: .destructive) { store.removeDraftCurrentExercise() } label: {
                 Label("移除当前动作", systemImage: "minus.circle")

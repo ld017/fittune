@@ -77,6 +77,8 @@
 		B0000000000000000000003C /* ExerciseReplacementEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */; };
 		B0000000000000000000003D /* PlanEditingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000040 /* PlanEditingEngine.swift */; };
 		B0000000000000000000003E /* PlanEditingEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000041 /* PlanEditingEngineTests.swift */; };
+		B0000000000000000000003F /* PlanEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000042 /* PlanEditorView.swift */; };
+		B00000000000000000000040 /* ExerciseReplacementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000043 /* ExerciseReplacementView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -204,6 +206,8 @@
 		C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseReplacementEngineTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000040 /* PlanEditingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditingEngine.swift; sourceTree = "<group>"; };
 		C00000000000000000000041 /* PlanEditingEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditingEngineTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000042 /* PlanEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanEditorView.swift; sourceTree = "<group>"; };
+		C00000000000000000000043 /* ExerciseReplacementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseReplacementView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -323,6 +327,8 @@
 				C00000000000000000000009 /* TodayView.swift */,
 				C0000000000000000000000A /* WorkoutSessionView.swift */,
 				C0000000000000000000000B /* PlanView.swift */,
+				C00000000000000000000042 /* PlanEditorView.swift */,
+				C00000000000000000000043 /* ExerciseReplacementView.swift */,
 				C0000000000000000000000C /* InsightsView.swift */,
 				C0000000000000000000000D /* ProfileView.swift */,
 				C00000000000000000000018 /* ExerciseLibraryView.swift */,
@@ -636,6 +642,8 @@
 				B00000000000000000000009 /* TodayView.swift in Sources */,
 				B0000000000000000000000A /* WorkoutSessionView.swift in Sources */,
 				B0000000000000000000000B /* PlanView.swift in Sources */,
+				B0000000000000000000003F /* PlanEditorView.swift in Sources */,
+				B00000000000000000000040 /* ExerciseReplacementView.swift in Sources */,
 				B0000000000000000000000C /* InsightsView.swift in Sources */,
 				B0000000000000000000000D /* ProfileView.swift in Sources */,
 				B00000000000000000000015 /* ExerciseLibraryView.swift in Sources */,

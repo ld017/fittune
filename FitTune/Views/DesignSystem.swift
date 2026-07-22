@@ -143,6 +143,72 @@ struct PrimaryActionButtonStyle: ButtonStyle {
     }
 }
 
+struct FilterChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(isSelected ? FitTheme.background : .primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(isSelected ? FitTheme.accent : FitTheme.elevated, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AdvisoryBadge: View {
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption2.bold())
+            .foregroundStyle(FitTheme.warning)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(FitTheme.warning.opacity(0.12), in: Capsule())
+    }
+}
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        layout(proposal: proposal, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(proposal: ProposedViewSize(width: bounds.width, height: bounds.height), subviews: subviews)
+        for (index, point) in result.points.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+        }
+    }
+
+    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, points: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var points: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += lineHeight + spacing
+                lineHeight = 0
+            }
+            points.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        return (CGSize(width: min(maxWidth, max(0, x - spacing)), height: y + lineHeight), points)
+    }
+}
+
 struct NumericInputControl: View {
     let title: String
     @Binding var value: Double

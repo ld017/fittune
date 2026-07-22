@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlanView: View {
     @Environment(AppStore.self) private var store
+    @State private var editorDraft: PlanEditorDraft?
 
     var body: some View {
         ZStack {
@@ -51,6 +52,9 @@ struct PlanView: View {
         }
         .navigationTitle("训练计划")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editorDraft) { draft in
+            PlanEditorView(draft: draft, mode: .plan)
+        }
     }
 
     private func planSummary(_ plan: TrainingPlan) -> some View {
@@ -80,9 +84,16 @@ struct PlanView: View {
                         .foregroundStyle(FitTheme.secondaryText)
                 }
                 Spacer()
-                Text("≈ \(session.estimatedMinutes) 分")
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text("≈ \(session.estimatedMinutes) 分")
+                        .font(.caption.bold())
+                        .foregroundStyle(FitTheme.secondaryText)
+                    Button("编辑编排") {
+                        editorDraft = store.makePlanEditorDraft(sessionID: session.id)
+                    }
                     .font(.caption.bold())
-                    .foregroundStyle(FitTheme.secondaryText)
+                    .foregroundStyle(FitTheme.accent)
+                }
             }
 
             VStack(spacing: 0) {
@@ -107,27 +118,12 @@ struct PlanView: View {
                                 .lineLimit(2)
                         }
                         Spacer()
-                        Menu {
-                            let compatible = (TrainingEngine.exerciseAlternatives(for: exercise.pattern) + store.customExercises.filter { $0.pattern == exercise.pattern })
-                                .sorted {
-                                    let leftFavorite = store.favoriteExerciseIDs.contains($0.id)
-                                    let rightFavorite = store.favoriteExerciseIDs.contains($1.id)
-                                    if leftFavorite != rightFavorite { return leftFavorite }
-                                    return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-                                }
-                            ForEach(compatible) { option in
-                                Button {
-                                    store.replaceExercise(sessionID: session.id, exerciseID: exercise.id, with: option)
-                                } label: {
-                                    Label(option.name, systemImage: store.favoriteExerciseIDs.contains(option.id) ? "star.fill" : (option.name == exercise.name ? "checkmark" : "arrow.triangle.2.circlepath"))
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                                .font(.title3)
-                                .foregroundStyle(FitTheme.accent)
-                        }
-                        .accessibilityLabel("替换 \(exercise.name)")
+                        Text(exercise.resolvedPhase.title)
+                            .font(.caption2.bold())
+                            .foregroundStyle(FitTheme.accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(FitTheme.accent.opacity(0.12), in: Capsule())
                     }
                     .padding(.vertical, 9)
                     if exercise.id != session.exercises.last?.id {

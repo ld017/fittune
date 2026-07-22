@@ -1,10 +1,12 @@
 import Foundation
 
-struct PlanEditorDraft: Equatable {
+struct PlanEditorDraft: Identifiable, Equatable {
     var sourceSessionID: UUID
     var sessionName: String
     var focus: String
     var exercises: [ExercisePrescription]
+
+    var id: UUID { sourceSessionID }
 
     func exercises(in phase: TrainingPhase) -> [ExercisePrescription] {
         exercises.filter { $0.resolvedPhase == phase }
