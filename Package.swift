@@ -20,6 +20,7 @@ let package = Package(
                 "Engine/TrainingEngine.swift",
                 "Engine/ExerciseCatalog.swift",
                 "Engine/ExerciseReplacementEngine.swift",
+                "Engine/PlanEditingEngine.swift",
                 "Engine/RecoveryEngine.swift",
                 "Engine/LiveAdaptationEngine.swift",
                 "Engine/SummaryEngine.swift",

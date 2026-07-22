@@ -532,6 +532,111 @@ final class AppStore {
         persist()
     }
 
+    func makePlanEditorDraft(sessionID: UUID) -> PlanEditorDraft? {
+        guard let session = plan?.sessions.first(where: { $0.id == sessionID }) else { return nil }
+        return PlanEditorDraft(
+            sourceSessionID: session.id,
+            sessionName: session.name,
+            focus: session.focus,
+            exercises: session.exercises
+        )
+    }
+
+    func commitPlanEditorDraft(_ editorDraft: PlanEditorDraft) {
+        guard !editorDraft.exercises.isEmpty,
+              var currentPlan = plan,
+              let sessionIndex = currentPlan.sessions.firstIndex(where: { $0.id == editorDraft.sourceSessionID }) else { return }
+        currentPlan.sessions[sessionIndex].name = editorDraft.sessionName
+        currentPlan.sessions[sessionIndex].focus = editorDraft.focus
+        currentPlan.sessions[sessionIndex].exercises = editorDraft.exercises
+        currentPlan.ruleVersion = TrainingEngine.ruleVersion
+        plan = currentPlan
+        persist()
+    }
+
+    func makeActiveWorkoutEditorDraft() -> PlanEditorDraft? {
+        guard let workoutDraft = activeWorkoutDraft else { return nil }
+        return PlanEditorDraft(
+            sourceSessionID: workoutDraft.sourceSessionID,
+            sessionName: workoutDraft.session.name,
+            focus: workoutDraft.session.focus,
+            exercises: workoutDraft.session.exercises
+        )
+    }
+
+    func commitActiveWorkoutEditorDraft(_ editorDraft: PlanEditorDraft) throws {
+        guard var workoutDraft = activeWorkoutDraft,
+              workoutDraft.sourceSessionID == editorDraft.sourceSessionID else {
+            throw PlanEditError.missingExercise
+        }
+        guard !editorDraft.exercises.isEmpty else {
+            throw PlanEditError.cannotRemoveLastExercise
+        }
+
+        let previousExercises = workoutDraft.session.exercises
+        let lockedIDs = Set(workoutDraft.results.map(\.exerciseID))
+        let previousLocked = previousExercises.filter { lockedIDs.contains($0.id) }
+        let updatedLocked = editorDraft.exercises.filter { lockedIDs.contains($0.id) }
+        guard previousLocked == updatedLocked else { throw PlanEditError.lockedExercise }
+
+        let currentExerciseID = previousExercises.indices.contains(workoutDraft.exerciseIndex)
+            ? previousExercises[workoutDraft.exerciseIndex].id
+            : nil
+        var events = workoutDraft.changeEvents ?? []
+        let previousByID = Dictionary(uniqueKeysWithValues: previousExercises.map { ($0.id, $0) })
+        let updatedByID = Dictionary(uniqueKeysWithValues: editorDraft.exercises.map { ($0.id, $0) })
+
+        for removed in previousExercises where updatedByID[removed.id] == nil {
+            events.append(.init(kind: .exerciseRemoved, exerciseName: removed.name, detail: "从本次训练移除"))
+        }
+        for added in editorDraft.exercises where previousByID[added.id] == nil {
+            events.append(.init(kind: .exerciseAdded, exerciseName: added.name, detail: "添加到本次训练"))
+        }
+        for updated in editorDraft.exercises {
+            guard let previous = previousByID[updated.id] else { continue }
+            if previous.name != updated.name || previous.pattern != updated.pattern || previous.equipmentKind != updated.equipmentKind {
+                events.append(.init(kind: .exerciseReplaced, exerciseName: updated.name, detail: "由\(previous.name)替换为\(updated.name)"))
+            }
+            if previous.sets != updated.sets || previous.repLower != updated.repLower || previous.repUpper != updated.repUpper || previous.targetRIR != updated.targetRIR {
+                events.append(.init(kind: .prescriptionChanged, exerciseName: updated.name, detail: "训练参数已调整"))
+            }
+            let previousIndex = previousExercises.firstIndex(where: { $0.id == updated.id })
+            let updatedIndex = editorDraft.exercises.firstIndex(where: { $0.id == updated.id })
+            if previousIndex != updatedIndex || previous.resolvedPhase != updated.resolvedPhase {
+                events.append(.init(kind: .exerciseReordered, exerciseName: updated.name, detail: "调整至\(updated.resolvedPhase.title)"))
+            }
+        }
+
+        workoutDraft.session.name = editorDraft.sessionName
+        workoutDraft.session.focus = editorDraft.focus
+        workoutDraft.session.exercises = editorDraft.exercises
+        workoutDraft.changeEvents = events
+        if let currentExerciseID,
+           let updatedIndex = editorDraft.exercises.firstIndex(where: { $0.id == currentExerciseID }) {
+            workoutDraft.exerciseIndex = updatedIndex
+        } else {
+            workoutDraft.exerciseIndex = min(workoutDraft.exerciseIndex, editorDraft.exercises.count - 1)
+            prepareDraftForCurrentExercise(&workoutDraft)
+        }
+        workoutDraft.updatedAt = .now
+        activeWorkoutDraft = workoutDraft
+        persist()
+    }
+
+    func saveActiveWorkoutLayoutToSourcePlan() throws {
+        guard let workoutDraft = activeWorkoutDraft,
+              var currentPlan = plan,
+              let sessionIndex = currentPlan.sessions.firstIndex(where: { $0.id == workoutDraft.sourceSessionID }) else {
+            throw PlanEditError.missingExercise
+        }
+        currentPlan.sessions[sessionIndex].name = workoutDraft.session.name
+        currentPlan.sessions[sessionIndex].focus = workoutDraft.session.focus
+        currentPlan.sessions[sessionIndex].exercises = workoutDraft.session.exercises
+        currentPlan.ruleVersion = TrainingEngine.ruleVersion
+        plan = currentPlan
+        persist()
+    }
+
     func completeWorkout(_ record: WorkoutRecord) {
         workoutHistory.insert(record, at: 0)
         learnWorkingLoads(from: record)
