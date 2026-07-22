@@ -147,16 +147,13 @@ struct WorkoutSessionView: View {
                     .font(.caption.bold())
                     .foregroundStyle(FitTheme.secondaryText)
             }
-            Text("第 \(draft.setNumber) / \(exercise.sets) 组")
+            Text("\(setKindText(draft)) \(draft.currentPhaseOrdinal) / \(draft.currentPhaseTotal)")
                 .font(.system(size: 42, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .accessibilityLabel("当前第 \(draft.setNumber) 组，共 \(exercise.sets) 组")
-            Text(setKindText(draft))
-                .font(.headline)
-                .foregroundStyle(draft.currentSetKind == .warmup ? FitTheme.warning : FitTheme.accentBlue)
-            ProgressView(value: Double(min(draft.setNumber, exercise.sets)), total: Double(max(1, exercise.sets)))
+                .accessibilityLabel("当前\(setKindText(draft))第 \(draft.currentPhaseOrdinal) 组，共 \(draft.currentPhaseTotal) 组")
+            ProgressView(value: Double(min(draft.setNumber, draft.totalPlannedSets)), total: Double(max(1, draft.totalPlannedSets)))
                 .tint(FitTheme.accent)
         }
         .fitCard(padding: 18)
@@ -224,8 +221,8 @@ struct WorkoutSessionView: View {
 
             Divider().overlay(Color.white.opacity(0.08))
             IntegerInputControl(
-                title: "预计总组数",
-                value: Binding(get: { exercise.sets }, set: { store.setDraftPlannedSets($0) }),
+                title: "正式组数",
+                value: Binding(get: { draft.totalWorkingSets }, set: { store.setDraftPlannedSets($0) }),
                 range: 1...12,
                 step: 1,
                 unit: "组"
@@ -233,11 +230,11 @@ struct WorkoutSessionView: View {
             IntegerInputControl(
                 title: "其中热身组",
                 value: Binding(get: { draft.currentWarmupSets }, set: { store.setDraftWarmupSets($0) }),
-                range: 0...exercise.sets,
+                range: 0...6,
                 step: 1,
                 unit: "组"
             )
-            Text("总组数与热身组数由你决定，算法不会自动减少或提前结束。")
+            Text("正式组与热身组分别计算；例如 2 个热身组 + 4 个正式组，共完成 6 组。算法不会自动减少或提前结束。")
                 .font(.caption)
                 .foregroundStyle(FitTheme.secondaryText)
         }

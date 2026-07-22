@@ -43,8 +43,8 @@ final class DomainModelTests: XCTestCase {
         XCTAssertEqual(try roundTrip(prescription).phase, .finisher)
     }
 
-    func testCurrentSnapshotSchemaIsThirteen() {
-        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 13)
+    func testCurrentSnapshotSchemaIsFourteen() {
+        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 14)
     }
 
     func testLegacySnapshotWithoutSchemaVersionResolvesVersionSix() throws {

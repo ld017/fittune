@@ -2,6 +2,13 @@ import XCTest
 @testable import FitTune
 
 final class TrainingEngineTests: XCTestCase {
+    func testGeneratedExercisesDefaultToFourWorkingSets() throws {
+        let profile = profile(goal: .hypertrophy, experience: .new)
+        let plan = TrainingEngine.generatePlan(for: profile)
+        let exercise = try XCTUnwrap(plan.sessions.first?.exercises.first)
+
+        XCTAssertEqual(exercise.resolvedWorkingSets, 4)
+    }
     func testGeneratedPlanUsesRIRZeroForAllWorkingPrescriptions() {
         let plan = TrainingEngine.generatePlan(for: profile(goal: .hypertrophy, experience: .intermediate))
 
@@ -98,7 +105,7 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertLessThan(recommendation.nextLoadKg, 100)
     }
 
-    func testReturnToTrainingStartsWithLessVolumeThanAdvancedHypertrophy() {
+    func testAllExperienceLevelsReceiveFourEditableWorkingSets() {
         var returnProfile = profile(goal: .returnToTraining, experience: .returning)
         let returnPlan = TrainingEngine.generatePlan(for: returnProfile)
 
@@ -108,7 +115,8 @@ final class TrainingEngineTests: XCTestCase {
 
         let returnSets = returnPlan.sessions.flatMap(\.exercises).reduce(0) { $0 + $1.sets }
         let advancedSets = advancedPlan.sessions.flatMap(\.exercises).reduce(0) { $0 + $1.sets }
-        XCTAssertLessThan(returnSets, advancedSets)
+        XCTAssertEqual(returnSets, advancedSets)
+        XCTAssertTrue(returnPlan.sessions.flatMap(\.exercises).allSatisfy { $0.resolvedWorkingSets == 4 })
     }
 
     func testPlanRespectsSelectedTrainingDaysAndEquipment() {

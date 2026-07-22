@@ -10,7 +10,7 @@ final class WorkoutLifecycleTests: XCTestCase {
         let snapshot = WorkoutActivitySnapshot.strength(draft: draft, heartRate: 151)
 
         XCTAssertEqual(snapshot.currentItem, "杠铃卧推")
-        XCTAssertEqual(snapshot.progress, "第 4 / 共 5 组")
+        XCTAssertEqual(snapshot.progress, "正式组 4 / 5")
         XCTAssertEqual(snapshot.heartRate, 151)
     }
 }

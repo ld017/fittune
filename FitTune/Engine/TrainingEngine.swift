@@ -1,7 +1,7 @@
 import Foundation
 
 enum TrainingEngine {
-    static let ruleVersion = "1.1-plan-edit-health-sync-1"
+    static let ruleVersion = "1.1.1-live-history-cardio-1"
 
     static func assessReadiness(_ input: ReadinessInput) -> ReadinessAssessment {
         let sleepDuration = min(max(input.sleepHours / 8.0, 0), 1) * 100
@@ -73,7 +73,7 @@ enum TrainingEngine {
         var factor = 1.0
         var action = LoadAdjustment.hold
         var reasons = ["完成次数与 RIR 处于目标范围"]
-        let remainingSets = max(0, prescription.sets - result.setNumber)
+        let remainingSets = max(0, prescription.resolvedWorkingSets - result.setNumber)
 
         if result.reps < prescription.repLower || result.rir < prescription.targetRIR - 1 {
             factor = 0.925
@@ -856,8 +856,7 @@ enum TrainingEngine {
         experience: ExperienceLevel,
         priority: Bool
     ) -> ExercisePrescription {
-        let cautious = experience == .new || experience == .returning || experience == .autoAssess
-        var sets = cautious ? 2 : (experience == .advanced ? 4 : 3)
+        let sets = 4
         var lower = 6
         var upper = 10
 
@@ -866,11 +865,9 @@ enum TrainingEngine {
             if priority {
                 lower = 3
                 upper = 6
-                sets = cautious ? 2 : (experience == .advanced ? 4 : 3)
             } else {
                 lower = 6
                 upper = 10
-                sets = cautious ? 2 : 3
             }
         case .hypertrophy:
             lower = priority ? 6 : 8
@@ -878,7 +875,6 @@ enum TrainingEngine {
         case .balanced:
             lower = 6
             upper = 12
-            sets = cautious ? 2 : 3
         }
 
         return ExercisePrescription(
@@ -890,7 +886,8 @@ enum TrainingEngine {
             targetRIR: 0,
             isPriority: priority,
             suggestedLoadKg: nil,
-            equipmentKind: option.equipment
+            equipmentKind: option.equipment,
+            workingSets: sets
         )
     }
 

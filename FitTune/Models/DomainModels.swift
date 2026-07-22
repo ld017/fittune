@@ -563,13 +563,18 @@ struct ExercisePrescription: Identifiable, Codable, Hashable {
     var equipmentKind: EquipmentKind? = nil
     var suggestedLoadReason: String? = nil
     var phase: TrainingPhase? = nil
+    /// Explicit working-set target introduced in schema 14. A missing value
+    /// preserves the legacy meaning where `sets` represented all sets.
+    var workingSets: Int? = nil
+
+    var resolvedWorkingSets: Int { max(1, workingSets ?? sets) }
 
     var resolvedPhase: TrainingPhase {
         phase ?? (isPriority ? .primary : .accessory)
     }
 
     var targetText: String {
-        "\(sets) 组 × \(repLower)–\(repUpper) 次 · \(targetRIR) RIR"
+        "\(resolvedWorkingSets) 个正式组 × \(repLower)–\(repUpper) 次 · \(targetRIR) RIR"
     }
 }
 
@@ -644,7 +649,7 @@ struct TrainingSession: Identifiable, Codable, Hashable {
     var exercises: [ExercisePrescription]
 
     var estimatedMinutes: Int {
-        max(25, exercises.reduce(0) { $0 + $1.sets * ($1.isPriority ? 4 : 3) })
+        max(25, exercises.reduce(0) { $0 + $1.resolvedWorkingSets * ($1.isPriority ? 4 : 3) })
     }
 }
 
@@ -1015,11 +1020,14 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var changeEvents: [WorkoutChangeEvent]? = nil
     var metricSamples: [WorkoutMetricSample]? = nil
     var liveRecoveryMilestonesApplied: Set<Int> = []
+    /// `nil` means a pre-schema-14 draft whose `sets` value includes warmups.
+    var usesSeparateWarmups: Bool? = nil
 
     var currentExercise: ExercisePrescription { session.exercises[exerciseIndex] }
 
     var currentWarmupSets: Int {
-        min(currentExercise.sets, max(0, warmupSetsByExercise[currentExercise.id] ?? 0))
+        let maximum = usesSeparateWarmups == true ? 6 : currentExercise.sets
+        return min(maximum, max(0, warmupSetsByExercise[currentExercise.id] ?? 0))
     }
 
     var currentSetKind: SetKind {
@@ -1034,7 +1042,21 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     }
 
     var totalWorkingSets: Int {
-        max(0, currentExercise.sets - currentWarmupSets)
+        if usesSeparateWarmups == true { return currentExercise.resolvedWorkingSets }
+        return max(0, currentExercise.sets - currentWarmupSets)
+    }
+
+    var totalPlannedSets: Int {
+        if usesSeparateWarmups == true { return currentWarmupSets + currentExercise.resolvedWorkingSets }
+        return currentExercise.sets
+    }
+
+    var currentPhaseOrdinal: Int {
+        currentSetKind == .warmup ? setNumber : max(1, workingSetOrdinal)
+    }
+
+    var currentPhaseTotal: Int {
+        currentSetKind == .warmup ? currentWarmupSets : totalWorkingSets
     }
 }
 
@@ -1065,7 +1087,7 @@ struct StartingLoadRecommendation: Equatable {
 }
 
 struct AppSnapshot: Codable {
-    static let currentSchemaVersion = 13
+    static let currentSchemaVersion = 14
 
     var profile: UserProfile?
     var plan: TrainingPlan?

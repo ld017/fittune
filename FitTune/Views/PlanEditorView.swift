@@ -216,12 +216,13 @@ struct PlanEditorView: View {
                 prescription = ExercisePrescription(
                     name: option.name,
                     pattern: option.pattern,
-                    sets: 3,
+                    sets: 4,
                     repLower: 8,
                     repUpper: 12,
                     targetRIR: 0,
                     isPriority: phase == .primary,
-                    equipmentKind: option.equipment
+                    equipmentKind: option.equipment,
+                    workingSets: 4
                 )
             }
             draft = PlanEditingEngine.add(prescription, to: phase, at: index, in: draft)

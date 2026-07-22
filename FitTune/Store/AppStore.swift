@@ -725,6 +725,10 @@ final class AppStore {
             techniqueQuality: 4,
             hasPain: false
         )
+        draft.usesSeparateWarmups = true
+        for index in draft.session.exercises.indices where draft.session.exercises[index].workingSets == nil {
+            draft.session.exercises[index].workingSets = draft.session.exercises[index].sets
+        }
         if let profile {
             draft.planSnapshot = PlanSnapshot(
                 sourcePlanRuleVersion: plan?.ruleVersion ?? TrainingEngine.ruleVersion,
@@ -809,7 +813,7 @@ final class AppStore {
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
         guard draft.setNumber >= 1,
-              draft.setNumber <= exercise.sets,
+              draft.setNumber <= draft.totalPlannedSets,
               !draft.results.contains(where: { $0.exerciseID == exercise.id && $0.setNumber == draft.setNumber }) else { return }
 
         let previous = draft.results.last { $0.exerciseID == exercise.id }
@@ -856,7 +860,7 @@ final class AppStore {
         )
         draft.restStartedAt = .now
         draft.liveRecoveryMilestonesApplied = []
-        draft.phase = draft.setNumber >= exercise.sets ? .exerciseComplete : .resting
+        draft.phase = draft.setNumber >= draft.totalPlannedSets ? .exerciseComplete : .resting
         draft.userOverrodeSuggestedLoad = false
         draft.updatedAt = .now
         activeWorkoutDraft = draft
@@ -869,7 +873,7 @@ final class AppStore {
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
-        guard draft.setNumber < exercise.sets else { return }
+        guard draft.setNumber < draft.totalPlannedSets else { return }
 
         let previousKind = draft.currentSetKind
         draft.setNumber += 1
@@ -915,9 +919,14 @@ final class AppStore {
         let completed = draft.results.filter { $0.exerciseID == exerciseID }.count
         let minimum = max(1, completed + (draft.phase == .training ? 1 : 0))
         let sets = min(12, max(minimum, requestedSets))
-        draft.session.exercises[draft.exerciseIndex].sets = sets
-        draft.warmupSetsByExercise[exerciseID] = min(sets, draft.warmupSetsByExercise[exerciseID] ?? 0)
-        if draft.phase == .exerciseComplete, sets > completed {
+        if draft.usesSeparateWarmups == true {
+            draft.session.exercises[draft.exerciseIndex].workingSets = sets
+            draft.session.exercises[draft.exerciseIndex].sets = sets
+        } else {
+            draft.session.exercises[draft.exerciseIndex].sets = sets
+        }
+        draft.warmupSetsByExercise[exerciseID] = min(draft.totalPlannedSets, draft.warmupSetsByExercise[exerciseID] ?? 0)
+        if draft.phase == .exerciseComplete, draft.totalPlannedSets > completed {
             draft.setNumber = completed + 1
             draft.phase = .training
             draft.restRecommendation = nil
@@ -933,7 +942,8 @@ final class AppStore {
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
-        let warmupCount = min(exercise.sets, max(0, requestedSets))
+        let maximumWarmups = draft.usesSeparateWarmups == true ? 6 : exercise.sets
+        let warmupCount = min(maximumWarmups, max(0, requestedSets))
         if warmupCount > 0, draft.workingLoadTargetByExercise[exercise.id] == nil {
             draft.workingLoadTargetByExercise[exercise.id] = draft.loadKg
         }
@@ -1098,8 +1108,8 @@ final class AppStore {
     private func prepareDraftForCurrentExercise(_ draft: inout WorkoutDraft) {
         let exercise = draft.session.exercises[draft.exerciseIndex]
         let completed = draft.results.filter { $0.exerciseID == exercise.id }.count
-        draft.setNumber = min(exercise.sets, completed + 1)
-        draft.phase = completed >= exercise.sets ? .exerciseComplete : .training
+        draft.setNumber = min(draft.totalPlannedSets, completed + 1)
+        draft.phase = completed >= draft.totalPlannedSets ? .exerciseComplete : .training
         let starting = loadRecommendation(for: exercise)
         draft.loadKg = draft.results.last(where: { $0.exerciseID == exercise.id })?.loadKg
             ?? starting.loadKg
@@ -1360,6 +1370,7 @@ final class AppStore {
         }
         if needsSchemaMigration {
             materializeTrainingPhases(in: &plan)
+            migratePlanToSeparateWorkingSets(&plan)
         }
         readiness = snapshot.readiness
         workoutHistory = snapshot.workoutHistory
@@ -1406,6 +1417,19 @@ final class AppStore {
             for exerciseIndex in editablePlan.sessions[sessionIndex].exercises.indices {
                 let resolved = editablePlan.sessions[sessionIndex].exercises[exerciseIndex].resolvedPhase
                 editablePlan.sessions[sessionIndex].exercises[exerciseIndex].phase = resolved
+            }
+        }
+        plan = editablePlan
+    }
+
+    private func migratePlanToSeparateWorkingSets(_ plan: inout TrainingPlan?) {
+        guard var editablePlan = plan else { return }
+        for sessionIndex in editablePlan.sessions.indices {
+            for exerciseIndex in editablePlan.sessions[sessionIndex].exercises.indices {
+                let previous = editablePlan.sessions[sessionIndex].exercises[exerciseIndex]
+                let workingSets = max(4, previous.workingSets ?? previous.sets)
+                editablePlan.sessions[sessionIndex].exercises[exerciseIndex].sets = workingSets
+                editablePlan.sessions[sessionIndex].exercises[exerciseIndex].workingSets = workingSets
             }
         }
         plan = editablePlan

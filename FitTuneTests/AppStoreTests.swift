@@ -63,6 +63,70 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.activeWorkoutDraft?.loadKg, 100)
     }
 
+    func testNewWorkoutKeepsFourWorkingSetsSeparateFromWarmups() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(
+            name: "深蹲",
+            pattern: .squat,
+            sets: 4,
+            repLower: 5,
+            repUpper: 8,
+            targetRIR: 0,
+            isPriority: true,
+            workingSets: 4
+        )
+        store.startWorkout(TrainingSession(name: "腿", focus: "腿", exercises: [exercise]))
+        store.setDraftWarmupSets(2)
+
+        XCTAssertEqual(store.activeWorkoutDraft?.currentWarmupSets, 2)
+        XCTAssertEqual(store.activeWorkoutDraft?.totalWorkingSets, 4)
+        XCTAssertEqual(store.activeWorkoutDraft?.totalPlannedSets, 6)
+    }
+
+    func testEditingWorkingSetsDoesNotConsumeWarmupSets() {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 4,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 0,
+            isPriority: true,
+            workingSets: 4
+        )
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        store.setDraftWarmupSets(2)
+        store.setDraftPlannedSets(5)
+
+        XCTAssertEqual(store.activeWorkoutDraft?.totalWorkingSets, 5)
+        XCTAssertEqual(store.activeWorkoutDraft?.totalPlannedSets, 7)
+    }
+
+    func testLegacyDraftWithoutSeparateWarmupFlagKeepsLegacyTotalSetMeaning() throws {
+        let exercise = ExercisePrescription(name: "卧推", pattern: .horizontalPush, sets: 4, repLower: 6, repUpper: 10, targetRIR: 0, isPriority: true)
+        var draft = WorkoutDraft(
+            sourceSessionID: UUID(),
+            session: TrainingSession(name: "胸", focus: "胸", exercises: [exercise]),
+            exerciseIndex: 0,
+            setNumber: 1,
+            loadKg: 60,
+            reps: 8,
+            rir: 0,
+            techniqueQuality: 4,
+            hasPain: false
+        )
+        draft.warmupSetsByExercise[exercise.id] = 2
+        let encoded = try JSONEncoder().encode(draft)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "usesSeparateWarmups")
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        let restored = try JSONDecoder().decode(WorkoutDraft.self, from: legacyData)
+
+        XCTAssertEqual(restored.totalPlannedSets, 4)
+        XCTAssertEqual(restored.totalWorkingSets, 2)
+    }
+
     func testSetKindCanRepresentBackoffDropAndAMRAPWithoutChangingPlannedSets() {
         let store = AppStore(defaults: makeDefaults())
         let exercise = ExercisePrescription(name: "卧推", pattern: .horizontalPush, sets: 3, repLower: 6, repUpper: 10, targetRIR: 0, isPriority: true)
@@ -260,7 +324,7 @@ final class AppStoreTests: XCTestCase {
 
         let restored = AppStore(defaults: defaults)
 
-        XCTAssertEqual(restored.plan?.ruleVersion, "1.1-plan-edit-health-sync-1")
+        XCTAssertEqual(restored.plan?.ruleVersion, TrainingEngine.ruleVersion)
         XCTAssertEqual(restored.plan?.sessions[0].exercises[0].phase, .primary)
         XCTAssertEqual(restored.workoutHistory[0].planSnapshot?.sourcePlanRuleVersion, historicalRuleVersion)
         XCTAssertNil(restored.workoutHistory[0].planSnapshot?.exercises[0].phase)

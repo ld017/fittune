@@ -16,7 +16,7 @@ struct WorkoutActivitySnapshot: Codable, Hashable {
             startedAt: draft.startedAt,
             title: draft.session.name,
             currentItem: exercise.name,
-            progress: "第 \(draft.setNumber) / 共 \(exercise.sets) 组",
+            progress: "\(draft.currentSetKind.title) \(draft.currentPhaseOrdinal) / \(draft.currentPhaseTotal)",
             heartRate: heartRate.map { Int($0.rounded()) },
             restEndsAt: draft.restStartedAt.map { $0.addingTimeInterval(TimeInterval(draft.restRecommendation?.recommendedSeconds ?? draft.recommendation?.restSeconds ?? 0)) }
         )
