@@ -85,6 +85,91 @@ final class LiveSensorCoordinatorTests: XCTestCase {
         XCTAssertNotEqual(coordinator.activeLiveSource, other)
     }
 
+    func testSilenceMonitorReconnectsAtFiveSecondsAndRemindsAtFifteen() {
+        let start = Date(timeIntervalSince1970: 100)
+        let sessionID = UUID()
+        let source = LiveSourceDescriptor(id: "fit3", kind: .bluetooth, name: "FIT 3")
+        var monitor = HeartRateSilenceMonitor()
+
+        monitor.begin(sessionID: sessionID, source: source, at: start)
+
+        XCTAssertEqual(monitor.evaluate(at: start.addingTimeInterval(4)), .none)
+        XCTAssertEqual(
+            monitor.evaluate(at: start.addingTimeInterval(5)),
+            .reconnect(source)
+        )
+        guard case let .remind(reminder) = monitor.evaluate(
+            at: start.addingTimeInterval(15)
+        ) else {
+            return XCTFail("Expected reconnect reminder")
+        }
+        XCTAssertEqual(reminder.sourceName, "FIT 3")
+        XCTAssertEqual(monitor.evaluate(at: start.addingTimeInterval(20)), .none)
+    }
+
+    func testValidSampleRearmsReminderForANewInterruption() {
+        let start = Date(timeIntervalSince1970: 100)
+        let source = LiveSourceDescriptor(id: "fit3", kind: .bluetooth, name: "FIT 3")
+        var monitor = HeartRateSilenceMonitor()
+        monitor.begin(sessionID: UUID(), source: source, at: start)
+        _ = monitor.evaluate(at: start.addingTimeInterval(5))
+        _ = monitor.evaluate(at: start.addingTimeInterval(15))
+
+        monitor.receiveValidSample(at: start.addingTimeInterval(16))
+
+        XCTAssertEqual(
+            monitor.evaluate(at: start.addingTimeInterval(21)),
+            .reconnect(source)
+        )
+        guard case .remind = monitor.evaluate(at: start.addingTimeInterval(31)) else {
+            return XCTFail("Expected a reminder for the new interruption")
+        }
+    }
+
+    func testEndedMonitorNeverReminds() {
+        let start = Date(timeIntervalSince1970: 100)
+        let source = LiveSourceDescriptor(id: "fit3", kind: .bluetooth, name: "FIT 3")
+        var monitor = HeartRateSilenceMonitor()
+        monitor.begin(sessionID: UUID(), source: source, at: start)
+        monitor.end()
+
+        XCTAssertEqual(monitor.evaluate(at: start.addingTimeInterval(30)), .none)
+    }
+
+    @MainActor
+    func testEndingWorkoutClearsReconnectMonitoringState() {
+        let coordinator = LiveSensorCoordinator()
+        let source = LiveSourceDescriptor(
+            id: "fit3",
+            kind: .bluetooth,
+            name: "FIT 3"
+        )
+        coordinator.select(source)
+        coordinator.beginWorkout(sessionID: UUID(), activity: "strength")
+
+        coordinator.endWorkout()
+
+        XCTAssertNil(coordinator.reconnectReminder)
+        XCTAssertNil(coordinator.activeSessionID)
+    }
+
+    @MainActor
+    func testManualDisconnectClearsReconnectReminderAndSession() {
+        let coordinator = LiveSensorCoordinator()
+        let source = LiveSourceDescriptor(
+            id: "fit3",
+            kind: .bluetooth,
+            name: "FIT 3"
+        )
+        coordinator.select(source)
+        coordinator.beginWorkout(sessionID: UUID(), activity: "strength")
+
+        coordinator.disconnect()
+
+        XCTAssertNil(coordinator.reconnectReminder)
+        XCTAssertNil(coordinator.activeSessionID)
+    }
+
     func testStaleJumpAndPoorContactSamplesAreExcluded() {
         let now = Date(timeIntervalSince1970: 100)
         let provenance = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)

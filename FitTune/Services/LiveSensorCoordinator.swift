@@ -84,6 +84,67 @@ struct LiveSensorCoordinatorStateMachine: Equatable {
     }
 }
 
+struct HeartRateReconnectReminder: Identifiable, Equatable {
+    let id = UUID()
+    let sessionID: UUID
+    let sourceName: String
+}
+
+enum HeartRateMonitoringAction: Equatable {
+    case none
+    case reconnect(LiveSourceDescriptor)
+    case remind(HeartRateReconnectReminder)
+}
+
+struct HeartRateSilenceMonitor {
+    private(set) var sessionID: UUID?
+    private(set) var source: LiveSourceDescriptor?
+    private(set) var lastValidSampleAt: Date?
+    private var requestedReconnect = false
+    private var showedReminder = false
+
+    mutating func begin(
+        sessionID: UUID,
+        source: LiveSourceDescriptor,
+        at date: Date
+    ) {
+        self.sessionID = sessionID
+        self.source = source
+        lastValidSampleAt = date
+        requestedReconnect = false
+        showedReminder = false
+    }
+
+    mutating func receiveValidSample(at date: Date) {
+        guard sessionID != nil else { return }
+        lastValidSampleAt = date
+        requestedReconnect = false
+        showedReminder = false
+    }
+
+    mutating func evaluate(at date: Date) -> HeartRateMonitoringAction {
+        guard let sessionID, let source, let lastValidSampleAt else { return .none }
+        let elapsed = date.timeIntervalSince(lastValidSampleAt)
+        if elapsed >= 5, !requestedReconnect {
+            requestedReconnect = true
+            return .reconnect(source)
+        }
+        if elapsed >= 15, !showedReminder {
+            showedReminder = true
+            return .remind(.init(sessionID: sessionID, sourceName: source.name))
+        }
+        return .none
+    }
+
+    mutating func end() {
+        sessionID = nil
+        source = nil
+        lastValidSampleAt = nil
+        requestedReconnect = false
+        showedReminder = false
+    }
+}
+
 @MainActor
 @Observable
 final class LiveSensorCoordinator {
@@ -99,7 +160,10 @@ final class LiveSensorCoordinator {
     private(set) var preferredLiveSource: LiveSourceDescriptor?
     private(set) var activeSessionID: UUID?
     private(set) var watchStartState: WatchWorkoutStartState = .idle
+    private(set) var reconnectReminder: HeartRateReconnectReminder?
     private var watchStreamState: WatchMetricStreamState?
+    private var silenceMonitor = HeartRateSilenceMonitor()
+    private var silenceTask: Task<Void, Never>?
 
     init(
         bluetoothSource: BluetoothHeartRateSource = BluetoothHeartRateSource(),
@@ -122,10 +186,7 @@ final class LiveSensorCoordinator {
             }
         }
         bluetoothSource.onDisconnected = { [weak self] in
-            Task { @MainActor in
-                self?.machine.didDisconnect()
-                self?.statusMessage = "连接中断，正在重连原设备"
-            }
+            Task { @MainActor in self?.handleBluetoothDisconnect() }
         }
         bluetoothSource.onMeasurement = { [weak self] measurement, date, sourceName in
             Task { @MainActor in self?.receive(measurement, at: date, sourceName: sourceName) }
@@ -161,6 +222,9 @@ final class LiveSensorCoordinator {
             watchStartState = .estimatedFallback
             bluetoothSource.startScanning()
             statusMessage = "正在自动重连 \(activeLiveSource?.name ?? "蓝牙心率设备")；未收到心率前使用估算"
+            if let source = activeLiveSource {
+                startSilenceMonitoring(sessionID: sessionID, source: source)
+            }
             return
         }
         guard activeLiveSource?.kind == .appleWatch,
@@ -181,6 +245,7 @@ final class LiveSensorCoordinator {
 
     func endWorkout() {
         if let activeSessionID, activeLiveSource?.kind == .appleWatch { watchSource?.send(command: .ended, sessionID: activeSessionID, activity: "") }
+        stopSilenceMonitoring()
         activeSessionID = nil
         watchStreamState = nil
         watchStartState = .idle
@@ -220,6 +285,10 @@ final class LiveSensorCoordinator {
     }
 
     func disconnect() {
+        stopSilenceMonitoring()
+        activeSessionID = nil
+        watchStreamState = nil
+        watchStartState = .idle
         bluetoothSource.disconnect()
         machine.stop()
         latestSample = nil
@@ -227,6 +296,17 @@ final class LiveSensorCoordinator {
         preferredLiveSource = nil
         defaults.removeObject(forKey: Self.preferredSourceKey)
         statusMessage = "已断开；将使用手机或历史估算"
+    }
+
+    func retryPreferredSource() {
+        reconnectReminder = nil
+        guard preferredLiveSource?.kind == .bluetooth else { return }
+        statusMessage = "正在重新扫描 \(preferredLiveSource?.name ?? "蓝牙心率设备")"
+        bluetoothSource.startScanning()
+    }
+
+    func dismissReconnectReminder() {
+        reconnectReminder = nil
     }
 
     private func handleDiscovery(_ descriptor: LiveSourceDescriptor) {
@@ -277,8 +357,58 @@ final class LiveSensorCoordinator {
             return
         }
         latestSample = sample
+        silenceMonitor.receiveValidSample(at: date)
+        reconnectReminder = nil
         if let source = machine.activeLiveSource { machine.didConnect(source) }
         statusMessage = "实时心率 \(measurement.bpm) bpm · \(sourceName)"
+    }
+
+    private func startSilenceMonitoring(
+        sessionID: UUID,
+        source: LiveSourceDescriptor
+    ) {
+        silenceTask?.cancel()
+        silenceMonitor.begin(sessionID: sessionID, source: source, at: .now)
+        reconnectReminder = nil
+        silenceTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                self?.evaluateHeartRateSilence(sessionID: sessionID)
+            }
+        }
+    }
+
+    private func stopSilenceMonitoring() {
+        silenceTask?.cancel()
+        silenceTask = nil
+        silenceMonitor.end()
+        reconnectReminder = nil
+    }
+
+    private func evaluateHeartRateSilence(sessionID: UUID) {
+        guard activeSessionID == sessionID else { return }
+        switch silenceMonitor.evaluate(at: .now) {
+        case .none:
+            break
+        case let .reconnect(source):
+            statusMessage = "心率广播暂时中断，正在自动重连 \(source.name)"
+            bluetoothSource.startScanning()
+        case let .remind(reminder):
+            reconnectReminder = reminder
+            statusMessage = "心率连接已中断；训练继续使用估算"
+            bluetoothSource.startScanning()
+        }
+    }
+
+    private func handleBluetoothDisconnect() {
+        machine.didDisconnect()
+        guard activeSessionID != nil,
+              activeLiveSource?.kind == .bluetooth else {
+            statusMessage = "连接已断开"
+            return
+        }
+        statusMessage = "连接中断，正在重连原设备"
     }
 
     private func receive(_ envelope: WatchMetricEnvelope) {
