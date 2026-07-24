@@ -13,7 +13,7 @@ struct DailyEnergyReport: Equatable {
 }
 
 enum EnergyEngine {
-    static let algorithmVersion = "1.1.1-energy-step-dedup-1"
+    static let algorithmVersion = "1.1.1-energy-timeseries-2"
 
     static func dailyReport(
         resting: MetricRange?,

@@ -422,6 +422,71 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertGreaterThan(estimate.kilocalories, 0)
     }
 
+    func testCardioHeartRateSeriesFillsLongGapWithModalityMET() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var user = profile(goal: .generalFitness, experience: .intermediate)
+        user.ageYears = 30
+        user.biologicalSex = .male
+        let provenance = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = [0.0, 5.0, 1_795.0, 1_800.0].map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 145,
+                provenance: provenance
+            )
+        }
+
+        let estimate = TrainingEngine.cardioEnergyEstimate(
+            modality: .cycling,
+            intensity: .zone2,
+            minutes: 30,
+            weightKg: 70,
+            profile: user,
+            metricSamples: samples,
+            startedAt: start
+        )
+        let fallback = TrainingEngine.netActiveEnergy(
+            met: TrainingEngine.cardioMET(modality: .cycling, intensity: .zone2),
+            weightKg: 70,
+            minutes: 30
+        )
+
+        XCTAssertEqual(estimate.kilocalories, fallback, accuracy: fallback * 0.05)
+        XCTAssertTrue(estimate.method.contains("心率 + 有氧模型"))
+    }
+
+    func testOnlyAppleWatchSamplesProvideMeasuredWorkoutEnergy() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let watch = MetricProvenance(
+            source: .appleWatch,
+            sourceName: "Apple Watch",
+            confidence: .measured,
+            coverage: 1
+        )
+        let bluetooth = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+
+        XCTAssertEqual(
+            TrainingEngine.appleWatchActiveEnergy(from: [
+                .init(timestamp: date, activeEnergyKcal: 120, provenance: watch),
+                .init(timestamp: date.addingTimeInterval(5), activeEnergyKcal: 180, provenance: watch)
+            ]),
+            180
+        )
+        XCTAssertNil(TrainingEngine.appleWatchActiveEnergy(from: [
+            .init(timestamp: date, activeEnergyKcal: 180, provenance: bluetooth)
+        ]))
+    }
+
     func testStrengthMeasuredEnergyOverridesEstimate() {
         let record = WorkoutRecord(
             sessionName: "力量",
@@ -434,6 +499,91 @@ final class TrainingEngineTests: XCTestCase {
         let estimate = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: 70)
         XCTAssertEqual(estimate.kilocalories, 234)
         XCTAssertEqual(estimate.confidence, "高")
+    }
+
+    func testLowHeartRateStrengthSessionUsesModelFloorInsteadOfSingleDigitEnergy() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var user = profile(goal: .hypertrophy, experience: .intermediate)
+        user.ageYears = 30
+        user.biologicalSex = .female
+        let provenance = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "HUAWEI WATCH FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = stride(from: 0.0, through: 3_600.0, by: 5.0).map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 70,
+                provenance: provenance
+            )
+        }
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            sessionRPE: 7,
+            averageHeartRate: 70,
+            metricSamples: samples
+        )
+
+        let estimate = TrainingEngine.strengthEnergyEstimate(
+            record: record,
+            weightKg: 70,
+            profile: user
+        )
+
+        XCTAssertGreaterThan(estimate.kilocalories, 100)
+        XCTAssertTrue(estimate.method.contains("心率 + 力量模型"))
+        XCTAssertLessThan(estimate.lowerBound, estimate.kilocalories)
+        XCTAssertGreaterThan(estimate.upperBound, estimate.kilocalories)
+    }
+
+    func testStrengthHeartRateGapsAreFilledWithoutDoubleCounting() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var user = profile(goal: .hypertrophy, experience: .intermediate)
+        user.ageYears = 30
+        user.biologicalSex = .male
+        let provenance = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "H10",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = [0.0, 5.0, 1_800.0, 1_805.0].map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 140,
+                provenance: provenance
+            )
+        }
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            sessionRPE: 7,
+            averageHeartRate: 140,
+            metricSamples: samples
+        )
+
+        let estimate = TrainingEngine.strengthEnergyEstimate(
+            record: record,
+            weightKg: 70,
+            profile: user
+        )
+        let fallback = TrainingEngine.netActiveEnergy(
+            met: 5,
+            weightKg: 70,
+            minutes: 60
+        )
+
+        XCTAssertEqual(estimate.kilocalories, fallback, accuracy: fallback * 0.05)
+        XCTAssertEqual(estimate.confidence, "低至中")
     }
 
     func testEffectReportsRecoveryRangeAndSessionLoad() {
