@@ -576,6 +576,150 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.metricSamples?.first?.heartRateBPM, 135)
     }
 
+    func testStrengthSaveUsesLatestAppleWatchCumulativeEnergy() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 1,
+            repLower: 8,
+            repUpper: 10,
+            targetRIR: 1,
+            isPriority: true
+        )
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        store.completeCurrentDraftSet()
+        let source = MetricProvenance(
+            source: .appleWatch,
+            sourceName: "Apple Watch",
+            confidence: .measured,
+            coverage: 1
+        )
+        store.appendLiveMetricSample(
+            .init(timestamp: .now, heartRateBPM: 130, activeEnergyKcal: 120, provenance: source),
+            validity: .valid
+        )
+        store.appendLiveMetricSample(
+            .init(timestamp: .now, heartRateBPM: 132, activeEnergyKcal: 210, provenance: source),
+            validity: .valid
+        )
+
+        let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
+
+        XCTAssertEqual(record.measuredActiveEnergyKcal, 210)
+        XCTAssertEqual(record.activeEnergyKcal, 210)
+        XCTAssertEqual(record.energyMethod, "Apple Watch / 设备实测")
+    }
+
+    func testCardioSaveUsesLatestAppleWatchCumulativeEnergy() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCardioSession(modality: .cycling, intensity: .zone2)
+        store.activeCardioDraft?.startedAt = start
+        let source = MetricProvenance(
+            source: .appleWatch,
+            sourceName: "Apple Watch",
+            confidence: .measured,
+            coverage: 1
+        )
+        store.appendCardioMetricSample(
+            .init(timestamp: start, heartRateBPM: 130, activeEnergyKcal: 80, provenance: source)
+        )
+        store.appendCardioMetricSample(
+            .init(timestamp: start.addingTimeInterval(1_800), heartRateBPM: 140, activeEnergyKcal: 190, provenance: source)
+        )
+
+        let record = try XCTUnwrap(
+            store.finishCardioSession(
+                status: .completed,
+                at: start.addingTimeInterval(1_800)
+            )
+        )
+
+        XCTAssertEqual(record.activeEnergyKcal, 190)
+        XCTAssertEqual(record.energyMethod, "Apple Watch / 设备实测")
+        XCTAssertTrue(record.source.contains("Apple Watch"))
+    }
+
+    func testCurrentStrengthEnergyRecordRecalculatesWithoutMutatingInput() {
+        let store = AppStore(defaults: makeDefaults())
+        var user = testProfile(goal: .hypertrophy, split: .fullBody)
+        user.ageYears = 30
+        user.biologicalSex = .female
+        store.finishOnboarding(with: user)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = stride(from: 0.0, through: 3_600.0, by: 5.0).map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 70,
+                provenance: source
+            )
+        }
+        let oldRecord = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 5,
+            sessionRPE: 7,
+            averageHeartRate: 70,
+            energyMethod: "Keytel 心率模型（力量训练修正区间）",
+            metricSamples: samples
+        )
+
+        let updated = store.currentEnergyRecord(oldRecord)
+
+        XCTAssertGreaterThan(updated.activeEnergyKcal ?? 0, 100)
+        XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
+        XCTAssertTrue(updated.energyMethod?.contains("心率 + 力量模型") == true)
+    }
+
+    func testCurrentCardioEnergyRecordRecalculatesWithoutMutatingInput() {
+        let store = AppStore(defaults: makeDefaults())
+        var user = testProfile(goal: .generalFitness, split: .fullBody)
+        user.ageYears = 30
+        user.biologicalSex = .male
+        store.finishOnboarding(with: user)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = stride(from: 0.0, through: 1_800.0, by: 5.0).map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 135,
+                provenance: source
+            )
+        }
+        let oldRecord = CardioWorkoutRecord(
+            date: start,
+            modality: .cycling,
+            intensity: .zone2,
+            durationMinutes: 30,
+            averageHeartRate: 135,
+            activeEnergyKcal: 5,
+            source: "旧心率估算",
+            energyMethod: "Keytel 平均心率模型",
+            metricSamples: samples
+        )
+
+        let updated = store.currentEnergyRecord(oldRecord)
+
+        XCTAssertNotEqual(updated.activeEnergyKcal, 5)
+        XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
+        XCTAssertTrue(updated.energyMethod?.contains("心率 + 有氧模型") == true)
+    }
+
     private func testProfile(goal: TrainingGoal, split: TrainingSplit) -> UserProfile {
         UserProfile(
             nickname: "测试",

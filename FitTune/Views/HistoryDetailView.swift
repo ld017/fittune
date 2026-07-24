@@ -1,19 +1,21 @@
 import SwiftUI
 
 struct StrengthHistoryDetailView: View {
+    @Environment(AppStore.self) private var store
     let record: WorkoutRecord
     let bodyWeightKg: Double
 
     var body: some View {
+        let current = store.currentEnergyRecord(record)
         List {
             Section("训练信息") {
-                LabeledContent("状态", value: record.resolvedCompletionStatus.title)
-                LabeledContent("开始", value: record.startedAt.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent("完成组数", value: "\(record.sets.count)")
-                if let snapshot = record.planSnapshot { LabeledContent("计划快照", value: "\(snapshot.split.title) · \(snapshot.sourcePlanRuleVersion)") }
+                LabeledContent("状态", value: current.resolvedCompletionStatus.title)
+                LabeledContent("开始", value: current.startedAt.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent("完成组数", value: "\(current.sets.count)")
+                if let snapshot = current.planSnapshot { LabeledContent("计划快照", value: "\(snapshot.split.title) · \(snapshot.sourcePlanRuleVersion)") }
             }
             Section("组明细") {
-                ForEach(record.sets) { set in
+                ForEach(current.sets) { set in
                     VStack(alignment: .leading, spacing: 3) {
                         Text("\(set.exerciseName) · \(set.resolvedSetKind.title)")
                         Text("第 \(set.setNumber) 组 · \(set.loadKg.formatted(.number.precision(.fractionLength(0...1)))) kg × \(set.reps) · RIR \(set.rir)")
@@ -23,10 +25,10 @@ struct StrengthHistoryDetailView: View {
             }
             Section("总结") {
                 NavigationLink("查看完整总结") {
-                    WorkoutSummaryView(presentation: .init(title: record.sessionName, date: record.completedAt, summary: record.summary ?? SummaryEngine.strengthSummary(for: record, bodyWeightKg: bodyWeightKg)))
+                    WorkoutSummaryView(presentation: .init(title: current.sessionName, date: current.completedAt, summary: current.summary ?? SummaryEngine.strengthSummary(for: current, bodyWeightKg: bodyWeightKg)))
                 }
             }
-            if let revisions = record.summaryRevisions, !revisions.isEmpty {
+            if let revisions = current.summaryRevisions, !revisions.isEmpty {
                 Section("总结修订") {
                     ForEach(revisions) { revision in
                         VStack(alignment: .leading) {
@@ -42,23 +44,25 @@ struct StrengthHistoryDetailView: View {
 }
 
 struct CardioHistoryDetailView: View {
+    @Environment(AppStore.self) private var store
     let record: CardioWorkoutRecord
 
     var body: some View {
+        let current = store.currentEnergyRecord(record)
         List {
             Section("训练信息") {
-                LabeledContent("状态", value: (record.completionStatus ?? .completed).title)
-                LabeledContent("开始", value: record.date.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent("方式", value: record.modality.title)
-                LabeledContent("强度", value: record.intensity.title)
-                LabeledContent("时长", value: "\(record.durationMinutes) 分钟")
-                if let distance = record.distanceKm { LabeledContent("距离", value: String(format: "%.2f km", distance)) }
-                if let heartRate = record.averageHeartRate { LabeledContent("平均心率", value: "\(Int(heartRate.rounded())) bpm") }
-                LabeledContent("主动消耗", value: "\(Int(record.activeEnergyKcal.rounded())) kcal")
-                LabeledContent("数据来源", value: record.source)
-                if let gap = record.dataGapReason { Label(gap, systemImage: "exclamationmark.triangle.fill").foregroundStyle(FitTheme.warning) }
+                LabeledContent("状态", value: (current.completionStatus ?? .completed).title)
+                LabeledContent("开始", value: current.date.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent("方式", value: current.modality.title)
+                LabeledContent("强度", value: current.intensity.title)
+                LabeledContent("时长", value: "\(current.durationMinutes) 分钟")
+                if let distance = current.distanceKm { LabeledContent("距离", value: String(format: "%.2f km", distance)) }
+                if let heartRate = current.averageHeartRate { LabeledContent("平均心率", value: "\(Int(heartRate.rounded())) bpm") }
+                LabeledContent("主动消耗", value: "\(Int(current.activeEnergyKcal.rounded())) kcal")
+                LabeledContent("数据来源", value: current.source)
+                if let gap = current.dataGapReason { Label(gap, systemImage: "exclamationmark.triangle.fill").foregroundStyle(FitTheme.warning) }
             }
-            if let samples = record.metricSamples, !samples.isEmpty {
+            if let samples = current.metricSamples, !samples.isEmpty {
                 Section("采集详情") {
                     LabeledContent("样本", value: "\(samples.count)")
                     if let maxHeartRate = samples.compactMap(\.heartRateBPM).max() { LabeledContent("最大心率", value: "\(Int(maxHeartRate.rounded())) bpm") }
@@ -68,10 +72,10 @@ struct CardioHistoryDetailView: View {
             }
             Section("总结") {
                 NavigationLink("查看完整总结") {
-                    WorkoutSummaryView(presentation: .init(title: record.modality.title, date: record.date, summary: record.summary ?? SummaryEngine.cardioSummary(for: record)))
+                    WorkoutSummaryView(presentation: .init(title: current.modality.title, date: current.date, summary: current.summary ?? SummaryEngine.cardioSummary(for: current)))
                 }
             }
-            if let revisions = record.summaryRevisions, !revisions.isEmpty {
+            if let revisions = current.summaryRevisions, !revisions.isEmpty {
                 Section("总结修订") {
                     ForEach(revisions) { revision in
                         VStack(alignment: .leading) {
@@ -82,6 +86,6 @@ struct CardioHistoryDetailView: View {
                 }
             }
         }
-        .navigationTitle(record.modality.title)
+        .navigationTitle(current.modality.title)
     }
 }

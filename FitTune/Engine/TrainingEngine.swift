@@ -550,7 +550,9 @@ enum TrainingEngine {
         measuredActiveEnergy: Double? = nil,
         source: String = "手动",
         externalID: String? = nil,
-        date: Date = .now
+        date: Date = .now,
+        metricSamples: [WorkoutMetricSample] = [],
+        startedAt: Date? = nil
     ) -> CardioWorkoutRecord {
         let estimate = cardioEnergyEstimate(
             modality: modality,
@@ -562,7 +564,9 @@ enum TrainingEngine {
             averageHeartRate: averageHeartRate,
             speedKph: speedKph,
             inclinePercent: inclinePercent,
-            measuredActiveEnergy: measuredActiveEnergy
+            measuredActiveEnergy: measuredActiveEnergy,
+            metricSamples: metricSamples,
+            startedAt: startedAt
         )
         var record = CardioWorkoutRecord(
             date: date,
@@ -581,7 +585,8 @@ enum TrainingEngine {
             sessionRPE: sessionRPE,
             energyMethod: estimate.method,
             energyLowerBoundKcal: estimate.lowerBound,
-            energyUpperBoundKcal: estimate.upperBound
+            energyUpperBoundKcal: estimate.upperBound,
+            metricSamples: metricSamples
         )
         record.effect = evaluateCardioWorkout(record)
         return record
