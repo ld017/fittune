@@ -66,6 +66,20 @@ struct WorkoutSessionView: View {
         } message: {
             Text("已完成和未完成的组都不会生成训练记录，此操作无法恢复。")
         }
+        .alert(
+            "心率连接已中断",
+            isPresented: Binding(
+                get: { liveSensors.reconnectReminder != nil },
+                set: { if !$0 { liveSensors.dismissReconnectReminder() } }
+            )
+        ) {
+            Button("立即重新扫描") { liveSensors.retryPreferredSource() }
+            Button("继续估算", role: .cancel) {
+                liveSensors.dismissReconnectReminder()
+            }
+        } message: {
+            Text("已尝试自动重连 \(liveSensors.reconnectReminder?.sourceName ?? "心率设备")，暂未恢复心率。可以重新扫描，训练记录不会中断。")
+        }
         .sheet(isPresented: $showExerciseLibrary) { exerciseLibrarySheet }
         .sheet(isPresented: $showWorkoutEditor) {
             if let editorDraft = store.makeActiveWorkoutEditorDraft() {
@@ -134,9 +148,9 @@ struct WorkoutSessionView: View {
                     .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accent : FitTheme.warning)
             }
             Spacer()
-            Text("\(draft.results.count) 组")
-                .font(.subheadline.bold().monospacedDigit())
-                .frame(width: 52)
+            Color.clear
+                .frame(width: 42, height: 42)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
