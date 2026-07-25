@@ -52,7 +52,46 @@ enum BluetoothHeartRateParser {
     }
 }
 
-final class BluetoothHeartRateSource: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+protocol BluetoothHeartRateProviding: AnyObject {
+    var onDiscovery: ((LiveSourceDescriptor) -> Void)? { get set }
+    var onConnected: ((LiveSourceDescriptor) -> Void)? { get set }
+    var onDisconnected: (() -> Void)? { get set }
+    var onMeasurement: ((BluetoothHeartRateMeasurement, Date, String) -> Void)? { get set }
+
+    func startScanning()
+    func connect(identifier: String)
+    func reconnect(identifier: String)
+    func disconnect()
+}
+
+enum BluetoothConnectionFailureAction: Equatable {
+    case ignore
+    case awaitCoordinatorRetry
+}
+
+struct BluetoothReconnectPolicy {
+    private(set) var desiredIdentifier: String?
+
+    mutating func requestConnection(identifier: String) {
+        desiredIdentifier = identifier
+    }
+
+    mutating func requestManualDisconnect(identifier: String?) {
+        if identifier == nil || desiredIdentifier == identifier {
+            desiredIdentifier = nil
+        }
+    }
+
+    func shouldReconnect(identifier: String) -> Bool {
+        desiredIdentifier == identifier
+    }
+
+    func connectionFailureAction(identifier: String) -> BluetoothConnectionFailureAction {
+        desiredIdentifier == identifier ? .awaitCoordinatorRetry : .ignore
+    }
+}
+
+final class BluetoothHeartRateSource: NSObject, BluetoothHeartRateProviding, CBCentralManagerDelegate, CBPeripheralDelegate {
     var onDiscovery: ((LiveSourceDescriptor) -> Void)?
     var onConnected: ((LiveSourceDescriptor) -> Void)?
     var onDisconnected: (() -> Void)?
@@ -61,6 +100,7 @@ final class BluetoothHeartRateSource: NSObject, CBCentralManagerDelegate, CBPeri
     private var central: CBCentralManager?
     private var peripherals: [String: CBPeripheral] = [:]
     private var connectedPeripheral: CBPeripheral?
+    private var reconnectPolicy = BluetoothReconnectPolicy()
     private let heartRateService = CBUUID(string: "180D")
     private let heartRateMeasurement = CBUUID(string: "2A37")
 
@@ -74,13 +114,39 @@ final class BluetoothHeartRateSource: NSObject, CBCentralManagerDelegate, CBPeri
 
     func connect(identifier: String) {
         guard let peripheral = peripherals[identifier] else { return }
+        reconnectPolicy.requestConnection(identifier: identifier)
         central?.stopScan()
         connectedPeripheral = peripheral
         peripheral.delegate = self
         central?.connect(peripheral)
     }
 
+    func reconnect(identifier: String) {
+        reconnectPolicy.requestConnection(identifier: identifier)
+        guard let peripheral = peripherals[identifier] else {
+            startScanning()
+            return
+        }
+        connectedPeripheral = peripheral
+        peripheral.delegate = self
+        switch peripheral.state {
+        case .connected:
+            central?.cancelPeripheralConnection(peripheral)
+        case .connecting:
+            break
+        case .disconnected:
+            central?.connect(peripheral)
+        case .disconnecting:
+            break
+        @unknown default:
+            startScanning()
+        }
+    }
+
     func disconnect() {
+        reconnectPolicy.requestManualDisconnect(
+            identifier: connectedPeripheral?.identifier.uuidString
+        )
         if let connectedPeripheral { central?.cancelPeripheralConnection(connectedPeripheral) }
         connectedPeripheral = nil
     }
@@ -103,8 +169,19 @@ final class BluetoothHeartRateSource: NSObject, CBCentralManagerDelegate, CBPeri
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
+        let identifier = peripheral.identifier.uuidString
+        guard reconnectPolicy.shouldReconnect(identifier: identifier) else { return }
         onDisconnected?()
+        connectedPeripheral = peripheral
         central.connect(peripheral)
+    }
+
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: (any Error)?) {
+        let identifier = peripheral.identifier.uuidString
+        guard reconnectPolicy.connectionFailureAction(identifier: identifier) == .awaitCoordinatorRetry else {
+            return
+        }
+        onDisconnected?()
     }
 
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {

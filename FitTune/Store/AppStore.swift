@@ -120,13 +120,28 @@ final class AppStore {
         let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
         let strength = workoutHistory.filter { calendar.isDateInToday($0.completedAt) }.map { record in
             let current = currentEnergyRecord(record)
+            if let activeEnergyKcal = current.activeEnergyKcal {
+                return savedEnergyRange(
+                    value: activeEnergyKcal,
+                    lowerBound: current.energyLowerBoundKcal,
+                    upperBound: current.energyUpperBoundKcal,
+                    method: current.energyMethod,
+                    algorithmVersion: current.energyAlgorithmVersion
+                )
+            }
             let estimate = TrainingEngine.strengthEnergyEstimate(record: current, weightKg: weight, profile: profile)
             let source: MetricSource = current.energyMethod?.contains("设备实测") == true ? .appleWatch : .historicalModel
             return EnergyEngine.metricRange(from: estimate, source: source)
         }
         let cardio = cardioWorkouts.filter { calendar.isDateInToday($0.date) }.map { record in
             let current = currentEnergyRecord(record)
-            return MetricRange(value: current.activeEnergyKcal, lowerBound: current.energyLowerBoundKcal ?? current.activeEnergyKcal * 0.75, upperBound: current.energyUpperBoundKcal ?? current.activeEnergyKcal * 1.25, provenance: .init(source: current.source.contains("Watch") ? .appleWatch : .historicalModel, sourceName: current.energyMethod ?? current.source, confidence: current.energyMethod?.contains("实测") == true ? .measured : .derived, coverage: 1, algorithmVersion: EnergyEngine.algorithmVersion))
+            return savedEnergyRange(
+                value: current.activeEnergyKcal,
+                lowerBound: current.energyLowerBoundKcal,
+                upperBound: current.energyUpperBoundKcal,
+                method: current.energyMethod ?? current.source,
+                algorithmVersion: current.energyAlgorithmVersion
+            )
         }
         let wearableEntry = dailyActiveEnergy.filter { calendar.isDateInToday($0.date) }.max { $0.kilocalories < $1.kilocalories }
         let stepEntry = dailySteps.filter { calendar.isDateInToday($0.date) }.max { $0.steps < $1.steps }
@@ -154,11 +169,19 @@ final class AppStore {
     }
 
     func currentEnergyRecord(_ record: WorkoutRecord) -> WorkoutRecord {
-        guard record.metricSamples?.isEmpty == false else { return record }
+        guard record.energyAlgorithmVersion != EnergyEngine.algorithmVersion,
+              let samples = record.metricSamples,
+              !samples.isEmpty else { return record }
+        let watchEnergy = TrainingEngine.appleWatchActiveEnergy(from: samples)
+        guard watchEnergy != nil || TrainingEngine.hasUsableHeartRateSeries(
+            samples,
+            startedAt: record.startedAt,
+            completedAt: record.completedAt
+        ) else { return record }
         var current = record
         current.measuredActiveEnergyKcal =
             record.measuredActiveEnergyKcal
-            ?? TrainingEngine.appleWatchActiveEnergy(from: record.metricSamples ?? [])
+            ?? watchEnergy
         let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
         let estimate = TrainingEngine.strengthEnergyEstimate(
             record: current,
@@ -169,6 +192,7 @@ final class AppStore {
         current.energyLowerBoundKcal = estimate.lowerBound
         current.energyUpperBoundKcal = estimate.upperBound
         current.energyMethod = estimate.method
+        current.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         current.summary = SummaryEngine.strengthSummary(
             for: current,
             bodyWeightKg: weight,
@@ -178,11 +202,17 @@ final class AppStore {
     }
 
     func currentEnergyRecord(_ record: CardioWorkoutRecord) -> CardioWorkoutRecord {
-        guard record.metricSamples?.isEmpty == false else { return record }
+        guard record.energyAlgorithmVersion != EnergyEngine.algorithmVersion,
+              let samples = record.metricSamples,
+              !samples.isEmpty else { return record }
+        let completedAt = record.date.addingTimeInterval(Double(record.durationMinutes) * 60)
+        let measured = TrainingEngine.appleWatchActiveEnergy(from: samples)
+        guard measured != nil || TrainingEngine.hasUsableHeartRateSeries(
+            samples,
+            startedAt: record.date,
+            completedAt: completedAt
+        ) else { return record }
         var current = record
-        let measured = TrainingEngine.appleWatchActiveEnergy(
-            from: record.metricSamples ?? []
-        )
         let estimate = TrainingEngine.cardioEnergyEstimate(
             modality: record.modality,
             intensity: record.intensity,
@@ -194,19 +224,52 @@ final class AppStore {
             speedKph: record.speedKph,
             inclinePercent: record.inclinePercent,
             measuredActiveEnergy: measured,
-            metricSamples: record.metricSamples ?? [],
+            metricSamples: samples,
             startedAt: record.date
         )
         current.activeEnergyKcal = estimate.kilocalories
         current.energyLowerBoundKcal = estimate.lowerBound
         current.energyUpperBoundKcal = estimate.upperBound
         current.energyMethod = estimate.method
+        current.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         if measured != nil { current.source = "Apple Watch 设备实测" }
         current.summary = SummaryEngine.cardioSummary(
             for: current,
             maximumHeartRate: resolvedMaximumHeartRate
         )
         return current
+    }
+
+    private func savedEnergyRange(
+        value: Double,
+        lowerBound: Double?,
+        upperBound: Double?,
+        method: String?,
+        algorithmVersion: String?
+    ) -> MetricRange {
+        let name = method ?? "训练热量估算"
+        let measured = name.contains("设备实测")
+        let confidence: DataConfidence
+        if measured {
+            confidence = .measured
+        } else if name.contains("心率") || name.contains("ACSM") {
+            confidence = .derived
+        } else {
+            confidence = .estimated
+        }
+        let spread = measured ? 0.05 : 0.25
+        return MetricRange(
+            value: value,
+            lowerBound: lowerBound ?? value * (1 - spread),
+            upperBound: upperBound ?? value * (1 + spread),
+            provenance: .init(
+                source: measured ? .appleWatch : .historicalModel,
+                sourceName: name,
+                confidence: confidence,
+                coverage: 1,
+                algorithmVersion: algorithmVersion
+            )
+        )
     }
 
     func finishOnboarding(with newProfile: UserProfile) {
@@ -545,8 +608,14 @@ final class AppStore {
             updated.energyMethod = "Apple Watch / 设备实测（同步更新）"
             updated.energyLowerBoundKcal = energy * 0.95
             updated.energyUpperBoundKcal = energy * 1.05
+            updated.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         }
         updated.effect = TrainingEngine.evaluateStrengthWorkout(updated)
+        updated.summary = SummaryEngine.strengthSummary(
+            for: updated,
+            bodyWeightKg: latestWeight ?? profile?.bodyWeightKg ?? 70,
+            maximumHeartRate: resolvedMaximumHeartRate
+        )
         workoutHistory[index] = updated
         persist()
     }
@@ -1164,9 +1233,10 @@ final class AppStore {
         let setRPE = draft.results.map { min(10.0, max(5.0, 10.0 - Double($0.rir))) }
         let sessionRPE = setRPE.reduce(0, +) / Double(setRPE.count)
         let watchEnergy = TrainingEngine.appleWatchActiveEnergy(from: draft.metricSamples ?? [])
-        let measuredEnergy = draft.measuredActiveEnergyKcal > 0
+        let enteredEnergy = draft.measuredActiveEnergyKcal > 0
             ? draft.measuredActiveEnergyKcal
-            : watchEnergy
+            : nil
+        let measuredEnergy = watchEnergy ?? enteredEnergy
         var record = WorkoutRecord(
             sessionName: draft.session.name,
             startedAt: draft.startedAt,
@@ -1179,16 +1249,17 @@ final class AppStore {
             averageHeartRate: draft.averageHeartRate > 0 ? draft.averageHeartRate : nil,
             measuredActiveEnergyKcal: measuredEnergy
         )
+        record.metricSamples = draft.metricSamples
         let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
         let energy = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: weight, profile: profile)
         record.activeEnergyKcal = energy.kilocalories
         record.energyMethod = energy.method
         record.energyLowerBoundKcal = energy.lowerBound
         record.energyUpperBoundKcal = energy.upperBound
+        record.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         record.effect = TrainingEngine.evaluateStrengthWorkout(record)
         record.planSnapshot = draft.planSnapshot
         record.changeEvents = draft.changeEvents
-        record.metricSamples = draft.metricSamples
         record.heartRateDecisionLog = draft.heartRateDecisionLog
         record.summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: weight, maximumHeartRate: resolvedMaximumHeartRate)
         finishWorkoutDraft(with: record)

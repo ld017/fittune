@@ -460,6 +460,37 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertTrue(estimate.method.contains("心率 + 有氧模型"))
     }
 
+    func testCardioTimeSeriesWithoutDemographicsUsesPureMETModel() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let user = profile(goal: .generalFitness, experience: .intermediate)
+        let provenance = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = [0.0, 5.0].map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 145,
+                provenance: provenance
+            )
+        }
+
+        let estimate = TrainingEngine.cardioEnergyEstimate(
+            modality: .cycling,
+            intensity: .zone2,
+            minutes: 30,
+            weightKg: 70,
+            profile: user,
+            metricSamples: samples,
+            startedAt: start
+        )
+
+        XCTAssertEqual(estimate.method, "2024 Adult Compendium MET")
+        XCTAssertEqual(estimate.confidence, "低至中")
+    }
+
     func testOnlyAppleWatchSamplesProvideMeasuredWorkoutEnergy() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         let watch = MetricProvenance(
@@ -583,6 +614,42 @@ final class TrainingEngineTests: XCTestCase {
         )
 
         XCTAssertEqual(estimate.kilocalories, fallback, accuracy: fallback * 0.05)
+        XCTAssertEqual(estimate.confidence, "低至中")
+    }
+
+    func testStrengthTimeSeriesWithoutDemographicsUsesPureSessionRPEModel() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let user = profile(goal: .hypertrophy, experience: .intermediate)
+        let provenance = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let samples = [0.0, 5.0].map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: 140,
+                provenance: provenance
+            )
+        }
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            sessionRPE: 7,
+            metricSamples: samples
+        )
+
+        let estimate = TrainingEngine.strengthEnergyEstimate(
+            record: record,
+            weightKg: 70,
+            profile: user
+        )
+
+        XCTAssertEqual(estimate.method, "2024 Adult Compendium MET + session-RPE")
         XCTAssertEqual(estimate.confidence, "低至中")
     }
 

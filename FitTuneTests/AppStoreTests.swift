@@ -588,6 +588,7 @@ final class AppStoreTests: XCTestCase {
             isPriority: true
         )
         store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        store.updateWorkoutDraft { $0.measuredActiveEnergyKcal = 999 }
         store.completeCurrentDraftSet()
         let source = MetricProvenance(
             source: .appleWatch,
@@ -609,6 +610,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.measuredActiveEnergyKcal, 210)
         XCTAssertEqual(record.activeEnergyKcal, 210)
         XCTAssertEqual(record.energyMethod, "Apple Watch / 设备实测")
+        XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
     func testCardioSaveUsesLatestAppleWatchCumulativeEnergy() throws {
@@ -639,6 +641,47 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.activeEnergyKcal, 190)
         XCTAssertEqual(record.energyMethod, "Apple Watch / 设备实测")
         XCTAssertTrue(record.source.contains("Apple Watch"))
+        XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
+    }
+
+    func testStrengthSaveCalculatesEnergyAfterAttachingHeartRateSeries() throws {
+        let store = AppStore(defaults: makeDefaults())
+        var user = testProfile(goal: .hypertrophy, split: .fullBody)
+        user.ageYears = 30
+        user.biologicalSex = .female
+        store.finishOnboarding(with: user)
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 1,
+            repLower: 8,
+            repUpper: 10,
+            targetRIR: 1,
+            isPriority: true
+        )
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        let start = Date.now.addingTimeInterval(-3_600)
+        store.updateWorkoutDraft { $0.startedAt = start }
+        store.completeCurrentDraftSet()
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        store.appendLiveMetricSample(
+            .init(timestamp: start, heartRateBPM: 70, provenance: source),
+            validity: .valid
+        )
+        store.appendLiveMetricSample(
+            .init(timestamp: start.addingTimeInterval(5), heartRateBPM: 70, provenance: source),
+            validity: .valid
+        )
+
+        let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
+
+        XCTAssertEqual(record.energyMethod, "FitTune 心率 + 力量模型估算")
+        XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
     func testCurrentStrengthEnergyRecordRecalculatesWithoutMutatingInput() {
@@ -681,6 +724,40 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(updated.energyMethod?.contains("心率 + 力量模型") == true)
     }
 
+    func testCurrentStrengthEnergyRecordKeepsFinalizedMeasuredEnergyOverLiveCumulativeSample() {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let watch = MetricProvenance(
+            source: .appleWatch,
+            sourceName: "Apple Watch",
+            confidence: .measured,
+            coverage: 1
+        )
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 5,
+            measuredActiveEnergyKcal: 192,
+            energyMethod: "旧记录",
+            metricSamples: [
+                .init(
+                    timestamp: start.addingTimeInterval(1_800),
+                    activeEnergyKcal: 180,
+                    provenance: watch
+                )
+            ]
+        )
+
+        let updated = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(updated.measuredActiveEnergyKcal, 192)
+        XCTAssertEqual(updated.activeEnergyKcal, 192)
+        XCTAssertEqual(updated.energyMethod, "Apple Watch / 设备实测")
+    }
+
     func testCurrentCardioEnergyRecordRecalculatesWithoutMutatingInput() {
         let store = AppStore(defaults: makeDefaults())
         var user = testProfile(goal: .generalFitness, split: .fullBody)
@@ -718,6 +795,208 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNotEqual(updated.activeEnergyKcal, 5)
         XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
         XCTAssertTrue(updated.energyMethod?.contains("心率 + 有氧模型") == true)
+    }
+
+    func testCurrentStrengthEnergyRecordKeepsSavedValueWithoutUsableHeartRate() {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .phoneSensor,
+            sourceName: "iPhone",
+            confidence: .measured,
+            coverage: 1
+        )
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 77,
+            energyMethod: "旧记录",
+            metricSamples: [
+                .init(timestamp: start, cadence: 100, provenance: source)
+            ]
+        )
+
+        let current = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(current.activeEnergyKcal, 77)
+        XCTAssertEqual(current.energyMethod, "旧记录")
+    }
+
+    func testCurrentCardioEnergyRecordKeepsSavedValueForSparseHeartRate() {
+        let store = AppStore(defaults: makeDefaults())
+        var user = testProfile(goal: .generalFitness, split: .fullBody)
+        user.ageYears = 30
+        user.biologicalSex = .male
+        store.finishOnboarding(with: user)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let record = CardioWorkoutRecord(
+            date: start,
+            modality: .cycling,
+            intensity: .zone2,
+            durationMinutes: 30,
+            activeEnergyKcal: 77,
+            source: "旧记录",
+            energyMethod: "旧记录",
+            metricSamples: [
+                .init(timestamp: start, heartRateBPM: 130, provenance: source),
+                .init(timestamp: start.addingTimeInterval(30), heartRateBPM: 132, provenance: source)
+            ]
+        )
+
+        let current = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(current.activeEnergyKcal, 77)
+        XCTAssertEqual(current.energyMethod, "旧记录")
+    }
+
+    func testCurrentAlgorithmRecordKeepsPersistedEnergyWithHeartRateCurve() {
+        let store = AppStore(defaults: makeDefaults())
+        var user = testProfile(goal: .hypertrophy, split: .fullBody)
+        user.ageYears = 30
+        user.biologicalSex = .female
+        store.finishOnboarding(with: user)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 177,
+            energyMethod: "FitTune 心率 + 力量模型估算",
+            energyLowerBoundKcal: 120,
+            energyUpperBoundKcal: 220,
+            energyAlgorithmVersion: EnergyEngine.algorithmVersion,
+            metricSamples: [
+                .init(timestamp: start, heartRateBPM: 130, provenance: source),
+                .init(timestamp: start.addingTimeInterval(5), heartRateBPM: 132, provenance: source)
+            ]
+        )
+
+        let current = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(current.activeEnergyKcal, 177)
+        XCTAssertEqual(current.energyLowerBoundKcal, 120)
+        XCTAssertEqual(current.energyUpperBoundKcal, 220)
+    }
+
+    func testWearableStrengthMergeMarksMeasuredEnergyWithCurrentAlgorithmVersion() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.workoutHistory = [
+            WorkoutRecord(
+                sessionName: "力量",
+                startedAt: start,
+                completedAt: start.addingTimeInterval(3_600),
+                readinessScore: 80,
+                sets: [],
+                activeEnergyKcal: 160,
+                energyMethod: "旧记录"
+            )
+        ]
+
+        store.mergeWearableStrengthWorkout(
+            WearableStrengthWorkout(
+                date: start,
+                durationMinutes: 60,
+                activeEnergyKcal: 240,
+                averageHeartRate: 135,
+                externalID: "watch-workout"
+            )
+        )
+
+        let merged = try XCTUnwrap(store.workoutHistory.first)
+        XCTAssertEqual(merged.activeEnergyKcal, 240)
+        XCTAssertEqual(merged.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
+    }
+
+    func testWearableStrengthMergeRegeneratesSummaryWithFinalEnergy() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 160,
+            energyMethod: "旧记录"
+        )
+        record.summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+        store.workoutHistory = [record]
+
+        store.mergeWearableStrengthWorkout(
+            WearableStrengthWorkout(
+                date: start,
+                durationMinutes: 60,
+                activeEnergyKcal: 240,
+                averageHeartRate: 135,
+                externalID: "watch-workout"
+            )
+        )
+
+        let merged = try XCTUnwrap(store.workoutHistory.first)
+        XCTAssertEqual(merged.summary?.activeEnergyKcal?.value, 240)
+        XCTAssertEqual(merged.summary?.activeEnergyKcal?.provenance.confidence, .measured)
+    }
+
+    func testTodayEnergyReportKeepsSavedCurrentAlgorithmValueAfterWeightChange() throws {
+        let store = AppStore(defaults: makeDefaults())
+        var user = testProfile(goal: .hypertrophy, split: .fullBody)
+        user.ageYears = 30
+        user.biologicalSex = .female
+        store.finishOnboarding(with: user)
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 1,
+            repLower: 8,
+            repUpper: 10,
+            targetRIR: 1,
+            isPriority: true
+        )
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        let start = Date.now.addingTimeInterval(-3_600)
+        store.updateWorkoutDraft { $0.startedAt = start }
+        store.completeCurrentDraftSet()
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+        store.appendLiveMetricSample(
+            .init(timestamp: start, heartRateBPM: 130, provenance: source),
+            validity: .valid
+        )
+        store.appendLiveMetricSample(
+            .init(timestamp: start.addingTimeInterval(5), heartRateBPM: 132, provenance: source),
+            validity: .valid
+        )
+        let saved = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
+
+        store.addWeight(140)
+
+        XCTAssertEqual(
+            store.todayEnergyReport.strength.value,
+            try XCTUnwrap(saved.activeEnergyKcal),
+            accuracy: 0.001
+        )
     }
 
     private func testProfile(goal: TrainingGoal, split: TrainingSplit) -> UserProfile {

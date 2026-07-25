@@ -27,12 +27,23 @@ enum SummaryEngine {
             heartRateDecisions: record.heartRateDecisionLog
         )
         let duration = max(1, record.completedAt.timeIntervalSince(record.startedAt))
+        let energyMeasured = record.measuredActiveEnergyKcal.map { $0 > 0 } ?? false
         return WorkoutSummary(
             generatedAt: .now,
             algorithmVersion: algorithmVersion,
             averageHeartRate: average(heartRates),
             maximumHeartRate: heartRates.max(),
-            activeEnergyKcal: energyRange(value: record.activeEnergyKcal, measured: record.measuredActiveEnergyKcal != nil, sourceName: record.energyMethod ?? "力量训练估算"),
+            activeEnergyKcal: energyRange(
+                value: record.activeEnergyKcal,
+                lowerBound: record.energyLowerBoundKcal,
+                upperBound: record.energyUpperBoundKcal,
+                source: energyMeasured ? .appleWatch : .historicalModel,
+                sourceName: record.energyMethod ?? "力量训练估算",
+                confidence: energyMeasured
+                    ? .measured
+                    : energyConfidence(method: record.energyMethod),
+                algorithmVersion: record.energyAlgorithmVersion
+            ),
             estimatedRecoveryHours: metricRange(value: Double(record.effect?.estimatedRecoveryHours ?? 24), spread: 0.30, source: .historicalModel, name: "训练量与接近力竭模型", confidence: .estimated),
             trainingEffect: record.effect.map { metricRange(value: Double(max($0.strengthScore, $0.hypertrophyScore)), spread: 0.15, source: .historicalModel, name: "训练效果规则", confidence: .derived) },
             dataCoverage: min(1, Double(heartRates.count) / max(1, duration / 5)),
@@ -62,14 +73,26 @@ enum SummaryEngine {
             vo2MaxConfidence: .unavailable
         )
         let source = sourceForCardio(record.source)
-        let confidence: DataConfidence = source == .phoneEstimate ? .estimated : .measured
+        let measured = record.energyMethod?.contains("设备实测") == true
+            || (record.energyMethod == nil && source != .phoneEstimate)
+        let confidence: DataConfidence = measured
+            ? .measured
+            : energyConfidence(method: record.energyMethod)
         let duration = max(1, Double(record.durationMinutes * 60))
         return WorkoutSummary(
             generatedAt: .now,
             algorithmVersion: algorithmVersion,
             averageHeartRate: heartRates.isEmpty ? record.averageHeartRate : average(heartRates),
             maximumHeartRate: heartRates.max(),
-            activeEnergyKcal: metricRange(value: record.activeEnergyKcal, spread: confidence == .measured ? 0.10 : 0.25, source: source, name: record.source, confidence: confidence),
+            activeEnergyKcal: energyRange(
+                value: record.activeEnergyKcal,
+                lowerBound: record.energyLowerBoundKcal,
+                upperBound: record.energyUpperBoundKcal,
+                source: measured ? source : .historicalModel,
+                sourceName: record.energyMethod ?? record.source,
+                confidence: confidence,
+                algorithmVersion: record.energyAlgorithmVersion
+            ),
             estimatedRecoveryHours: metricRange(value: Double(record.effect?.estimatedRecoveryHours ?? 12), spread: 0.35, source: .historicalModel, name: "有氧负荷模型", confidence: .estimated),
             trainingEffect: record.effect.map { metricRange(value: Double($0.aerobicScore), spread: 0.15, source: .historicalModel, name: "有氧效果规则", confidence: .derived) },
             dataCoverage: min(1, Double(heartRates.count) / max(1, duration / 5)),
@@ -118,8 +141,37 @@ enum SummaryEngine {
         values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
     }
 
-    private static func energyRange(value: Double?, measured: Bool, sourceName: String) -> MetricRange? {
-        value.map { metricRange(value: $0, spread: measured ? 0.10 : 0.25, source: measured ? .appleHealth : .phoneEstimate, name: sourceName, confidence: measured ? .measured : .estimated) }
+    private static func energyRange(
+        value: Double?,
+        lowerBound: Double?,
+        upperBound: Double?,
+        source: MetricSource,
+        sourceName: String,
+        confidence: DataConfidence,
+        algorithmVersion: String?
+    ) -> MetricRange? {
+        guard let value else { return nil }
+        let spread = confidence == .measured ? 0.05 : 0.25
+        return MetricRange(
+            value: value,
+            lowerBound: lowerBound ?? max(0, value * (1 - spread)),
+            upperBound: upperBound ?? value * (1 + spread),
+            provenance: MetricProvenance(
+                source: source,
+                sourceName: sourceName,
+                confidence: confidence,
+                coverage: confidence == .measured ? 1 : 0.5,
+                sampledAt: .now,
+                algorithmVersion: algorithmVersion
+            )
+        )
+    }
+
+    private static func energyConfidence(method: String?) -> DataConfidence {
+        guard let method else { return .estimated }
+        return method.contains("心率") || method.contains("ACSM")
+            ? .derived
+            : .estimated
     }
 
     private static func metricRange(value: Double, spread: Double, source: MetricSource, name: String, confidence: DataConfidence) -> MetricRange {

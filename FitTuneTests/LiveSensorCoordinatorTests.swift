@@ -107,6 +107,70 @@ final class LiveSensorCoordinatorTests: XCTestCase {
         XCTAssertEqual(monitor.evaluate(at: start.addingTimeInterval(20)), .none)
     }
 
+    func testSilenceMonitorRemindsImmediatelyWhenFirstEvaluationIsAfterFifteenSeconds() {
+        let start = Date(timeIntervalSince1970: 100)
+        let source = LiveSourceDescriptor(id: "fit3", kind: .bluetooth, name: "FIT 3")
+        var monitor = HeartRateSilenceMonitor()
+        monitor.begin(sessionID: UUID(), source: source, at: start)
+
+        guard case .remind = monitor.evaluate(at: start.addingTimeInterval(16)) else {
+            return XCTFail("Expected immediate reconnect reminder")
+        }
+    }
+
+    @MainActor
+    func testSilenceEvaluationReconnectsTheRememberedBluetoothDevice() {
+        let bluetooth = RecordingBluetoothHeartRateSource()
+        let coordinator = LiveSensorCoordinator(bluetoothSource: bluetooth)
+        let source = LiveSourceDescriptor(id: "fit3", kind: .bluetooth, name: "FIT 3")
+        coordinator.select(source)
+        let sessionID = UUID()
+        let start = Date.now
+        coordinator.beginWorkout(sessionID: sessionID, activity: "strength")
+
+        coordinator.evaluateHeartRateSilence(
+            sessionID: sessionID,
+            at: start.addingTimeInterval(6)
+        )
+
+        XCTAssertEqual(bluetooth.reconnectIdentifiers.last, "fit3")
+        XCTAssertTrue(coordinator.statusMessage.contains("自动重连"))
+    }
+
+    func testManualDisconnectDisablesBluetoothAutoReconnect() {
+        var policy = BluetoothReconnectPolicy()
+        policy.requestConnection(identifier: "fit3")
+        XCTAssertTrue(policy.shouldReconnect(identifier: "fit3"))
+
+        policy.requestManualDisconnect(identifier: "fit3")
+
+        XCTAssertFalse(policy.shouldReconnect(identifier: "fit3"))
+    }
+
+    func testSwitchingBluetoothDevicesDoesNotReconnectTheOldPeripheral() {
+        var policy = BluetoothReconnectPolicy()
+        policy.requestConnection(identifier: "old")
+        policy.requestManualDisconnect(identifier: "old")
+        policy.requestConnection(identifier: "new")
+
+        XCTAssertFalse(policy.shouldReconnect(identifier: "old"))
+        XCTAssertTrue(policy.shouldReconnect(identifier: "new"))
+    }
+
+    func testBluetoothConnectionFailureWaitsForCoordinatorRetry() {
+        var policy = BluetoothReconnectPolicy()
+        policy.requestConnection(identifier: "fit3")
+
+        XCTAssertEqual(
+            policy.connectionFailureAction(identifier: "fit3"),
+            .awaitCoordinatorRetry
+        )
+        XCTAssertEqual(
+            policy.connectionFailureAction(identifier: "old"),
+            .ignore
+        )
+    }
+
     func testValidSampleRearmsReminderForANewInterruption() {
         let start = Date(timeIntervalSince1970: 100)
         let source = LiveSourceDescriptor(id: "fit3", kind: .bluetooth, name: "FIT 3")
@@ -198,4 +262,19 @@ private final class ReentrantWatchSource: WatchLiveSource {
     }
 
     func send(command: MirroredWorkoutEvent, sessionID: UUID, activity: String) {}
+}
+
+private final class RecordingBluetoothHeartRateSource: BluetoothHeartRateProviding {
+    var onDiscovery: ((LiveSourceDescriptor) -> Void)?
+    var onConnected: ((LiveSourceDescriptor) -> Void)?
+    var onDisconnected: (() -> Void)?
+    var onMeasurement: ((BluetoothHeartRateMeasurement, Date, String) -> Void)?
+    var reconnectIdentifiers: [String] = []
+
+    func startScanning() {}
+    func connect(identifier: String) {}
+    func reconnect(identifier: String) {
+        reconnectIdentifiers.append(identifier)
+    }
+    func disconnect() {}
 }

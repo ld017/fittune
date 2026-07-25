@@ -10,6 +10,10 @@ final class SummaryEngineTests: XCTestCase {
         let work2 = SetResult(exerciseID: UUID(), exerciseName: "杠铃卧推", setNumber: 3, loadKg: 80, reps: 20, rir: 0, movementPattern: .horizontalPush, setKind: .working)
         var record = WorkoutRecord(sessionName: "胸", startedAt: start, completedAt: start.addingTimeInterval(600), readinessScore: 80, sets: [warmup, work1, work2])
         record.activeEnergyKcal = 120
+        record.energyMethod = "FitTune 心率 + 力量模型估算"
+        record.energyLowerBoundKcal = 100
+        record.energyUpperBoundKcal = 140
+        record.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         record.metricSamples = [
             .init(timestamp: start, heartRateBPM: 100, provenance: provenance),
             .init(timestamp: start.addingTimeInterval(300), heartRateBPM: 150, provenance: provenance)
@@ -26,13 +30,21 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertEqual(summary.strength?.failureRate, 1)
         XCTAssertEqual(summary.strength?.volumeLoadKg, 80 * 8 + 80 * 20)
         XCTAssertEqual(summary.strength?.bestE1RMKg, TrainingEngine.estimatedOneRepMax(loadKg: 80, reps: 8, rir: 0))
-        XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .estimated)
+        XCTAssertEqual(summary.activeEnergyKcal?.lowerBound, 100)
+        XCTAssertEqual(summary.activeEnergyKcal?.upperBound, 140)
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.sourceName, "FitTune 心率 + 力量模型估算")
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .derived)
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.algorithmVersion, EnergyEngine.algorithmVersion)
     }
 
     func testCardioSummaryShowsVerifiableMetricsWithoutInventingVO2Max() {
         let start = Date(timeIntervalSince1970: 1_000_000)
         let provenance = MetricProvenance(source: .phoneSensor, sourceName: "iPhone", confidence: .measured, coverage: 0.8)
         var record = CardioWorkoutRecord(date: start, modality: .running, intensity: .zone2, durationMinutes: 30, distanceKm: 5, averageHeartRate: 145, activeEnergyKcal: 300, source: "手机估算")
+        record.energyMethod = "FitTune 心率 + 有氧模型估算"
+        record.energyLowerBoundKcal = 240
+        record.energyUpperBoundKcal = 360
+        record.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         record.metricSamples = [
             .init(timestamp: start, heartRateBPM: 130, cadence: 165, distanceMeters: 0, provenance: provenance),
             .init(timestamp: start.addingTimeInterval(1800), heartRateBPM: 155, cadence: 175, distanceMeters: 5000, provenance: provenance)
@@ -46,6 +58,29 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertEqual(summary.cardio?.averageCadence, 170)
         XCTAssertEqual(summary.cardio?.paceSecondsPerKm, 360)
         XCTAssertNil(summary.cardio?.vo2Max)
+        XCTAssertEqual(summary.activeEnergyKcal?.lowerBound, 240)
+        XCTAssertEqual(summary.activeEnergyKcal?.upperBound, 360)
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.sourceName, "FitTune 心率 + 有氧模型估算")
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .derived)
+    }
+
+    func testStrengthSummaryDoesNotTreatZeroMeasuredEnergyAsDeviceMeasurement() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 220,
+            measuredActiveEnergyKcal: 0,
+            energyMethod: "2024 Adult Compendium MET + session-RPE"
+        )
+
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.source, .historicalModel)
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .estimated)
     }
 
     func testHuaweiRevisionChangesSummaryOnlyNotOriginalRawRecord() {

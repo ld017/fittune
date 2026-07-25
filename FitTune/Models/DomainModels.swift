@@ -805,6 +805,7 @@ struct WorkoutRecord: Identifiable, Codable, Equatable {
     var energyMethod: String? = nil
     var energyLowerBoundKcal: Double? = nil
     var energyUpperBoundKcal: Double? = nil
+    var energyAlgorithmVersion: String? = nil
     var externalID: String? = nil
     var planSnapshot: PlanSnapshot? = nil
     var changeEvents: [WorkoutChangeEvent]? = nil
@@ -846,6 +847,7 @@ struct CardioWorkoutRecord: Identifiable, Codable, Equatable {
     var energyMethod: String? = nil
     var energyLowerBoundKcal: Double? = nil
     var energyUpperBoundKcal: Double? = nil
+    var energyAlgorithmVersion: String? = nil
     var completionStatus: WorkoutCompletionStatus? = nil
     var dataGapReason: String? = nil
     var metricSamples: [WorkoutMetricSample]? = nil

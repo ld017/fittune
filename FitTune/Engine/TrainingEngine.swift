@@ -586,6 +586,7 @@ enum TrainingEngine {
             energyMethod: estimate.method,
             energyLowerBoundKcal: estimate.lowerBound,
             energyUpperBoundKcal: estimate.upperBound,
+            energyAlgorithmVersion: EnergyEngine.algorithmVersion,
             metricSamples: metricSamples
         )
         record.effect = evaluateCardioWorkout(record)
@@ -688,6 +689,22 @@ enum TrainingEngine {
         var coverage: Double
     }
 
+    static func hasUsableHeartRateSeries(
+        _ samples: [WorkoutMetricSample],
+        startedAt: Date,
+        completedAt: Date
+    ) -> Bool {
+        let valid = validHeartRateSamples(
+            samples,
+            startedAt: startedAt,
+            completedAt: completedAt
+        )
+        return zip(valid, valid.dropFirst()).contains { left, right in
+            let interval = right.date.timeIntervalSince(left.date)
+            return interval > 0 && interval <= 15
+        }
+    }
+
     private static func timeWeightedHeartRateEnergy(
         samples: [WorkoutMetricSample],
         startedAt: Date,
@@ -699,16 +716,18 @@ enum TrainingEngine {
         upperRateFactor: Double
     ) -> TimeWeightedHeartRateEnergy? {
         let totalSeconds = max(60, completedAt.timeIntervalSince(startedAt))
-        let valid = samples
-            .compactMap { sample -> (date: Date, bpm: Double)? in
-                guard let bpm = sample.heartRateBPM,
-                      (60...210).contains(bpm),
-                      sample.timestamp >= startedAt,
-                      sample.timestamp <= completedAt else { return nil }
-                return (sample.timestamp, bpm)
-            }
-            .sorted { $0.date < $1.date }
+        let valid = validHeartRateSamples(
+            samples,
+            startedAt: startedAt,
+            completedAt: completedAt
+        )
         guard valid.count >= 2 else { return nil }
+        guard heartRateActiveEnergy(
+            averageHeartRate: valid[0].bpm,
+            minutes: 1,
+            weightKg: weightKg,
+            profile: profile
+        ) != nil else { return nil }
 
         var energy = 0.0
         var coveredSeconds = 0.0
@@ -742,10 +761,27 @@ enum TrainingEngine {
         if cursor < completedAt {
             energy += fallbackKcalPerMinute * completedAt.timeIntervalSince(cursor) / 60
         }
+        guard coveredSeconds > 0 else { return nil }
         return TimeWeightedHeartRateEnergy(
             kilocalories: energy,
             coverage: min(1, coveredSeconds / totalSeconds)
         )
+    }
+
+    private static func validHeartRateSamples(
+        _ samples: [WorkoutMetricSample],
+        startedAt: Date,
+        completedAt: Date
+    ) -> [(date: Date, bpm: Double)] {
+        samples
+            .compactMap { sample -> (date: Date, bpm: Double)? in
+                guard let bpm = sample.heartRateBPM,
+                      (60...210).contains(bpm),
+                      sample.timestamp >= startedAt,
+                      sample.timestamp <= completedAt else { return nil }
+                return (sample.timestamp, bpm)
+            }
+            .sorted { $0.date < $1.date }
     }
 
     private static func strengthFallbackEstimate(
