@@ -897,7 +897,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(current.energyUpperBoundKcal, 220)
     }
 
-    func testWearableStrengthMergeMarksMeasuredEnergyWithCurrentAlgorithmVersion() throws {
+    func testWearableStrengthMergeKeepsStructuralEnergyAndStoresDeviceComparison() throws {
         let store = AppStore(defaults: makeDefaults())
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         store.workoutHistory = [
@@ -923,11 +923,14 @@ final class AppStoreTests: XCTestCase {
         )
 
         let merged = try XCTUnwrap(store.workoutHistory.first)
-        XCTAssertEqual(merged.activeEnergyKcal, 240)
+        XCTAssertNotEqual(merged.activeEnergyKcal, 240)
+        XCTAssertEqual(merged.deviceActiveEnergyEstimateKcal, 240)
+        XCTAssertEqual(merged.deviceEnergySource, .appleWatch)
+        XCTAssertEqual(merged.energyDiagnostics?.comparisonEstimateKcal, 240)
         XCTAssertEqual(merged.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
-    func testWearableStrengthMergeRegeneratesSummaryWithFinalEnergy() throws {
+    func testWearableStrengthMergeRegeneratesSummaryFromStructuralEnergy() throws {
         let store = AppStore(defaults: makeDefaults())
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var record = WorkoutRecord(
@@ -953,8 +956,38 @@ final class AppStoreTests: XCTestCase {
         )
 
         let merged = try XCTUnwrap(store.workoutHistory.first)
-        XCTAssertEqual(merged.summary?.activeEnergyKcal?.value, 240)
-        XCTAssertEqual(merged.summary?.activeEnergyKcal?.provenance.confidence, .measured)
+        XCTAssertEqual(merged.summary?.activeEnergyKcal?.value, merged.activeEnergyKcal)
+        XCTAssertNotEqual(merged.summary?.activeEnergyKcal?.value, 240)
+        XCTAssertNotEqual(merged.summary?.activeEnergyKcal?.provenance.confidence, .measured)
+    }
+
+    func testStrengthSavePreservesDraftRPEAndClosesOpenPause() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 1,
+            repLower: 8,
+            repUpper: 10,
+            targetRIR: 1,
+            isPriority: true
+        )
+        store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
+        let completedPauseStart = Date.now.addingTimeInterval(-1_200)
+        let openPauseStart = Date.now.addingTimeInterval(-300)
+        store.updateWorkoutDraft {
+            $0.sessionRPE = 4.5
+            $0.pauseIntervals = [WorkoutPauseInterval(startedAt: completedPauseStart, endedAt: completedPauseStart.addingTimeInterval(120))]
+            $0.currentPauseStartedAt = openPauseStart
+        }
+        store.completeCurrentDraftSet()
+
+        let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
+
+        XCTAssertEqual(record.sessionRPE, 4.5)
+        XCTAssertEqual(record.pauseIntervals?.count, 2)
+        XCTAssertEqual(record.pauseIntervals?.last?.startedAt, openPauseStart)
+        XCTAssertEqual(record.pauseIntervals?.last?.endedAt, record.completedAt)
     }
 
     func testTodayEnergyReportKeepsSavedCurrentAlgorithmValueAfterWeightChange() throws {

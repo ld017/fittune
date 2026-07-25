@@ -58,6 +58,30 @@ final class StrengthEnergyEstimatorTests: XCTestCase {
         XCTAssertEqual(pausedEstimate.kilocalories, uninterruptedEstimate.kilocalories, accuracy: 0.001)
     }
 
+    func testOverlappingPausesAreUnionedAndPausedHeartRateDoesNotAdjustCenter() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
+        var paused = record(
+            start: start,
+            minutes: 60,
+            rpe: 8,
+            sets: timedSets(count: 15, pattern: .squat, start: start, spacing: 180),
+            pauses: [
+                WorkoutPauseInterval(startedAt: start.addingTimeInterval(600), endedAt: start.addingTimeInterval(1_800)),
+                WorkoutPauseInterval(startedAt: start.addingTimeInterval(1_200), endedAt: start.addingTimeInterval(2_400))
+            ]
+        )
+        paused.metricSamples = stride(from: 600.0, through: 2_400.0, by: 5.0).map {
+            WorkoutMetricSample(timestamp: start.addingTimeInterval($0), heartRateBPM: 190, provenance: source)
+        }
+
+        let estimate = StrengthEnergyEstimator.estimate(record: paused, weightKg: 70, profile: completeProfile())
+        let expected = TrainingEngine.netActiveEnergy(met: 6, weightKg: 70, minutes: 30)
+
+        XCTAssertEqual(estimate.kilocalories, expected, accuracy: 0.001)
+        XCTAssertEqual(estimate.diagnostics?.dataCoverage, 1)
+    }
+
     func testMissingSessionRPEUsesStructuralModelAndWiderRange() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var sets = timedSets(count: 6, pattern: .arms, start: start, spacing: 300)

@@ -604,17 +604,21 @@ final class AppStore {
             liveCumulativeKcal: liveCumulativeEnergy,
             finalizedHealthKitKcal: wearable.activeEnergyKcal
         ), energy > 0 {
-            updated.measuredActiveEnergyKcal = energy
-            updated.activeEnergyKcal = energy
-            updated.energyMethod = "Apple Watch / 设备实测（同步更新）"
-            updated.energyLowerBoundKcal = energy * 0.95
-            updated.energyUpperBoundKcal = energy * 1.05
-            updated.energyAlgorithmVersion = EnergyEngine.algorithmVersion
+            updated.deviceActiveEnergyEstimateKcal = energy
+            updated.deviceEnergySource = .appleWatch
         }
+        let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
+        let estimate = TrainingEngine.strengthEnergyEstimate(record: updated, weightKg: weight, profile: profile)
+        updated.activeEnergyKcal = estimate.kilocalories
+        updated.energyMethod = estimate.method
+        updated.energyLowerBoundKcal = estimate.lowerBound
+        updated.energyUpperBoundKcal = estimate.upperBound
+        updated.energyDiagnostics = estimate.diagnostics
+        updated.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         updated.effect = TrainingEngine.evaluateStrengthWorkout(updated)
         updated.summary = SummaryEngine.strengthSummary(
             for: updated,
-            bodyWeightKg: latestWeight ?? profile?.bodyWeightKg ?? 70,
+            bodyWeightKg: weight,
             maximumHeartRate: resolvedMaximumHeartRate
         )
         workoutHistory[index] = updated
@@ -1231,8 +1235,11 @@ final class AppStore {
         let quality = qualities.isEmpty
             ? nil
             : Int((Double(qualities.reduce(0, +)) / Double(qualities.count)).rounded())
-        let setRPE = draft.results.map { min(10.0, max(5.0, 10.0 - Double($0.rir))) }
-        let sessionRPE = setRPE.reduce(0, +) / Double(setRPE.count)
+        let completedAt = Date.now
+        var pauses = draft.pauseIntervals.filter { $0.endedAt != nil }
+        if let startedAt = draft.currentPauseStartedAt {
+            pauses.append(WorkoutPauseInterval(startedAt: startedAt, endedAt: completedAt))
+        }
         let watchEnergy = TrainingEngine.appleWatchActiveEnergy(from: draft.metricSamples ?? [])
         let enteredEnergy = draft.measuredActiveEnergyKcal > 0
             ? draft.measuredActiveEnergyKcal
@@ -1241,14 +1248,15 @@ final class AppStore {
         var record = WorkoutRecord(
             sessionName: draft.session.name,
             startedAt: draft.startedAt,
-            completedAt: .now,
+            completedAt: completedAt,
             readinessScore: readinessAssessment.score,
             sets: draft.results,
             sessionQuality: quality,
             completionStatus: status,
-            sessionRPE: sessionRPE,
+            sessionRPE: draft.sessionRPE,
             averageHeartRate: draft.averageHeartRate > 0 ? draft.averageHeartRate : nil,
-            measuredActiveEnergyKcal: measuredEnergy
+            measuredActiveEnergyKcal: measuredEnergy,
+            pauseIntervals: pauses
         )
         record.metricSamples = draft.metricSamples
         let weight = latestWeight ?? profile?.bodyWeightKg ?? 70

@@ -14,13 +14,21 @@ enum StrengthEnergyEstimator {
         var seconds: Double { endedAt.timeIntervalSince(startedAt) }
     }
 
+    private struct CompletedPause {
+        var startedAt: Date
+        var endedAt: Date
+
+        var seconds: Double { endedAt.timeIntervalSince(startedAt) }
+    }
+
     static func estimate(
         record: WorkoutRecord,
         weightKg: Double,
         profile: UserProfile?
     ) -> EnergyEstimate {
         let wallClockSeconds = max(0, record.completedAt.timeIntervalSince(record.startedAt))
-        let pauseSeconds = completedPauseSeconds(record.pauseIntervals ?? [], record: record)
+        let completedPauses = completedPauses(record.pauseIntervals ?? [], record: record)
+        let pauseSeconds = completedPauses.reduce(0) { $0 + $1.seconds }
         let effectiveSeconds = max(0, wallClockSeconds - pauseSeconds)
         let workingSets = record.sets.filter { $0.resolvedSetKind != .warmup }
         let effectiveMinutes = effectiveSeconds / 60
@@ -36,7 +44,14 @@ enum StrengthEnergyEstimator {
         let structuralKcal = validInput(wallClockSeconds: wallClockSeconds, effectiveSeconds: effectiveSeconds, weightKg: weightKg)
             ? TrainingEngine.netActiveEnergy(met: met, weightKg: weightKg, minutes: effectiveMinutes)
             : 0
-        let heartRate = heartRateComparison(record: record, weightKg: weightKg, profile: profile, structuralKcal: structuralKcal, effectiveSeconds: effectiveSeconds)
+        let heartRate = heartRateComparison(
+            record: record,
+            weightKg: weightKg,
+            profile: profile,
+            structuralKcal: structuralKcal,
+            effectiveSeconds: effectiveSeconds,
+            pauses: completedPauses
+        )
         let center = heartRate?.kcal ?? structuralKcal
         let hasTimeline = !workingSets.isEmpty && workingSets.allSatisfy { $0.startedAt != nil }
         let spread = record.sessionRPE == nil || !hasTimeline ? 0.35 : 0.25
@@ -78,13 +93,24 @@ enum StrengthEnergyEstimator {
         wallClockSeconds > 0 && effectiveSeconds > 0 && weightKg > 0
     }
 
-    private static func completedPauseSeconds(_ intervals: [WorkoutPauseInterval], record: WorkoutRecord) -> Double {
-        intervals.reduce(0) { total, interval in
-            guard let endedAt = interval.endedAt else { return total }
+    private static func completedPauses(_ intervals: [WorkoutPauseInterval], record: WorkoutRecord) -> [CompletedPause] {
+        let clipped = intervals.compactMap { interval -> CompletedPause? in
+            guard let endedAt = interval.endedAt else { return nil }
             let start = max(record.startedAt, interval.startedAt)
             let end = min(record.completedAt, endedAt)
-            return total + max(0, end.timeIntervalSince(start))
+            guard end > start else { return nil }
+            return CompletedPause(startedAt: start, endedAt: end)
+        }.sorted { $0.startedAt < $1.startedAt }
+
+        var merged: [CompletedPause] = []
+        for pause in clipped {
+            if let last = merged.last, pause.startedAt <= last.endedAt {
+                merged[merged.count - 1].endedAt = max(last.endedAt, pause.endedAt)
+            } else {
+                merged.append(pause)
+            }
         }
+        return merged
     }
 
     private static func structuralMET(
@@ -118,12 +144,18 @@ enum StrengthEnergyEstimator {
         weightKg: Double,
         profile: UserProfile?,
         structuralKcal: Double,
-        effectiveSeconds: Double
+        effectiveSeconds: Double,
+        pauses: [CompletedPause]
     ) -> (kcal: Double, coverage: Double)? {
         guard let profile,
               effectiveSeconds > 0,
               let samples = record.metricSamples else { return nil }
-        let intervals = dominantHeartRateIntervals(samples, startedAt: record.startedAt, completedAt: record.completedAt)
+        let intervals = dominantHeartRateIntervals(
+            samples,
+            startedAt: record.startedAt,
+            completedAt: record.completedAt,
+            pauses: pauses
+        )
         let coverage = intervals.reduce(0) { $0 + $1.seconds } / effectiveSeconds
         guard coverage >= 0.6,
               let first = intervals.first,
@@ -153,7 +185,8 @@ enum StrengthEnergyEstimator {
     private static func dominantHeartRateIntervals(
         _ samples: [WorkoutMetricSample],
         startedAt: Date,
-        completedAt: Date
+        completedAt: Date,
+        pauses: [CompletedPause]
     ) -> [HeartRateInterval] {
         let valid = samples.compactMap { sample -> (date: Date, bpm: Double, source: String)? in
             guard let bpm = sample.heartRateBPM,
@@ -167,7 +200,9 @@ enum StrengthEnergyEstimator {
             return zip(sorted, sorted.dropFirst()).compactMap { left, right in
                 let seconds = right.date.timeIntervalSince(left.date)
                 guard seconds > 0, seconds <= 15 else { return nil }
-                return HeartRateInterval(startedAt: left.date, endedAt: right.date, bpm: (left.bpm + right.bpm) / 2)
+                let interval = HeartRateInterval(startedAt: left.date, endedAt: right.date, bpm: (left.bpm + right.bpm) / 2)
+                guard !pauses.contains(where: { interval.startedAt < $0.endedAt && interval.endedAt > $0.startedAt }) else { return nil }
+                return interval
             }
         }
         return candidates.max { left, right in
