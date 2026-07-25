@@ -321,12 +321,10 @@ Extend `CardioSummaryMetrics` with optional
 `heartRateDriftConfidence`, `workloadConsistency`,
 `heartRateCoverage`, and `workloadCoverage`. Optional fields default to
 `nil`. Retain `measuredActiveEnergyKcal` only for legacy decoding.
-`TrainingEngine.makePrescription` copies `ExerciseOption.resolvedIsCompound`
-into `ExercisePrescription.isCompound`; set completion copies that value into
-`SetResult.isCompound`. Old prescriptions and results fall back to the
-existing movement-pattern compound set
-`[.squat, .hinge, .horizontalPush, .horizontalPull, .verticalPush,
-.verticalPull, .singleLeg]`.
+Task 1 only establishes these optional persisted fields. Task 4 consumes the
+stored value with the documented movement-pattern fallback, and Task 7 wires
+`ExerciseOption.resolvedIsCompound` through prescriptions into completed
+results.
 
 - [ ] **Step 4: Bump schema and verify old snapshots**
 
