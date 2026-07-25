@@ -923,22 +923,34 @@ final class AppStore {
             if milestone > 0, !draft.liveRecoveryMilestonesApplied.contains(milestone) {
                 let recent = samples.filter { $0.timestamp >= restStartedAt.addingTimeInterval(-180) }
                 let peak = recent.compactMap(\.heartRateBPM).max()
-                let exerciseName = draft.currentExercise.name
-                let calibrationCount = workoutHistory.filter { record in
-                    record.sets.contains { $0.exerciseName == exerciseName }
-                }.count
+                let response: SetHeartRateResponse?
+                if let peak, let current = sample.heartRateBPM {
+                    response = SetHeartRateResponse(
+                        peakBPM: peak,
+                        peakDelaySeconds: milestone,
+                        hrr60: milestone == 60 ? max(0, peak - current) : nil,
+                        hrr120: milestone == 120 ? max(0, peak - current) : nil,
+                        sourceName: sample.provenance.sourceName,
+                        confidence: .derived
+                    )
+                } else {
+                    response = nil
+                }
+                let recovery = TrainingEngine.personalRecoveryComparison(
+                    currentResponse: response,
+                    history: workoutHistory
+                )
                 let live = LiveAdaptationEngine.adapt(
                     baseRecommendation: recommendation,
                     baseRest: restRecommendation,
                     currentLoadKg: draft.results.last?.loadKg ?? draft.loadKg,
                     liveSignal: LiveHeartRateSignal(
-                        peakHeartRate: peak,
+                        response: response,
+                        personalComparison: recovery.comparison,
+                        sourceName: sample.provenance.sourceName,
                         currentHeartRate: sample.heartRateBPM,
-                        secondsAfterSet: milestone,
-                        validity: validity,
-                        sourceName: sample.provenance.sourceName
                     ),
-                    calibrationSessions: calibrationCount,
+                    calibrationPairs: recovery.calibrationPairs,
                     hasPain: draft.hasPain,
                     painAlertThresholdReached: draft.hasPain,
                     maximumHeartRateAlert: safetySettings.maximumHeartRateAlert
@@ -1018,7 +1030,15 @@ final class AppStore {
             setKind: result.resolvedSetKind,
             pattern: exercise.pattern,
             historicalE1RM: historicalE1RM,
-            readiness: readinessAssessment
+            readiness: readinessAssessment,
+            context: StrengthRestContext(
+                goal: profile?.strengthTrainingGoal ?? .balanced,
+                isCompound: exercise.isCompound ?? [
+                    .squat, .hinge, .horizontalPush, .horizontalPull,
+                    .verticalPush, .verticalPull, .singleLeg
+                ].contains(exercise.pattern)
+            ),
+            history: workoutHistory
         )
         draft.restStartedAt = .now
         draft.liveRecoveryMilestonesApplied = []

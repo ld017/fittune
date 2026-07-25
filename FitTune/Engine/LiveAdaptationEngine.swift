@@ -1,11 +1,10 @@
 import Foundation
 
 struct LiveHeartRateSignal: Equatable {
-    var peakHeartRate: Double?
-    var currentHeartRate: Double?
-    var secondsAfterSet: Int
-    var validity: LiveMetricValidity
+    var response: SetHeartRateResponse?
+    var personalComparison: PersonalRecoveryComparison
     var sourceName: String
+    var currentHeartRate: Double? = nil
 }
 
 enum AdaptationConfidence: String, Equatable {
@@ -32,7 +31,7 @@ enum LiveAdaptationEngine {
         baseRest: RestRecommendation,
         currentLoadKg: Double,
         liveSignal: LiveHeartRateSignal?,
-        calibrationSessions: Int,
+        calibrationPairs: Int,
         hasPain: Bool,
         painAlertThresholdReached: Bool,
         maximumHeartRateAlert: Int?
@@ -42,7 +41,6 @@ enum LiveAdaptationEngine {
         var rest = baseRest
         var reasons = [baseRecommendation.reason]
         var alerts: [String] = []
-        var usedHeartRate = false
 
         if hasPain || painAlertThresholdReached {
             alerts.append("检测到疼痛或异常不适：建议停止本动作并自行确认，系统不会自动结束。")
@@ -54,10 +52,7 @@ enum LiveAdaptationEngine {
             alerts.append("心率达到个人提醒阈值 \(maximumHeartRateAlert) bpm，请延长休息并确认身体状态。")
         }
 
-        guard let signal = liveSignal,
-              signal.validity == .valid,
-              let peak = signal.peakHeartRate,
-              let current = signal.currentHeartRate else {
+        guard let signal = liveSignal, signal.response != nil else {
             reasons.append("实时心率缺失或无效，保留次数、RIR、恢复和历史算法结果")
             return LiveAdaptationAdvice(
                 nextLoadKg: nextLoad,
@@ -72,34 +67,30 @@ enum LiveAdaptationEngine {
             )
         }
 
-        usedHeartRate = true
-        let recovery = max(0, peak - current)
-        let poorRecovery = (signal.secondsAfterSet >= 120 && recovery < 22)
-            || (signal.secondsAfterSet >= 60 && signal.secondsAfterSet < 120 && recovery < 12)
-        if poorRecovery {
-            rest.recommendedSeconds = min(600, max(rest.recommendedSeconds + 60, rest.lowerSeconds))
+        if signal.personalComparison == .slowerThanBaseline {
+            rest.recommendedSeconds = min(300, max(rest.lowerSeconds, rest.recommendedSeconds + 60))
             rest.upperSeconds = max(rest.upperSeconds, rest.recommendedSeconds)
-            rest.reasons.append("\(signal.secondsAfterSet) 秒心率恢复偏慢，延长 60 秒")
-            rest.inputsUsed.append("实时心率恢复")
-            reasons.append("心率恢复偏慢，只用于延长休息并阻止冒进加重")
+            rest.reasons.append("个人心率恢复较基线偏慢，延长 60 秒")
+            rest.inputsUsed.append("个人心率恢复")
+            reasons.append("个人心率恢复偏慢，只用于延长休息并阻止冒进加重")
             if adjustment == .increase || nextLoad > currentLoadKg {
                 nextLoad = currentLoadKg
                 adjustment = .hold
             }
+        } else if signal.personalComparison == .insufficientHistory {
+            reasons.append("个人心率恢复历史不足，显示当前响应但不改变建议")
         } else {
-            reasons.append("心率恢复未触发保守修正；心率不会单独提高重量")
-            if baseRecommendation.adjustment != .increase {
-                nextLoad = min(nextLoad, currentLoadKg)
-            }
+            reasons.append("个人心率恢复处于自身基线；心率不会单独提高重量")
         }
+
         return LiveAdaptationAdvice(
             nextLoadKg: nextLoad,
             adjustment: adjustment,
             rest: rest,
-            confidence: calibrationSessions < 3 ? .calibrating : .measured,
+            confidence: calibrationPairs >= 5 ? .measured : .calibrating,
             reasons: reasons,
             safetyAlerts: alerts,
-            usedLiveHeartRate: usedHeartRate,
+            usedLiveHeartRate: true,
             canContinue: true,
             automaticallyEndsExercise: false
         )

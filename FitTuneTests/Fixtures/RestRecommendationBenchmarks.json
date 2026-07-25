@@ -1,1 +1,1 @@
-{"algorithmVersion":"1.0-rest-1","basis":"Heavy compound working set at RIR 0 uses a conservative 300 second capped recommendation.","loadKg":100,"reps":5,"rir":0,"historicalE1RM":120,"expectedSeconds":300,"tolerance":0}
+{"algorithmVersion":"1.2.0-strength-rest-1","basis":"Heavy compound working set at RIR 0 uses a conservative 300 second capped recommendation.","loadKg":100,"reps":5,"rir":0,"historicalE1RM":120,"expectedSeconds":300,"tolerance":0}

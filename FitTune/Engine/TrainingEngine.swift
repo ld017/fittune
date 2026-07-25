@@ -1,7 +1,12 @@
 import Foundation
 
+struct StrengthRestContext: Equatable {
+    var goal: StrengthTrainingGoal
+    var isCompound: Bool
+}
+
 enum TrainingEngine {
-    static let ruleVersion = "1.1.1-live-history-cardio-1"
+    static let ruleVersion = "1.2.0-strength-rest-1"
 
     static func assessReadiness(_ input: ReadinessInput) -> ReadinessAssessment {
         let sleepDuration = min(max(input.sleepHours / 8.0, 0), 1) * 100
@@ -126,26 +131,41 @@ enum TrainingEngine {
         setKind: SetKind,
         pattern: MovementPattern,
         historicalE1RM: Double?,
-        readiness: ReadinessAssessment
+        readiness: ReadinessAssessment,
+        context: StrengthRestContext? = nil,
+        history: [WorkoutRecord] = []
     ) -> RestRecommendation {
         let compoundPatterns: Set<MovementPattern> = [
             .squat, .hinge, .horizontalPush, .horizontalPull,
             .verticalPush, .verticalPull, .singleLeg
         ]
-        let isCompound = compoundPatterns.contains(pattern)
+        let resolvedContext = context ?? .init(goal: .balanced, isCompound: compoundPatterns.contains(pattern))
         let relativeLoad = historicalE1RM.flatMap { $0 > 0 ? current.loadKg / $0 : nil }
-        var lower = setKind == .warmup ? 60 : (isCompound ? 120 : 90)
-        var upper = setKind == .warmup ? 120 : (isCompound ? 240 : 180)
-        var recommended = setKind == .warmup ? 90 : (isCompound ? 180 : 120)
-        var reasons = [setKind == .warmup ? "热身组采用较短基准休息" : (isCompound ? "复合正式组采用较长基准休息" : "孤立正式组采用中等基准休息")]
+        let highRelativeLoad = (relativeLoad ?? 0) >= 0.80 || current.reps <= 6
+        let evidenceRange = restEvidenceRange(
+            setKind: setKind,
+            context: resolvedContext,
+            highRelativeLoad: highRelativeLoad
+        )
+        let lower = evidenceRange.lower
+        var upper = evidenceRange.upper
+        var recommended = (lower + upper) / 2
+        var reasons = [evidenceRange.reason]
         var inputs = ["组类型", "动作模式", "完成次数", "RIR", "今日恢复"]
 
-        if setKind == .working && ((relativeLoad ?? 0) >= 0.80 || current.reps <= 6) {
-            lower = 180
-            upper = 300
-            recommended = 240
+        if setKind == .working && highRelativeLoad && evidenceRange.lower == 180 {
             reasons.append("低次数或估计负荷不低于历史 e1RM 的 80%")
             if relativeLoad != nil { inputs.append("历史 e1RM") }
+        }
+        if let candidate = personalRestCandidate(
+            for: current,
+            setKind: setKind,
+            history: history,
+            evidenceRange: lower...upper
+        ) {
+            recommended = candidate
+            reasons.append("同动作可比历史组的个人恢复时间")
+            inputs.append("个人组间恢复历史")
         }
         if current.rir == 0 {
             recommended += 60
@@ -155,10 +175,10 @@ enum TrainingEngine {
             reasons.append("RIR 1，增加 30 秒")
         }
         if let previous,
-           current.loadKg <= previous.loadKg,
-           Double(current.reps) < Double(previous.reps) * 0.90 {
+           canComparePerformance(previous, current, expectedKind: setKind),
+           performanceRetention(first: previous, next: current) < 0.95 {
             recommended += 30
-            reasons.append("次数较前组下降超过 10%，增加 30 秒")
+            reasons.append("可比前组表现下降，增加 30 秒")
             inputs.append("前组表现")
         }
         if readiness.level == .low {
@@ -177,6 +197,31 @@ enum TrainingEngine {
             reasons: reasons,
             inputsUsed: Array(Set(inputs)).sorted()
         )
+    }
+
+    static func personalRecoveryComparison(
+        currentResponse: SetHeartRateResponse?,
+        history: [WorkoutRecord]
+    ) -> (comparison: PersonalRecoveryComparison, calibrationPairs: Int) {
+        guard let currentResponse else { return (.insufficientHistory, 0) }
+        let pairs = historicalComparablePairs(in: history)
+        guard pairs.count >= 5 else { return (.insufficientHistory, pairs.count) }
+        let responses = pairs.compactMap(\.first.heartRateResponse)
+        let comparison60 = recoveryComparison(
+            current: currentResponse.hrr60,
+            baseline: responses.compactMap(\.hrr60),
+            minimumDifference: 5
+        )
+        let comparison120 = recoveryComparison(
+            current: currentResponse.hrr120,
+            baseline: responses.compactMap(\.hrr120),
+            minimumDifference: 8
+        )
+        let comparisons = [comparison60, comparison120]
+        guard comparisons.contains(where: { $0 != nil }) else {
+            return (.insufficientHistory, pairs.count)
+        }
+        return (comparisons.contains { $0 == true } ? .slowerThanBaseline : .withinBaseline, pairs.count)
     }
 
     static func recommendStartingLoad(
@@ -1189,6 +1234,151 @@ enum TrainingEngine {
         ExerciseOption(name: "反手高位下拉", pattern: .verticalPull, equipment: .cable, category: .back, subcategory: .verticalPull),
         ExerciseOption(name: "泽奇深蹲", pattern: .squat, equipment: .barbell, category: .quadriceps, subcategory: .squat)
     ]
+
+    private static func restEvidenceRange(
+        setKind: SetKind,
+        context: StrengthRestContext,
+        highRelativeLoad: Bool
+    ) -> (lower: Int, upper: Int, reason: String) {
+        if setKind == .warmup {
+            return (60, 120, "热身组采用 60–120 秒证据范围")
+        }
+        if highRelativeLoad || (context.isCompound && context.goal == .maxStrength) {
+            return (180, 300, "最大力量或低次数高相对负荷采用 180–300 秒证据范围")
+        }
+        if context.goal == .hypertrophy && context.isCompound {
+            return (120, 240, "增肌复合动作采用 120–240 秒证据范围")
+        }
+        if context.goal == .hypertrophy {
+            return (90, 180, "增肌孤立动作采用 90–180 秒证据范围")
+        }
+        if context.isCompound {
+            return (120, 240, "复合动作采用 120–240 秒证据范围")
+        }
+        return (60, 120, "轻负荷或孤立动作采用 60–120 秒证据范围")
+    }
+
+    private static func personalRestCandidate(
+        for current: SetResult,
+        setKind: SetKind,
+        history: [WorkoutRecord],
+        evidenceRange: ClosedRange<Int>
+    ) -> Int? {
+        let currentExercise = canonicalExerciseKey(current.exerciseName)
+        let retainedRests = historicalComparablePairs(in: history)
+            .filter { canonicalExerciseKey($0.first.exerciseName) == currentExercise && $0.first.resolvedSetKind == setKind }
+            .filter { performanceRetention(first: $0.first, next: $0.next) >= 0.95 }
+            .compactMap { $0.first.actualRestSeconds }
+        guard retainedRests.count >= 5 else { return nil }
+        let roundedUp = Int((median(retainedRests) / 15).rounded(.up)) * 15
+        return min(evidenceRange.upperBound, max(evidenceRange.lowerBound, roundedUp))
+    }
+
+    private struct HistoricalComparablePair {
+        var first: SetResult
+        var next: SetResult
+    }
+
+    private static func historicalComparablePairs(in history: [WorkoutRecord]) -> [HistoricalComparablePair] {
+        history.flatMap { record in
+            zip(record.sets, record.sets.dropFirst()).compactMap { first, next in
+                guard isHistoricalComparable(first: first, next: next, pauses: record.pauseIntervals ?? [], recordEnd: record.completedAt) else {
+                    return nil
+                }
+                return HistoricalComparablePair(first: first, next: next)
+            }
+        }
+    }
+
+    private static func isHistoricalComparable(
+        first: SetResult,
+        next: SetResult,
+        pauses: [WorkoutPauseInterval],
+        recordEnd: Date
+    ) -> Bool {
+        guard first.startedAt != nil,
+              next.startedAt != nil,
+              let actualRest = first.actualRestSeconds,
+              actualRest >= 0,
+              canonicalExerciseKey(first.exerciseName) == canonicalExerciseKey(next.exerciseName),
+              first.resolvedSetKind == next.resolvedSetKind,
+              comparableSetKind(first.resolvedSetKind),
+              abs(first.loadKg - next.loadKg) <= max(2.5, max(first.loadKg, next.loadKg) * 0.05),
+              abs(first.reps - next.reps) <= 2,
+              abs(first.rir - next.rir) <= 1,
+              !reportsPainOrTechniqueBreakdown(first),
+              !reportsPainOrTechniqueBreakdown(next)
+        else { return false }
+
+        let restStart = first.completedAt
+        let restEnd = restStart.addingTimeInterval(actualRest)
+        return !pauses.contains { pause in
+            let pauseEnd = pause.endedAt ?? recordEnd
+            return pause.startedAt < restEnd && pauseEnd > restStart
+        }
+    }
+
+    private static func canComparePerformance(_ first: SetResult, _ next: SetResult, expectedKind: SetKind) -> Bool {
+        first.resolvedSetKind == expectedKind
+            && next.resolvedSetKind == expectedKind
+            && comparableSetKind(expectedKind)
+            && canonicalExerciseKey(first.exerciseName) == canonicalExerciseKey(next.exerciseName)
+            && abs(first.loadKg - next.loadKg) <= max(2.5, max(first.loadKg, next.loadKg) * 0.05)
+            && abs(first.reps - next.reps) <= 2
+            && abs(first.rir - next.rir) <= 1
+            && !reportsPainOrTechniqueBreakdown(first)
+            && !reportsPainOrTechniqueBreakdown(next)
+    }
+
+    private static func comparableSetKind(_ kind: SetKind) -> Bool {
+        ![.backoff, .drop, .amrap].contains(kind)
+    }
+
+    private static func reportsPainOrTechniqueBreakdown(_ set: SetResult) -> Bool {
+        set.feeling == .pain || set.feeling == .techniqueBreakdown
+    }
+
+    private static func canonicalExerciseKey(_ name: String) -> String {
+        canonicalExercise(named: name)?.id ?? name.normalizedExerciseName
+    }
+
+    private static func performanceRetention(first: SetResult, next: SetResult) -> Double {
+        var ratios: [Double] = []
+        if let firstE1RM = estimatedOneRepMax(loadKg: first.loadKg, reps: first.reps, rir: first.rir),
+           let nextE1RM = estimatedOneRepMax(loadKg: next.loadKg, reps: next.reps, rir: next.rir),
+           firstE1RM > 0 {
+            ratios.append(min(1.2, max(0, nextE1RM / firstE1RM)))
+        }
+        if first.reps > 0 {
+            ratios.append(min(1.2, max(0, Double(next.reps) / Double(first.reps))))
+        }
+        if let firstQuality = first.techniqueQuality,
+           let nextQuality = next.techniqueQuality,
+           firstQuality > 0 {
+            ratios.append(min(1.2, max(0, Double(nextQuality) / Double(firstQuality))))
+        }
+        return average(ratios)
+    }
+
+    private static func recoveryComparison(
+        current: Double?,
+        baseline: [Double],
+        minimumDifference: Double
+    ) -> Bool? {
+        guard let current, baseline.count >= 5 else { return nil }
+        let center = median(baseline)
+        let mad = median(baseline.map { abs($0 - center) })
+        return current < center - max(1.5 * mad, minimumDifference)
+    }
+
+    private static func median(_ values: [Double]) -> Double {
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[middle - 1] + sorted[middle]) / 2
+        }
+        return sorted[middle]
+    }
 
     private static func average(_ values: [Double]) -> Double {
         guard !values.isEmpty else { return 0 }

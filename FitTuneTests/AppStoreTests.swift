@@ -433,7 +433,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.workoutHistory.count, 1)
     }
 
-    func testValidLiveHeartRateExtendsRestOnlyOnceAtSixtySecondMilestone() {
+    func testLiveHeartRateWithoutPersonalHistoryLeavesRestUnchangedAtSixtySecondMilestone() {
         let store = AppStore(defaults: makeDefaults())
         store.finishOnboarding(with: testProfile(goal: .hypertrophy, split: .fullBody))
         let session = store.plan!.sessions[0]
@@ -453,7 +453,7 @@ final class AppStoreTests: XCTestCase {
         let firstUpdate = store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds
         store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(61), heartRateBPM: 161, provenance: provenance), validity: .valid, now: start.addingTimeInterval(61))
 
-        XCTAssertEqual(firstUpdate, min(600, baselineRest + 60))
+        XCTAssertEqual(firstUpdate, baselineRest)
         XCTAssertEqual(store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds, firstUpdate)
         XCTAssertEqual(store.activeWorkoutDraft!.metricSamples?.count, 3)
         XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.count, 1)

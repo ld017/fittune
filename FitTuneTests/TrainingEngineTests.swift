@@ -2,6 +2,102 @@ import XCTest
 @testable import FitTune
 
 final class TrainingEngineTests: XCTestCase {
+    func testMaxStrengthCompoundRestStartsAtThreeToFiveMinutes() {
+        let set = SetResult(
+            exerciseID: UUID(),
+            exerciseName: "杠铃深蹲",
+            setNumber: 1,
+            loadKg: 120,
+            reps: 4,
+            rir: 1,
+            movementPattern: .squat
+        )
+
+        let rest = TrainingEngine.recommendRest(
+            current: set,
+            previous: nil,
+            setKind: .working,
+            pattern: .squat,
+            historicalE1RM: 150,
+            readiness: readyAssessment,
+            context: .init(goal: .maxStrength, isCompound: true)
+        )
+
+        XCTAssertEqual(rest.lowerSeconds, 180)
+        XCTAssertEqual(rest.upperSeconds, 300)
+    }
+
+    func testPersonalComparableRestChangesMidpointWithoutLoweringEvidenceFloor() {
+        let exerciseID = UUID()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let historicalSets = (0..<5).flatMap { index -> [SetResult] in
+            let first = SetResult(
+                exerciseID: exerciseID,
+                exerciseName: "杠铃深蹲",
+                setNumber: 1,
+                loadKg: 100,
+                reps: 8,
+                rir: 2,
+                completedAt: start.addingTimeInterval(Double(index) * 86_400),
+                setKind: .working,
+                startedAt: start.addingTimeInterval(Double(index) * 86_400 - 30),
+                actualRestSeconds: 195
+            )
+            let second = SetResult(
+                exerciseID: exerciseID,
+                exerciseName: "杠铃深蹲",
+                setNumber: 2,
+                loadKg: 100,
+                reps: 8,
+                rir: 2,
+                completedAt: first.completedAt.addingTimeInterval(195),
+                setKind: .working,
+                startedAt: first.completedAt.addingTimeInterval(165)
+            )
+            return [first, second]
+        }
+        let record = WorkoutRecord(
+            sessionName: "腿",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(5 * 86_400),
+            readinessScore: 80,
+            sets: historicalSets
+        )
+        let current = SetResult(exerciseID: exerciseID, exerciseName: "杠铃深蹲", setNumber: 3, loadKg: 100, reps: 8, rir: 2, setKind: .working)
+
+        let rest = TrainingEngine.recommendRest(
+            current: current,
+            previous: nil,
+            setKind: .working,
+            pattern: .squat,
+            historicalE1RM: 150,
+            readiness: readyAssessment,
+            context: .init(goal: .hypertrophy, isCompound: true),
+            history: [record]
+        )
+
+        XCTAssertEqual(rest.lowerSeconds, 120)
+        XCTAssertEqual(rest.recommendedSeconds, 195)
+        XCTAssertEqual(rest.upperSeconds, 240)
+    }
+
+    func testLowRepHighRelativeLoadUsesThreeToFiveMinuteFloorOutsideCompoundContext() {
+        let set = SetResult(exerciseID: UUID(), exerciseName: "绳索弯举", setNumber: 1, loadKg: 45, reps: 6, rir: 2)
+
+        let rest = TrainingEngine.recommendRest(
+            current: set,
+            previous: nil,
+            setKind: .working,
+            pattern: .arms,
+            historicalE1RM: 50,
+            readiness: readyAssessment,
+            context: .init(goal: .hypertrophy, isCompound: false)
+        )
+
+        XCTAssertEqual(rest.lowerSeconds, 180)
+        XCTAssertEqual(rest.upperSeconds, 300)
+    }
+
     func testGeneratedExercisesDefaultToFourWorkingSets() throws {
         let profile = profile(goal: .hypertrophy, experience: .new)
         let plan = TrainingEngine.generatePlan(for: profile)
@@ -742,7 +838,7 @@ final class TrainingEngineTests: XCTestCase {
 
     func testRestRecommendationExtendsForRIRZeroRepDropAndLowReadiness() {
         let exerciseID = UUID()
-        let previous = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 3, loadKg: 80, reps: 10, rir: 2)
+        let previous = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 3, loadKg: 80, reps: 10, rir: 1)
         let current = SetResult(exerciseID: exerciseID, exerciseName: "卧推", setNumber: 4, loadKg: 80, reps: 8, rir: 0)
         let readiness = ReadinessAssessment(score: 40, level: .low, summary: "测试", loadMultiplier: 0.9, setReduction: 1)
 
@@ -757,7 +853,7 @@ final class TrainingEngineTests: XCTestCase {
 
         XCTAssertEqual(rest.recommendedSeconds, 300)
         XCTAssertTrue(rest.reasons.contains("RIR 0，增加 60 秒"))
-        XCTAssertTrue(rest.reasons.contains("次数较前组下降超过 10%，增加 30 秒"))
+        XCTAssertTrue(rest.reasons.contains("可比前组表现下降，增加 30 秒"))
         XCTAssertTrue(rest.reasons.contains("今日恢复偏低，增加 30 秒"))
         XCTAssertTrue((rest.lowerSeconds...rest.upperSeconds).contains(rest.recommendedSeconds))
     }
