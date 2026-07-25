@@ -111,6 +111,38 @@ final class CardioSessionTests: XCTestCase {
         XCTAssertNil(draft.workloadSegments[0].endedAt)
     }
 
+    func testStaleCardioWorkloadUpdateLeavesOpenSegmentUntouched() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCardioSession(modality: .inclineWalking, intensity: .zone2, speedKph: 5, at: start)
+
+        store.updateCardioWorkload(
+            speedKph: 6,
+            inclinePercent: nil,
+            powerWatts: nil,
+            handrailSupport: .none,
+            at: start
+        )
+
+        let draft = try XCTUnwrap(store.activeCardioDraft)
+        XCTAssertEqual(draft.workloadSegments.count, 1)
+        XCTAssertEqual(draft.workloadSegments[0].speedKph, 5)
+        XCTAssertNil(draft.workloadSegments[0].endedAt)
+    }
+
+    func testFinishingCardioBeforeItsStartKeepsDraftOpen() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCardioSession(modality: .inclineWalking, intensity: .zone2, speedKph: 5, at: start)
+
+        let record = store.finishCardioSession(status: .completed, at: start.addingTimeInterval(-1))
+
+        XCTAssertNil(record)
+        XCTAssertNotNil(store.activeCardioDraft)
+        XCTAssertNil(store.activeCardioDraft?.workloadSegments[0].endedAt)
+        XCTAssertTrue(store.cardioWorkouts.isEmpty)
+    }
+
     func testPermissionInterruptionCreatesPartialResultWithGapReason() throws {
         let store = AppStore(defaults: makeDefaults())
         store.startCardioSession(modality: .cycling, intensity: .zone2)

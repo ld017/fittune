@@ -29,3 +29,17 @@ Completed from base `8071288`.
 - Confirmed the new public signatures and `.none` handrail default exactly match the brief.
 - Confirmed confirmed distance does not replace the independently persisted sensor distance.
 - No UI or machine-level calibration behavior was added. Task 9 remains responsible for level calibration.
+
+## Fix Round 1
+
+### RED
+
+- A legacy record containing only a cumulative Apple Watch energy sample recalculated from 100 to 213.15 kcal instead of preserving its saved center and marking the device value as comparison data.
+- A workload update at the session start created a zero-duration closed segment and a second open segment.
+- A finish timestamp before the session start saved an invalid record whose workload segment ended before it began.
+
+### GREEN
+
+- Legacy recalculation now requires valid mechanical evidence or a usable heart-rate series. Device-only energy remains a diagnostics comparison alongside the legacy warning.
+- Workload updates reject timestamps at or before the draft/start of the open segment; finishes before the draft start return `nil` without clearing or changing the draft.
+- `CardioSessionTests`: 8 passed. `AppStoreTests`: 41 passed. Final `swift test`: 221 passed, 0 failures.

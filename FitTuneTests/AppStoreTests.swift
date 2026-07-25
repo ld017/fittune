@@ -869,6 +869,26 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(current.energyDiagnostics?.warnings.contains { $0.contains("历史") } == true)
     }
 
+    func testCurrentCardioEnergyRecordWithOnlyDeviceEnergyRetainsSavedEnergyAndWarning() {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let record = CardioWorkoutRecord(
+            date: start,
+            modality: .cycling,
+            intensity: .zone2,
+            durationMinutes: 30,
+            activeEnergyKcal: 100,
+            source: "旧记录",
+            metricSamples: [watchEnergySample(kcal: 166, at: start)]
+        )
+
+        let current = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(current.activeEnergyKcal, 100)
+        XCTAssertEqual(current.energyDiagnostics?.comparisonEstimateKcal, 166)
+        XCTAssertTrue(current.energyDiagnostics?.warnings.contains { $0.contains("历史") } == true)
+    }
+
     func testCurrentStrengthEnergyRecordKeepsSavedValueWithoutUsableHeartRate() {
         let store = AppStore(defaults: makeDefaults())
         let start = Date(timeIntervalSince1970: 1_700_000_000)

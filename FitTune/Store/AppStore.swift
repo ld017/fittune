@@ -207,7 +207,7 @@ final class AppStore {
         let completedAt = record.date.addingTimeInterval(Double(record.durationMinutes) * 60)
         let samples = record.metricSamples ?? []
         let measured = TrainingEngine.appleWatchActiveEnergy(from: samples)
-        let hasUsableSamples = measured != nil || TrainingEngine.hasUsableHeartRateSeries(
+        let hasUsableSamples = TrainingEngine.hasUsableHeartRateSeries(
             samples,
             startedAt: record.date,
             completedAt: completedAt
@@ -215,13 +215,17 @@ final class AppStore {
         let legacySegments = cardioLegacySegments(for: record, completedAt: completedAt)
         guard hasUsableSamples || !legacySegments.isEmpty else {
             var current = record
+            let deviceEnergy = record.deviceActiveEnergyEstimateKcal ?? measured
             var diagnostics = current.energyDiagnostics ?? EnergyEstimateDiagnostics(
                 primaryModel: "保留历史有氧估算",
                 inputsUsed: [],
                 warnings: [],
-                comparisonEstimateKcal: nil,
+                comparisonEstimateKcal: deviceEnergy,
                 dataCoverage: 0
             )
+            if diagnostics.comparisonEstimateKcal == nil {
+                diagnostics.comparisonEstimateKcal = deviceEnergy
+            }
             let warning = "历史有氧记录缺少可用的速度/坡度、功率或原始心率数据，保留原有热量估算。"
             if !diagnostics.warnings.contains(warning) {
                 diagnostics.warnings.append(warning)
@@ -450,9 +454,11 @@ final class AppStore {
         at changedAt: Date = .now
     ) {
         guard var draft = activeCardioDraft else { return }
+        guard changedAt > draft.startedAt else { return }
         let hasWorkload = speedKph != nil || inclinePercent != nil || powerWatts != nil || handrailSupport != .none
         if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
             let current = draft.workloadSegments[openIndex]
+            guard changedAt > current.startedAt else { return }
             guard current.speedKph != speedKph
                     || current.inclinePercent != inclinePercent
                     || current.powerWatts != powerWatts
@@ -515,6 +521,7 @@ final class AppStore {
     @discardableResult
     func finishCardioSession(status: WorkoutCompletionStatus, at completedAt: Date = .now) -> CardioWorkoutRecord? {
         guard var draft = activeCardioDraft else { return nil }
+        guard completedAt >= draft.startedAt else { return nil }
         if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
             draft.workloadSegments[openIndex].endedAt = completedAt
         }
