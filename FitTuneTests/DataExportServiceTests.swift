@@ -27,4 +27,73 @@ final class DataExportServiceTests: XCTestCase {
         XCTAssertTrue(csv.contains("\"划船, \"\"窄握\"\"\n变式\""))
         XCTAssertTrue(csv.hasPrefix("workout_id,"))
     }
+
+    func testWorkoutExportsIncludeScientificEnergyAndTimelineFields() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let response = SetHeartRateResponse(
+            peakBPM: 165,
+            peakDelaySeconds: 30,
+            hrr60: 20,
+            hrr120: 34,
+            sourceName: "H10",
+            confidence: .derived
+        )
+        let set = SetResult(
+            exerciseID: UUID(),
+            exerciseName: "深蹲",
+            setNumber: 1,
+            loadKg: 100,
+            reps: 8,
+            rir: 1,
+            completedAt: start.addingTimeInterval(30),
+            movementPattern: .squat,
+            setKind: .working,
+            startedAt: start,
+            restEndedAt: start.addingTimeInterval(210),
+            actualRestSeconds: 180,
+            heartRateResponse: response
+        )
+        var strength = WorkoutRecord(
+            sessionName: "腿",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(600),
+            readinessScore: 80,
+            sets: [set]
+        )
+        strength.energyDiagnostics = EnergyEstimateDiagnostics(
+            primaryModel: "Compendium structural MET",
+            inputsUsed: ["working_sets"],
+            warnings: ["EPOC 未计入本次主动热量"],
+            comparisonEstimateKcal: 166,
+            dataCoverage: 1
+        )
+        var cardio = CardioWorkoutRecord(
+            date: start,
+            modality: .inclineWalking,
+            intensity: .zone2,
+            durationMinutes: 10,
+            activeEnergyKcal: 71,
+            source: "FitTune"
+        )
+        cardio.workloadSegments = [
+            .init(
+                startedAt: start,
+                endedAt: start.addingTimeInterval(600),
+                speedKph: 5,
+                inclinePercent: 8,
+                source: .userEntered
+            )
+        ]
+        let csv = DataExportService.workoutsCSV(
+            workouts: [strength],
+            cardio: [cardio]
+        )
+        let setsCSV = DataExportService.setsCSV(workouts: [strength])
+
+        XCTAssertTrue(csv.contains("energy_primary_model"))
+        XCTAssertTrue(csv.contains("device_energy_comparison_kcal"))
+        XCTAssertTrue(csv.contains("workload_segments"))
+        XCTAssertTrue(setsCSV.contains("actual_rest_seconds"))
+        XCTAssertTrue(setsCSV.contains("peak_delay_seconds"))
+    }
 }

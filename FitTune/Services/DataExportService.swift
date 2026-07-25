@@ -17,21 +17,70 @@ enum DataExportService {
     }
 
     static func workoutsCSV(workouts: [WorkoutRecord], cardio: [CardioWorkoutRecord]) -> String {
-        var rows = [["type", "id", "date", "name", "status", "duration_min", "energy_kcal", "energy_method"]]
+        var rows = [[
+            "type", "id", "date", "name", "status", "duration_min", "energy_kcal", "energy_method",
+            "energy_primary_model", "energy_inputs_used", "energy_warnings", "energy_data_coverage",
+            "device_energy_comparison_kcal", "device_energy_source", "workload_segments"
+        ]]
         rows += workouts.map {
-            ["strength", $0.id.uuidString, iso($0.completedAt), $0.sessionName, $0.resolvedCompletionStatus.rawValue, decimal($0.completedAt.timeIntervalSince($0.startedAt) / 60), decimal($0.activeEnergyKcal), $0.energyMethod ?? ""]
+            workoutRow(
+                type: "strength",
+                id: $0.id,
+                date: $0.completedAt,
+                name: $0.sessionName,
+                status: $0.resolvedCompletionStatus,
+                durationMinutes: $0.completedAt.timeIntervalSince($0.startedAt) / 60,
+                energyKcal: $0.activeEnergyKcal,
+                energyMethod: $0.energyMethod,
+                diagnostics: $0.energyDiagnostics,
+                deviceEstimateKcal: $0.deviceActiveEnergyEstimateKcal,
+                deviceSource: $0.deviceEnergySource,
+                workloadSegments: nil
+            )
         }
         rows += cardio.map {
-            ["cardio", $0.id.uuidString, iso($0.date), $0.modality.title, ($0.completionStatus ?? .completed).rawValue, String($0.durationMinutes), decimal($0.activeEnergyKcal), $0.energyMethod ?? $0.source]
+            workoutRow(
+                type: "cardio",
+                id: $0.id,
+                date: $0.date,
+                name: $0.modality.title,
+                status: $0.completionStatus ?? .completed,
+                durationMinutes: Double($0.durationMinutes),
+                energyKcal: $0.activeEnergyKcal,
+                energyMethod: $0.energyMethod ?? $0.source,
+                diagnostics: $0.energyDiagnostics,
+                deviceEstimateKcal: $0.deviceActiveEnergyEstimateKcal,
+                deviceSource: $0.deviceEnergySource,
+                workloadSegments: $0.workloadSegments
+            )
         }
         return csv(rows)
     }
 
     static func setsCSV(workouts: [WorkoutRecord]) -> String {
-        var rows = [["workout_id", "completed_at", "exercise", "set_number", "set_kind", "load_kg", "reps", "rir", "technique_quality"]]
+        var rows = [[
+            "workout_id", "started_at", "completed_at", "exercise", "set_number", "set_kind", "load_kg", "reps", "rir", "technique_quality",
+            "actual_rest_seconds", "peak_bpm", "peak_delay_seconds", "hrr60", "hrr120"
+        ]]
         for workout in workouts {
             rows += workout.sets.map {
-                [workout.id.uuidString, iso($0.completedAt), $0.exerciseName, String($0.setNumber), $0.resolvedSetKind.rawValue, decimal($0.loadKg), String($0.reps), String($0.rir), $0.techniqueQuality.map(String.init) ?? ""]
+                [
+                    workout.id.uuidString,
+                    $0.startedAt.map(iso) ?? "",
+                    iso($0.completedAt),
+                    $0.exerciseName,
+                    String($0.setNumber),
+                    $0.resolvedSetKind.rawValue,
+                    decimal($0.loadKg),
+                    String($0.reps),
+                    String($0.rir),
+                    $0.techniqueQuality.map(String.init) ?? "",
+                    decimal($0.actualRestSeconds),
+                    decimal($0.heartRateResponse?.peakBPM),
+                    $0.heartRateResponse.map { String($0.peakDelaySeconds) } ?? "",
+                    decimal($0.heartRateResponse?.hrr60),
+                    decimal($0.heartRateResponse?.hrr120)
+                ]
             }
         }
         return csv(rows)
@@ -58,11 +107,50 @@ enum DataExportService {
     }
 
     private static func csv(_ rows: [[String]]) -> String { rows.map { $0.map(escape).joined(separator: ",") }.joined(separator: "\n") + "\n" }
+    private static func workoutRow(
+        type: String,
+        id: UUID,
+        date: Date,
+        name: String,
+        status: WorkoutCompletionStatus,
+        durationMinutes: Double,
+        energyKcal: Double?,
+        energyMethod: String?,
+        diagnostics: EnergyEstimateDiagnostics?,
+        deviceEstimateKcal: Double?,
+        deviceSource: MetricSource?,
+        workloadSegments: [CardioWorkloadSegment]?
+    ) -> [String] {
+        [
+            type,
+            id.uuidString,
+            iso(date),
+            name,
+            status.rawValue,
+            decimal(durationMinutes),
+            decimal(energyKcal),
+            energyMethod ?? "",
+            diagnostics?.primaryModel ?? "",
+            encoded(diagnostics?.inputsUsed),
+            encoded(diagnostics?.warnings),
+            decimal(diagnostics?.dataCoverage),
+            decimal(diagnostics?.comparisonEstimateKcal ?? deviceEstimateKcal),
+            deviceSource?.rawValue ?? "",
+            encoded(workloadSegments)
+        ]
+    }
     private static func escape(_ value: String) -> String {
         guard value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") else { return value }
         return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
     private static func iso(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
+    private static func encoded<T: Encodable>(_ value: T?) -> String {
+        guard let value else { return "" }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return String(data: (try? encoder.encode(value)) ?? Data(), encoding: .utf8) ?? ""
+    }
     private static func decimal(_ value: Double?) -> String {
         guard let value else { return "" }
         return String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), value).replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)

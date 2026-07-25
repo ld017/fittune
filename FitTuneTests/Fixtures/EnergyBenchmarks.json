@@ -1,1 +1,17 @@
-{"algorithmVersion":"1.2.0-scientific-energy-1","basis":"Measured daily active energy is authoritative; fallback walking energy subtracts cardio session steps while daily step display remains unchanged.","resting":1700,"strength":200,"cardio":150,"walking":100,"measuredActive":600,"expectedTotal":2300,"tolerance":0.001}
+{
+  "algorithmVersion": "1.2.0-scientific-energy-1",
+  "basis": "Workout-specific models own workout energy; device energy is comparison only. Daily measured active energy remains a separate daily aggregate.",
+  "resting": 1700,
+  "strength": 200,
+  "cardio": 150,
+  "walking": 100,
+  "measuredActive": 600,
+  "expectedTotal": 2300,
+  "tolerance": 0.001,
+  "inclineWeightKg": 70,
+  "inclineMinutes": 60,
+  "inclineSpeedKph": 5,
+  "inclinePercent": 8,
+  "expectedInclineActiveKcal": 427,
+  "inclineTolerance": 1
+}

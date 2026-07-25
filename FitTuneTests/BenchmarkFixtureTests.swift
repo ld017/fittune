@@ -16,6 +16,38 @@ final class BenchmarkFixtureTests: XCTestCase {
         XCTAssertEqual(report.total.value, fixture.expectedTotal, accuracy: fixture.tolerance)
     }
 
+    func testInclineWalkingEnergyBenchmark() throws {
+        let fixture: EnergyFixture = try load("EnergyBenchmarks")
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let estimate = CardioEnergyEstimator.estimate(
+            CardioEnergyInput(
+                modality: .inclineWalking,
+                intensity: .zone2,
+                startedAt: start,
+                completedAt: start.addingTimeInterval(fixture.inclineMinutes * 60),
+                weightKg: fixture.inclineWeightKg,
+                profile: nil,
+                confirmedDistanceKm: nil,
+                sensorDistanceKm: nil,
+                workloadSegments: [
+                    .init(
+                        startedAt: start,
+                        endedAt: start.addingTimeInterval(fixture.inclineMinutes * 60),
+                        speedKph: fixture.inclineSpeedKph,
+                        inclinePercent: fixture.inclinePercent,
+                        source: .userEntered
+                    )
+                ],
+                metricSamples: [],
+                deviceEstimateKcal: nil,
+                deviceEnergySource: nil,
+                importedDeviceOnly: false
+            )
+        )
+
+        XCTAssertEqual(estimate.kilocalories, fixture.expectedInclineActiveKcal, accuracy: fixture.inclineTolerance)
+    }
+
     func testRestAndE1RMBenchmarks() throws {
         let restFixture: RestFixture = try load("RestRecommendationBenchmarks")
         let set = SetResult(exerciseID: UUID(), exerciseName: "深蹲", setNumber: 1, loadKg: restFixture.loadKg, reps: restFixture.reps, rir: restFixture.rir)
@@ -49,7 +81,16 @@ final class BenchmarkFixtureTests: XCTestCase {
     }
 }
 
-private struct EnergyFixture: Decodable { let algorithmVersion, basis: String; let resting, strength, cardio, walking, measuredActive, expectedTotal, tolerance: Double }
+private struct EnergyFixture: Decodable {
+    let algorithmVersion, basis: String
+    let resting, strength, cardio, walking, measuredActive, expectedTotal, tolerance: Double
+    let inclineWeightKg: Double
+    let inclineMinutes: Double
+    let inclineSpeedKph: Double
+    let inclinePercent: Double
+    let expectedInclineActiveKcal: Double
+    let inclineTolerance: Double
+}
 private struct RestFixture: Decodable { let algorithmVersion, basis: String; let loadKg: Double; let reps, rir: Int; let historicalE1RM: Double; let expectedSeconds: Int; let tolerance: Double }
 private struct E1RMFixture: Decodable { let algorithmVersion, basis: String; let loadKg: Double; let reps, rir: Int; let expectedKg, tolerance: Double }
 private struct RecoveryFixture: Decodable { let algorithmVersion, basis: String; let sleep, soreness, stress, motivation: Double; let expectedScore: Int; let tolerance: Double }
