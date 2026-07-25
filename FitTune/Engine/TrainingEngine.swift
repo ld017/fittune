@@ -607,58 +607,43 @@ enum TrainingEngine {
         metricSamples: [WorkoutMetricSample] = [],
         startedAt: Date? = nil
     ) -> EnergyEstimate {
-        if let measured = measuredActiveEnergy, measured > 0 {
-            return EnergyEstimate(kilocalories: measured, lowerBound: measured * 0.95, upperBound: measured * 1.05, method: "Apple Watch / 设备实测", confidence: "高")
-        }
-        let resolvedSpeed = speedKph ?? distanceKm.map { $0 / max(Double(minutes) / 60, 0.01) }
-        if [.inclineWalking, .briskWalking, .running].contains(modality),
-           let speed = resolvedSpeed, (1...25).contains(speed) {
-            let metersPerMinute = speed * 1000 / 60
-            let grade = max(0, min((inclinePercent ?? 0) / 100, 0.40))
-            let netVO2: Double
-            let equation: String
-            if modality == .running || speed >= 8.0 {
-                netVO2 = 0.2 * metersPerMinute + 0.9 * metersPerMinute * grade
-                equation = "ACSM 跑步速度/坡度公式"
-            } else {
-                netVO2 = 0.1 * metersPerMinute + 1.8 * metersPerMinute * grade
-                equation = "ACSM 步行速度/坡度公式"
+        let start = startedAt ?? .now.addingTimeInterval(-Double(minutes) * 60)
+        let completedAt = start.addingTimeInterval(Double(minutes) * 60)
+        let legacySegments = speedKph.map {
+            [CardioWorkloadSegment(
+                startedAt: start,
+                endedAt: completedAt,
+                speedKph: $0,
+                inclinePercent: inclinePercent,
+                source: .userEntered
+            )]
+        } ?? []
+        let legacySamples: [WorkoutMetricSample]
+        if metricSamples.isEmpty, let averageHeartRate {
+            let provenance = MetricProvenance(source: .manual, sourceName: "手动平均心率", confidence: .estimated, coverage: 1)
+            legacySamples = stride(from: 0.0, through: Double(minutes) * 60, by: 10).map {
+                .init(timestamp: start.addingTimeInterval($0), heartRateBPM: averageHeartRate, provenance: provenance)
             }
-            let value = max(0, netVO2 * weightKg / 1000 * 5 * Double(minutes))
-            return EnergyEstimate(kilocalories: value, lowerBound: value * 0.85, upperBound: value * 1.15, method: equation, confidence: "中高")
+        } else {
+            legacySamples = metricSamples
         }
-        let fallbackValue = netActiveEnergy(
-            met: cardioMET(modality: modality, intensity: intensity),
-            weightKg: weightKg,
-            minutes: Double(minutes)
-        )
-        if let profile,
-           let startedAt,
-           let blended = timeWeightedHeartRateEnergy(
-                samples: metricSamples,
-                startedAt: startedAt,
-                completedAt: startedAt.addingTimeInterval(Double(minutes) * 60),
+        return CardioEnergyEstimator.estimate(
+            CardioEnergyInput(
+                modality: modality,
+                intensity: intensity,
+                startedAt: start,
+                completedAt: completedAt,
                 weightKg: weightKg,
                 profile: profile,
-                fallbackKcalPerMinute: fallbackValue / Double(max(1, minutes)),
-                lowerRateFactor: 0.75,
-                upperRateFactor: 1.25
-           ) {
-            let lowerFactor = 0.75 + 0.05 * blended.coverage
-            let upperFactor = 1.25 - 0.05 * blended.coverage
-            return EnergyEstimate(
-                kilocalories: blended.kilocalories,
-                lowerBound: blended.kilocalories * lowerFactor,
-                upperBound: blended.kilocalories * upperFactor,
-                method: "FitTune 心率 + 有氧模型估算",
-                confidence: blended.coverage >= 0.8 ? "中" : "低至中"
+                confirmedDistanceKm: distanceKm,
+                sensorDistanceKm: nil,
+                workloadSegments: legacySegments,
+                metricSamples: legacySamples,
+                deviceEstimateKcal: measuredActiveEnergy,
+                deviceEnergySource: measuredActiveEnergy == nil ? nil : .unknown,
+                importedDeviceOnly: false
             )
-        }
-        if let profile, let heartRate = averageHeartRate,
-           let value = heartRateActiveEnergy(averageHeartRate: heartRate, minutes: Double(minutes), weightKg: weightKg, profile: profile) {
-            return EnergyEstimate(kilocalories: value, lowerBound: value * 0.80, upperBound: value * 1.20, method: "Keytel 平均心率模型", confidence: "中")
-        }
-        return EnergyEstimate(kilocalories: fallbackValue, lowerBound: fallbackValue * 0.75, upperBound: fallbackValue * 1.25, method: "2024 Adult Compendium MET", confidence: "低至中")
+        )
     }
 
     static func appleWatchActiveEnergy(from samples: [WorkoutMetricSample]) -> Double? {

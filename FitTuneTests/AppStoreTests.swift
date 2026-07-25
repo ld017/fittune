@@ -613,7 +613,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
-    func testCardioSaveUsesLatestAppleWatchCumulativeEnergy() throws {
+    func testCardioSaveKeepsAppleWatchCumulativeEnergyAsComparison() throws {
         let store = AppStore(defaults: makeDefaults())
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         store.startCardioSession(modality: .cycling, intensity: .zone2)
@@ -638,8 +638,8 @@ final class AppStoreTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(record.activeEnergyKcal, 190)
-        XCTAssertEqual(record.energyMethod, "Apple Watch / 设备实测")
+        XCTAssertEqual(record.activeEnergyKcal, 213.15, accuracy: 0.01)
+        XCTAssertTrue(record.energyMethod?.contains("MET") == true)
         XCTAssertTrue(record.source.contains("Apple Watch"))
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
@@ -794,7 +794,7 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertNotEqual(updated.activeEnergyKcal, 5)
         XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
-        XCTAssertTrue(updated.energyMethod?.contains("心率 + 有氧模型") == true)
+        XCTAssertTrue(updated.energyMethod?.contains("Keytel") == true)
     }
 
     func testCurrentStrengthEnergyRecordKeepsSavedValueWithoutUsableHeartRate() {

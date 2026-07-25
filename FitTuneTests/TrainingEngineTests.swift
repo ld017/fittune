@@ -313,7 +313,7 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertEqual(TrainingEngine.restingEnergy(profile: user) ?? 0, 1648.75, accuracy: 0.01)
     }
 
-    func testCardioEnergyUsesNetMETAndMeasuredValueCanOverride() {
+    func testCardioEnergyUsesNetMETAndDeviceValueIsComparisonOnly() {
         let estimated = TrainingEngine.makeCardioWorkout(
             modality: .running,
             intensity: .zone2,
@@ -330,7 +330,8 @@ final class TrainingEngineTests: XCTestCase {
             weightKg: 70,
             measuredActiveEnergy: 321
         )
-        XCTAssertEqual(measured.activeEnergyKcal, 321)
+        XCTAssertEqual(measured.activeEnergyKcal, expected, accuracy: 0.01)
+        XCTAssertFalse(measured.energyMethod?.contains("Apple Watch") == true)
     }
 
     func testRepeatedRIRZeroSetsRemainAdvisoryAndExtendRest() {
@@ -457,7 +458,7 @@ final class TrainingEngineTests: XCTestCase {
         )
 
         XCTAssertEqual(estimate.kilocalories, fallback, accuracy: fallback * 0.05)
-        XCTAssertTrue(estimate.method.contains("心率 + 有氧模型"))
+        XCTAssertTrue(estimate.method.contains("MET"))
     }
 
     func testCardioTimeSeriesWithoutDemographicsUsesPureMETModel() {
