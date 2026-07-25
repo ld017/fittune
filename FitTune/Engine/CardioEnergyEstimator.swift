@@ -46,14 +46,19 @@ enum CardioEnergyEstimator {
         let fallback = metEnergy(input: input)
         let deviceComparison = usableDeviceEnergy(input)
         let hasSustainedHandrail = segments.contains { $0.handrailSupport == .sustained }
+        let acsm = acsmCandidate(input: input, segments: segments)
         var warnings: [String] = []
         var requiredSpread = 0.0
 
-        if let acsm = acsmCandidate(input: input, segments: segments), !hasSustainedHandrail {
+        if let acsm, !hasSustainedHandrail {
             let distanceWarning = distanceWarning(input: input, segments: segments)
             if distanceWarning != nil {
                 warnings.append(distanceWarning!)
                 requiredSpread = 0.25
+            }
+            if segments.contains(where: { $0.handrailSupport == .occasional }) {
+                warnings.append("偶尔扶把会增加坡度走耗能的不确定性。")
+                requiredSpread = max(requiredSpread, 0.25)
             }
             let diagnostics = diagnostics(
                 input,
@@ -65,14 +70,14 @@ enum CardioEnergyEstimator {
             return estimate(
                 value: acsm.kcal,
                 spread: max(0.15, requiredSpread),
-                method: acsm.running ? "ACSM 跑步速度/坡度分段公式" : "ACSM 步行速度/坡度分段公式",
+                method: acsm.method,
                 confidence: acsm.coverage >= 0.8 ? "中高" : "中",
                 diagnostics: diagnostics
             )
         }
 
-        if hasSustainedHandrail {
-            warnings.append("持续扶把会降低坡度走的实际耗能，ACSM 仅作上限参考。")
+        if hasSustainedHandrail, let acsm {
+            warnings.append("持续扶把会降低坡度走的实际耗能；未扶把 ACSM \(acsm.kcal.rounded()) kcal 仅作上限参考。")
         }
         if let power = cyclingPowerCandidate(input: input, segments: segments) {
             let diagnostics = diagnostics(
@@ -100,7 +105,8 @@ enum CardioEnergyEstimator {
                 warnings: warnings,
                 comparison: deviceComparison
             )
-            return estimate(value: heartRate.kcal, spread: heartRate.coverage >= 0.8 ? 0.20 : 0.25, method: "Keytel 心率 + 有氧 MET 缺口填补", confidence: heartRate.coverage >= 0.8 ? "中" : "低至中", diagnostics: diagnostics)
+            let result = estimate(value: heartRate.kcal, spread: heartRate.coverage >= 0.8 ? 0.20 : 0.25, method: "Keytel 心率 + 有氧 MET 缺口填补", confidence: heartRate.coverage >= 0.8 ? "中" : "低至中", diagnostics: diagnostics)
+            return includingUnsupportedACSMUpperCheck(result, acsm: hasSustainedHandrail ? acsm : nil)
         }
 
         if input.importedDeviceOnly, let device = deviceComparison {
@@ -120,7 +126,8 @@ enum CardioEnergyEstimator {
             warnings: warnings,
             comparison: deviceComparison
         )
-        return estimate(value: fallback, spread: hasSustainedHandrail ? 0.30 : 0.25, method: "2024 Adult Compendium MET", confidence: "低至中", diagnostics: diagnostics)
+        let result = estimate(value: fallback, spread: hasSustainedHandrail ? 0.30 : 0.25, method: "2024 Adult Compendium MET", confidence: "低至中", diagnostics: diagnostics)
+        return includingUnsupportedACSMUpperCheck(result, acsm: hasSustainedHandrail ? acsm : nil)
     }
 
     private static func normalizedSegments(_ input: CardioEnergyInput) -> [Segment] {
@@ -143,7 +150,7 @@ enum CardioEnergyEstimator {
             }
     }
 
-    private static func acsmCandidate(input: CardioEnergyInput, segments: [Segment]) -> (kcal: Double, coverage: Double, running: Bool)? {
+    private static func acsmCandidate(input: CardioEnergyInput, segments: [Segment]) -> (kcal: Double, coverage: Double, method: String)? {
         guard [.inclineWalking, .briskWalking, .running].contains(input.modality) else { return nil }
         let valid = segments.filter { segment in
             guard let speed = segment.speedKph else { return false }
@@ -151,17 +158,23 @@ enum CardioEnergyEstimator {
         }
         let seconds = valid.reduce(0) { $0 + $1.seconds }
         guard seconds > 0 else { return nil }
-        let running = input.modality == .running || valid.contains { ($0.speedKph ?? 0) >= 8 }
+        let usesRunning = valid.contains { input.modality == .running || ($0.speedKph ?? 0) >= 8 }
+        let usesWalking = valid.contains { input.modality != .running && ($0.speedKph ?? 0) < 8 }
         let kcal = valid.reduce(0.0) { total, segment in
-            total + acsmActiveKcal(
+            let running = input.modality == .running || (segment.speedKph ?? 0) >= 8
+            return total + acsmActiveKcal(
                 speedKph: segment.speedKph ?? 0,
                 inclinePercent: segment.inclinePercent ?? 0,
                 minutes: segment.seconds / 60,
                 weightKg: input.weightKg,
                 running: running
             )
-        }
-        return (kcal, min(1, seconds / input.completedAt.timeIntervalSince(input.startedAt)), running)
+        } + metEnergy(input: input, seconds: input.completedAt.timeIntervalSince(input.startedAt) - seconds)
+        let method: String
+        if usesRunning && usesWalking { method = "ACSM 步行/跑步速度/坡度分段公式" }
+        else if usesRunning { method = "ACSM 跑步速度/坡度分段公式" }
+        else { method = "ACSM 步行速度/坡度分段公式" }
+        return (kcal, min(1, seconds / input.completedAt.timeIntervalSince(input.startedAt)), method)
     }
 
     private static func acsmActiveKcal(speedKph: Double, inclinePercent: Double, minutes: Double, weightKg: Double, running: Bool) -> Double {
@@ -178,16 +191,18 @@ enum CardioEnergyEstimator {
         let powered = segments.filter { ($0.powerWatts ?? 0) > 0 }
         let seconds = powered.reduce(0) { $0 + $1.seconds }
         let duration = input.completedAt.timeIntervalSince(input.startedAt)
-        guard seconds / duration >= 0.6 else { return nil }
+        guard seconds > 0 else { return nil }
         let powers = powered.compactMap(\.powerWatts)
         let mean = powers.reduce(0, +) / Double(powers.count)
         guard mean > 0, (powers.max() ?? mean) - (powers.min() ?? mean) <= mean * 0.10 else { return nil }
 
         let mechanicalKcal = powered.reduce(0.0) { $0 + ($1.powerWatts ?? 0) * $1.seconds } / 4_184
+        let restingDuringPower = restingEnergy(input: input, seconds: seconds)
+        let fallback = metEnergy(input: input, seconds: duration - seconds)
         return (
-            mechanicalKcal / 0.215,
-            mechanicalKcal / 0.25,
-            mechanicalKcal / 0.18,
+            max(0, mechanicalKcal / 0.215 - restingDuringPower) + fallback,
+            max(0, mechanicalKcal / 0.25 - restingDuringPower) + fallback,
+            max(0, mechanicalKcal / 0.18 - restingDuringPower) + fallback,
             min(1, seconds / duration)
         )
     }
@@ -237,12 +252,24 @@ enum CardioEnergyEstimator {
         } ?? []
     }
 
-    private static func metEnergy(input: CardioEnergyInput) -> Double {
+    private static func metEnergy(input: CardioEnergyInput, seconds: Double? = nil) -> Double {
         TrainingEngine.netActiveEnergy(
             met: TrainingEngine.cardioMET(modality: input.modality, intensity: input.intensity),
             weightKg: input.weightKg,
-            minutes: input.completedAt.timeIntervalSince(input.startedAt) / 60
+            minutes: max(0, seconds ?? input.completedAt.timeIntervalSince(input.startedAt)) / 60
         )
+    }
+
+    private static func restingEnergy(input: CardioEnergyInput, seconds: Double) -> Double {
+        let daily = input.profile.flatMap { TrainingEngine.restingEnergy(profile: $0, weightKg: input.weightKg) } ?? 24 * input.weightKg
+        return max(0, daily * seconds / 86_400)
+    }
+
+    private static func includingUnsupportedACSMUpperCheck(_ estimate: EnergyEstimate, acsm: (kcal: Double, coverage: Double, method: String)?) -> EnergyEstimate {
+        guard let acsm else { return estimate }
+        var result = estimate
+        result.upperBound = max(result.upperBound, acsm.kcal)
+        return result
     }
 
     private static func distanceWarning(input: CardioEnergyInput, segments: [Segment]) -> String? {

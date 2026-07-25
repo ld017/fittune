@@ -564,6 +564,7 @@ enum TrainingEngine {
             averageHeartRate: averageHeartRate,
             speedKph: speedKph,
             inclinePercent: inclinePercent,
+            powerWatts: powerWatts,
             measuredActiveEnergy: measuredActiveEnergy,
             metricSamples: metricSamples,
             startedAt: startedAt
@@ -603,21 +604,29 @@ enum TrainingEngine {
         averageHeartRate: Double? = nil,
         speedKph: Double? = nil,
         inclinePercent: Double? = nil,
+        powerWatts: Double? = nil,
         measuredActiveEnergy: Double? = nil,
         metricSamples: [WorkoutMetricSample] = [],
         startedAt: Date? = nil
     ) -> EnergyEstimate {
         let start = startedAt ?? .now.addingTimeInterval(-Double(minutes) * 60)
         let completedAt = start.addingTimeInterval(Double(minutes) * 60)
-        let legacySegments = speedKph.map {
-            [CardioWorkloadSegment(
+        let resolvedSpeed = speedKph ?? distanceKm.flatMap { distance in
+            minutes > 0 && distance > 0 ? distance / (Double(minutes) / 60) : nil
+        }
+        let legacySegments: [CardioWorkloadSegment]
+        if resolvedSpeed != nil || powerWatts != nil {
+            legacySegments = [CardioWorkloadSegment(
                 startedAt: start,
                 endedAt: completedAt,
-                speedKph: $0,
+                speedKph: resolvedSpeed,
                 inclinePercent: inclinePercent,
+                powerWatts: powerWatts,
                 source: .userEntered
             )]
-        } ?? []
+        } else {
+            legacySegments = []
+        }
         let legacySamples: [WorkoutMetricSample]
         if metricSamples.isEmpty, let averageHeartRate {
             let provenance = MetricProvenance(source: .manual, sourceName: "手动平均心率", confidence: .estimated, coverage: 1)

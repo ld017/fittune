@@ -62,19 +62,75 @@ final class CardioEnergyEstimatorTests: XCTestCase {
         XCTAssertNotEqual(estimate.kilocalories, TrainingEngine.netActiveEnergy(met: 6.5, weightKg: 70, minutes: 60))
     }
 
-    func testDistanceConflictAndSustainedHandrailsDemoteACSM() {
+    func testMixedWalkingAndRunningSegmentsUseTheirOwnACSMEquations() {
+        let estimate = CardioEnergyEstimator.estimate(input(workloadSegments: [
+            .init(startedAt: start, endedAt: start.addingTimeInterval(1_800), speedKph: 5, inclinePercent: 8, source: .userEntered),
+            .init(startedAt: start.addingTimeInterval(1_800), endedAt: start.addingTimeInterval(3_600), speedKph: 10, inclinePercent: 0, source: .userEntered)
+        ]))
+
+        XCTAssertEqual(estimate.kilocalories, 563.5, accuracy: 0.1)
+        XCTAssertTrue(estimate.method.contains("ACSM"))
+    }
+
+    func testPartialMechanicalCoverageFillsOnlyUncoveredTimeWithMET() {
+        let cases: [(String, CardioEnergyInput, Double, Double, Double)] = [
+            (
+                "ACSM",
+                input(workloadSegments: [
+                    .init(startedAt: start, endedAt: start.addingTimeInterval(1_800), speedKph: 5, inclinePercent: 8, source: .userEntered)
+                ]),
+                415.6,
+                353.3,
+                477.9
+            ),
+            (
+                "power",
+                input(modality: .cycling, workloadSegments: [
+                    .init(startedAt: start, endedAt: start.addingTimeInterval(1_800), powerWatts: 200, source: .device)
+                ]),
+                578.3,
+                522.3,
+                656.2
+            )
+        ]
+
+        for (name, value, expected, lower, upper) in cases {
+            let estimate = CardioEnergyEstimator.estimate(value)
+            XCTAssertEqual(estimate.kilocalories, expected, accuracy: 0.2, name)
+            XCTAssertEqual(estimate.lowerBound, lower, accuracy: 0.2, name)
+            XCTAssertEqual(estimate.upperBound, upper, accuracy: 0.2, name)
+        }
+    }
+
+    func testClippedOpenOverlappingSegmentsCountOnlySessionTimeOnce() {
+        let estimate = CardioEnergyEstimator.estimate(input(workloadSegments: [
+            .init(startedAt: start.addingTimeInterval(-600), endedAt: start.addingTimeInterval(1_800), speedKph: 5, inclinePercent: 0, source: .userEntered),
+            .init(startedAt: start.addingTimeInterval(1_200), speedKph: 5, inclinePercent: 0, source: .userEntered)
+        ]))
+
+        XCTAssertEqual(estimate.kilocalories, 175, accuracy: 0.1)
+    }
+
+    func testDistanceConflictAndHandrailRulesAdjustACSMUse() {
         let mismatched = CardioEnergyEstimator.estimate(input(
             confirmedDistanceKm: 2,
             workloadSegments: [walkingSegment(speedKph: 5, inclinePercent: 8)]
         ))
-        let handrails = CardioEnergyEstimator.estimate(input(
+        let sustained = CardioEnergyEstimator.estimate(input(
             workloadSegments: [walkingSegment(speedKph: 5, inclinePercent: 8, handrailSupport: .sustained)]
+        ))
+        let occasional = CardioEnergyEstimator.estimate(input(
+            workloadSegments: [walkingSegment(speedKph: 5, inclinePercent: 8, handrailSupport: .occasional)]
         ))
 
         XCTAssertTrue(mismatched.diagnostics?.warnings.contains { $0.contains("距离") } == true)
         XCTAssertGreaterThanOrEqual(mismatched.upperBound / mismatched.kilocalories, 1.25)
-        XCTAssertFalse(handrails.diagnostics?.primaryModel.contains("ACSM") == true)
-        XCTAssertFalse(handrails.method.contains("ACSM"))
+        XCTAssertFalse(sustained.diagnostics?.primaryModel.contains("ACSM") == true)
+        XCTAssertTrue(sustained.method.contains("MET"))
+        XCTAssertGreaterThanOrEqual(sustained.upperBound, 427)
+        XCTAssertTrue(sustained.diagnostics?.warnings.contains { $0.contains("427") && $0.contains("上限") } == true)
+        XCTAssertTrue(occasional.method.contains("ACSM"))
+        XCTAssertGreaterThanOrEqual(occasional.upperBound / occasional.kilocalories, 1.25)
     }
 
     func testHeartRateFillsOnlyCoveredIntervalsAndMETFillsGap() {
@@ -107,8 +163,8 @@ final class CardioEnergyEstimatorTests: XCTestCase {
         ))
 
         XCTAssertTrue(estimate.method.contains("功率"))
-        XCTAssertEqual(estimate.lowerBound, 688.3, accuracy: 1)
-        XCTAssertEqual(estimate.upperBound, 955.9, accuracy: 1)
+        XCTAssertEqual(estimate.lowerBound, 618.3, accuracy: 1)
+        XCTAssertEqual(estimate.upperBound, 885.9, accuracy: 1)
     }
 
     func testDeviceOnlyImportUsesWideDeviceRangeButManualValueStaysComparison() {

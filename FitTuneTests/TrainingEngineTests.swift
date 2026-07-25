@@ -406,6 +406,29 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertGreaterThan(estimate.upperBound, estimate.kilocalories)
     }
 
+    func testLegacyCardioWrapperDerivesSpeedFromDistanceAndPreservesPower() {
+        let walking = TrainingEngine.makeCardioWorkout(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            minutes: 60,
+            weightKg: 70,
+            distanceKm: 5,
+            inclinePercent: 8
+        )
+        let cycling = TrainingEngine.makeCardioWorkout(
+            modality: .cycling,
+            intensity: .zone2,
+            minutes: 60,
+            weightKg: 70,
+            powerWatts: 200
+        )
+
+        XCTAssertEqual(walking.activeEnergyKcal, 427, accuracy: 1)
+        XCTAssertTrue(walking.energyMethod?.contains("ACSM") == true)
+        XCTAssertTrue(cycling.energyMethod?.contains("功率") == true)
+        XCTAssertEqual(cycling.energyLowerBoundKcal ?? 0, 618.3, accuracy: 1)
+    }
+
     func testHeartRateEnergyIsUsedWhenProfileAndHeartRateExist() {
         var user = profile(goal: .generalFitness, experience: .intermediate)
         user.ageYears = 30
