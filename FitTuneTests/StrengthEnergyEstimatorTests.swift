@@ -82,6 +82,28 @@ final class StrengthEnergyEstimatorTests: XCTestCase {
         XCTAssertEqual(estimate.diagnostics?.dataCoverage, 1)
     }
 
+    func testHeartRateIntervalsStraddlingPauseBoundariesKeepActiveSegments() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
+        var record = self.record(
+            start: start,
+            minutes: 1,
+            rpe: 8,
+            sets: timedSets(count: 15, pattern: .squat, start: start, spacing: 1),
+            pauses: [WorkoutPauseInterval(startedAt: start.addingTimeInterval(15), endedAt: start.addingTimeInterval(25))]
+        )
+        record.metricSamples = [0.0, 10.0, 20.0, 30.0, 40.0].map {
+            WorkoutMetricSample(timestamp: start.addingTimeInterval($0), heartRateBPM: 190, provenance: source)
+        }
+        var structuralRecord = record
+        structuralRecord.metricSamples = nil
+
+        let structural = StrengthEnergyEstimator.estimate(record: structuralRecord, weightKg: 70, profile: nil)
+        let adjusted = StrengthEnergyEstimator.estimate(record: record, weightKg: 70, profile: completeProfile())
+
+        XCTAssertEqual(adjusted.kilocalories, structural.kilocalories * 1.15, accuracy: 0.001)
+    }
+
     func testMissingSessionRPEUsesStructuralModelAndWiderRange() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var sets = timedSets(count: 6, pattern: .arms, start: start, spacing: 300)

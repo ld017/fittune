@@ -197,16 +197,37 @@ enum StrengthEnergyEstimator {
         }
         let candidates = Dictionary(grouping: valid, by: \.source).values.map { values -> [HeartRateInterval] in
             let sorted = values.sorted { $0.date < $1.date }
-            return zip(sorted, sorted.dropFirst()).compactMap { left, right in
+            let segments = zip(sorted, sorted.dropFirst()).map { left, right -> [HeartRateInterval] in
                 let seconds = right.date.timeIntervalSince(left.date)
-                guard seconds > 0, seconds <= 15 else { return nil }
+                guard seconds > 0, seconds <= 15 else { return [] }
                 let interval = HeartRateInterval(startedAt: left.date, endedAt: right.date, bpm: (left.bpm + right.bpm) / 2)
-                guard !pauses.contains(where: { interval.startedAt < $0.endedAt && interval.endedAt > $0.startedAt }) else { return nil }
-                return interval
+                return activeSegments(of: interval, excluding: pauses)
             }
+            return segments.flatMap { $0 }
         }
         return candidates.max { left, right in
             left.reduce(0) { $0 + $1.seconds } < right.reduce(0) { $0 + $1.seconds }
         } ?? []
+    }
+
+    private static func activeSegments(
+        of interval: HeartRateInterval,
+        excluding pauses: [CompletedPause]
+    ) -> [HeartRateInterval] {
+        var cursor = interval.startedAt
+        var segments: [HeartRateInterval] = []
+        for pause in pauses where pause.endedAt > cursor {
+            guard pause.startedAt < interval.endedAt else { break }
+            let activeEnd = min(interval.endedAt, pause.startedAt)
+            if activeEnd > cursor {
+                segments.append(HeartRateInterval(startedAt: cursor, endedAt: activeEnd, bpm: interval.bpm))
+            }
+            cursor = max(cursor, pause.endedAt)
+            if cursor >= interval.endedAt { return segments }
+        }
+        if cursor < interval.endedAt {
+            segments.append(HeartRateInterval(startedAt: cursor, endedAt: interval.endedAt, bpm: interval.bpm))
+        }
+        return segments
     }
 }
