@@ -1072,7 +1072,9 @@ final class AppStore {
     func startCurrentDraftSet(at startedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
               draft.phase == .training,
-              draft.currentPauseStartedAt == nil else { return }
+              draft.currentPauseStartedAt == nil,
+              startedAt >= (draft.results.last?.restEndedAt ?? draft.results.last?.completedAt ?? startedAt) else { return }
+        finalizePreviousSetResponse(in: &draft, nextSetStartedAt: startedAt)
         draft.currentSetStartedAt = startedAt
         draft.phase = .setActive
         draft.updatedAt = startedAt
@@ -1264,7 +1266,7 @@ final class AppStore {
         let exercise = draft.session.exercises[draft.exerciseIndex]
         guard draft.setNumber < draft.totalPlannedSets else { return }
 
-        closeCurrentRest(in: &draft, at: restEndedAt)
+        guard closeCurrentRest(in: &draft, at: restEndedAt) else { return }
 
         let previousKind = draft.currentSetKind
         draft.setNumber += 1
@@ -1436,7 +1438,7 @@ final class AppStore {
     func advanceDraftToNextExercise(at restEndedAt: Date = .now) -> Bool {
         guard var draft = activeWorkoutDraft,
               draft.exerciseIndex + 1 < draft.session.exercises.count else { return false }
-        closeCurrentRest(in: &draft, at: restEndedAt)
+        guard closeCurrentRest(in: &draft, at: restEndedAt) else { return false }
         draft.exerciseIndex += 1
         prepareDraftForCurrentExercise(&draft)
         activeWorkoutDraft = draft
@@ -1509,12 +1511,26 @@ final class AppStore {
         return record
     }
 
-    private func closeCurrentRest(in draft: inout WorkoutDraft, at restEndedAt: Date) {
-        guard let restStartedAt = draft.restStartedAt,
-              restEndedAt >= restStartedAt,
-              let resultIndex = draft.results.lastIndex(where: { $0.restEndedAt == nil }) else { return }
+    private func closeCurrentRest(in draft: inout WorkoutDraft, at restEndedAt: Date) -> Bool {
+        guard let restStartedAt = draft.restStartedAt else { return true }
+        guard restEndedAt >= restStartedAt,
+              let resultIndex = draft.results.lastIndex(where: { $0.restEndedAt == nil }),
+              restEndedAt >= draft.results[resultIndex].completedAt else { return false }
         draft.results[resultIndex].restEndedAt = restEndedAt
         draft.results[resultIndex].actualRestSeconds = restEndedAt.timeIntervalSince(restStartedAt)
+        return true
+    }
+
+    private func finalizePreviousSetResponse(in draft: inout WorkoutDraft, nextSetStartedAt: Date) {
+        guard let resultIndex = draft.results.lastIndex(where: { $0.startedAt != nil }),
+              let setStartedAt = draft.results[resultIndex].startedAt,
+              draft.results[resultIndex].completedAt <= nextSetStartedAt else { return }
+        draft.results[resultIndex].heartRateResponse = HeartRateAnalysisEngine.setResponse(
+            samples: draft.metricSamples ?? [],
+            setStartedAt: setStartedAt,
+            setCompletedAt: draft.results[resultIndex].completedAt,
+            nextSetStartedAt: nextSetStartedAt
+        )
     }
 
     private func prepareDraftForCurrentExercise(_ draft: inout WorkoutDraft) {

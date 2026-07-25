@@ -54,6 +54,71 @@ final class WorkoutLifecycleTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(store.activeWorkoutDraft?.results.first).startedAt)
     }
 
+    @MainActor
+    func testStaleAdvanceDoesNotMoveNextSetOrExercise() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let setStore = makeStrengthStore()
+        setStore.startCurrentDraftSet(at: start)
+        setStore.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        setStore.advanceDraftToNextSet(at: start.addingTimeInterval(29))
+
+        XCTAssertEqual(setStore.activeWorkoutDraft?.setNumber, 1)
+        XCTAssertEqual(setStore.activeWorkoutDraft?.phase, .resting)
+        XCTAssertNil(setStore.activeWorkoutDraft?.results.last?.restEndedAt)
+
+        let exerciseStore = makeTwoExerciseStrengthStore()
+        exerciseStore.startCurrentDraftSet(at: start)
+        exerciseStore.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        XCTAssertFalse(exerciseStore.advanceDraftToNextExercise(at: start.addingTimeInterval(29)))
+        XCTAssertEqual(exerciseStore.activeWorkoutDraft?.exerciseIndex, 0)
+        XCTAssertNil(exerciseStore.activeWorkoutDraft?.results.last?.restEndedAt)
+    }
+
+    @MainActor
+    func testRetrogradeSetStartIsRejectedAfterRestHasEnded() {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        store.advanceDraftToNextSet(at: start.addingTimeInterval(210))
+
+        store.startCurrentDraftSet(at: start.addingTimeInterval(200))
+
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .training)
+        XCTAssertNil(store.activeWorkoutDraft?.currentSetStartedAt)
+    }
+
+    @MainActor
+    func testNextSetStartFinalizesPreviousResponseAtCutoff() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        for (seconds, bpm) in [(30.0, 170.0), (90.0, 140.0), (150.0, 120.0)] {
+            store.appendLiveMetricSample(
+                .init(timestamp: start.addingTimeInterval(seconds), heartRateBPM: bpm, provenance: source),
+                validity: .valid,
+                now: start.addingTimeInterval(seconds)
+            )
+        }
+        XCTAssertEqual(try XCTUnwrap(store.activeWorkoutDraft?.results.first).heartRateResponse?.hrr120, 50)
+
+        store.advanceDraftToNextSet(at: start.addingTimeInterval(100))
+        store.startCurrentDraftSet(at: start.addingTimeInterval(110))
+        store.appendLiveMetricSample(
+            .init(timestamp: start.addingTimeInterval(160), heartRateBPM: 110, provenance: source),
+            validity: .valid,
+            now: start.addingTimeInterval(160)
+        )
+
+        let response = try XCTUnwrap(store.activeWorkoutDraft?.results.first?.heartRateResponse)
+        XCTAssertEqual(response.hrr60, 30)
+        XCTAssertNil(response.hrr120)
+    }
+
     func testLockScreenSnapshotUsesCurrentUserPlannedSetAndHeartRate() {
         let exercise = ExercisePrescription(name: "杠铃卧推", pattern: .horizontalPush, sets: 5, repLower: 6, repUpper: 8, targetRIR: 0, isPriority: true, equipmentKind: .barbell)
         let session = TrainingSession(name: "胸", focus: "胸", exercises: [exercise])
@@ -115,6 +180,18 @@ final class WorkoutLifecycleTests: XCTestCase {
             workingSets: 3
         )
         store.startWorkout(TrainingSession(name: "腿", focus: "股四头", exercises: [exercise]))
+        return store
+    }
+
+    @MainActor
+    private func makeTwoExerciseStrengthStore() -> AppStore {
+        let suite = "FitTuneTests.StrengthTimeline.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AppStore(defaults: defaults)
+        let first = ExercisePrescription(name: "杠铃深蹲", pattern: .squat, sets: 1, repLower: 5, repUpper: 8, targetRIR: 1, isPriority: true, workingSets: 1)
+        let second = ExercisePrescription(name: "卧推", pattern: .horizontalPush, sets: 1, repLower: 5, repUpper: 8, targetRIR: 1, isPriority: true, workingSets: 1)
+        store.startWorkout(TrainingSession(name: "全身", focus: "全身", exercises: [first, second]))
         return store
     }
 }
