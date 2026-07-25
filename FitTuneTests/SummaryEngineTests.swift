@@ -93,4 +93,170 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertEqual(revision.reason, "华为健康事后同步")
         XCTAssertEqual(revision.summary.algorithmVersion, SummaryEngine.algorithmVersion)
     }
+
+    func testCardioSummaryReportsTimeWeightedHRRLoadAndFatOxidationOpportunity() throws {
+        let record = makeSteadyInclineRecord(
+            durationMinutes: 60,
+            heartRateBPM: 125
+        )
+
+        let summary = SummaryEngine.cardioSummary(
+            for: record,
+            restingHeartRate: 60,
+            maximumHeartRate: 180
+        )
+
+        XCTAssertGreaterThan(summary.cardio?.aerobicBaseMinutes ?? 0, 50)
+        XCTAssertGreaterThan(summary.cardio?.fatOxidationOpportunityMinutes ?? 0, 50)
+        XCTAssertGreaterThan(summary.cardio?.zoneLoadAU ?? 0, 0)
+        XCTAssertNil(summary.cardio?.vo2Max)
+    }
+
+    func testVariableWorkloadDoesNotInventHeartRateDrift() {
+        let summary = SummaryEngine.cardioSummary(
+            for: makeVariableIntervalRecord(),
+            restingHeartRate: 60,
+            maximumHeartRate: 180
+        )
+
+        XCTAssertNil(summary.cardio?.heartRateDriftPercent)
+    }
+
+    func testStrengthSummaryShowsActualRestAndPerformanceRetention() {
+        let summary = SummaryEngine.strengthSummary(
+            for: makeTimedStrengthRecord(),
+            bodyWeightKg: 70,
+            maximumHeartRate: 180
+        )
+
+        XCTAssertEqual(summary.strength?.averageActualRestSeconds, 180)
+        XCTAssertNotNil(summary.strength?.performanceRetention)
+        XCTAssertFalse(summary.strength?.heartRateResponses?.isEmpty ?? true)
+    }
+
+    private func makeSteadyInclineRecord(
+        durationMinutes: Int,
+        heartRateBPM: Double
+    ) -> CardioWorkoutRecord {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = start.addingTimeInterval(Double(durationMinutes) * 60)
+        let provenance = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "H10",
+            confidence: .measured,
+            coverage: 1
+        )
+        var record = CardioWorkoutRecord(
+            date: start,
+            modality: .inclineWalking,
+            intensity: .zone2,
+            durationMinutes: durationMinutes,
+            distanceKm: 5,
+            averageHeartRate: heartRateBPM,
+            activeEnergyKcal: 427,
+            source: "FitTune"
+        )
+        record.workloadSegments = [
+            CardioWorkloadSegment(
+                startedAt: start,
+                endedAt: end,
+                speedKph: 5,
+                inclinePercent: 8,
+                source: .userEntered
+            )
+        ]
+        record.metricSamples = stride(
+            from: 0.0,
+            through: Double(durationMinutes) * 60,
+            by: 10
+        ).map {
+            WorkoutMetricSample(
+                timestamp: start.addingTimeInterval($0),
+                heartRateBPM: heartRateBPM,
+                provenance: provenance
+            )
+        }
+        return record
+    }
+
+    private func makeVariableIntervalRecord() -> CardioWorkoutRecord {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let midpoint = start.addingTimeInterval(900)
+        let end = start.addingTimeInterval(1_800)
+        var record = makeSteadyInclineRecord(
+            durationMinutes: 30,
+            heartRateBPM: 140
+        )
+        record.workloadSegments = [
+            .init(
+                startedAt: start,
+                endedAt: midpoint,
+                speedKph: 4,
+                inclinePercent: 4,
+                source: .userEntered
+            ),
+            .init(
+                startedAt: midpoint,
+                endedAt: end,
+                speedKph: 8,
+                inclinePercent: 10,
+                source: .userEntered
+            )
+        ]
+        return record
+    }
+
+    private func makeTimedStrengthRecord() -> WorkoutRecord {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let exerciseID = UUID()
+        let response = SetHeartRateResponse(
+            peakBPM: 165,
+            peakDelaySeconds: 30,
+            hrr60: 22,
+            hrr120: 36,
+            sourceName: "H10",
+            confidence: .derived
+        )
+        let firstEnd = start.addingTimeInterval(30)
+        let secondStart = firstEnd.addingTimeInterval(180)
+        return WorkoutRecord(
+            sessionName: "腿",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(600),
+            readinessScore: 80,
+            sets: [
+                SetResult(
+                    exerciseID: exerciseID,
+                    exerciseName: "杠铃深蹲",
+                    setNumber: 1,
+                    loadKg: 100,
+                    reps: 8,
+                    rir: 1,
+                    completedAt: firstEnd,
+                    movementPattern: .squat,
+                    techniqueQuality: 4,
+                    setKind: .working,
+                    startedAt: start,
+                    restEndedAt: secondStart,
+                    actualRestSeconds: 180,
+                    heartRateResponse: response
+                ),
+                SetResult(
+                    exerciseID: exerciseID,
+                    exerciseName: "杠铃深蹲",
+                    setNumber: 2,
+                    loadKg: 100,
+                    reps: 8,
+                    rir: 1,
+                    completedAt: secondStart.addingTimeInterval(30),
+                    movementPattern: .squat,
+                    techniqueQuality: 4,
+                    setKind: .working,
+                    startedAt: secondStart,
+                    heartRateResponse: response
+                )
+            ],
+            sessionRPE: 8
+        )
+    }
 }

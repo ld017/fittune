@@ -358,6 +358,16 @@ enum TrainingEngine {
         return loadKg * (1 + Double(estimatedMaxReps) / 30.0)
     }
 
+    static func comparableSetPerformanceRetention(for sets: [SetResult]) -> Double? {
+        let retentions = zip(sets, sets.dropFirst()).compactMap { first, next -> Double? in
+            guard canComparePerformance(first, next, expectedKind: first.resolvedSetKind) else {
+                return nil
+            }
+            return summaryPerformanceRetention(first: first, next: next)
+        }
+        return retentions.isEmpty ? nil : average(retentions)
+    }
+
     static func weightTrend(entries: [WeightEntry]) -> Double? {
         let sorted = entries.sorted { $0.date < $1.date }
         guard sorted.count >= 4 else { return nil }
@@ -1384,6 +1394,18 @@ enum TrainingEngine {
             ratios.append(min(1.2, max(0, Double(nextQuality) / Double(firstQuality))))
         }
         return average(ratios)
+    }
+
+    private static func summaryPerformanceRetention(first: SetResult, next: SetResult) -> Double? {
+        guard let firstE1RM = estimatedOneRepMax(loadKg: first.loadKg, reps: first.reps, rir: first.rir),
+              let nextE1RM = estimatedOneRepMax(loadKg: next.loadKg, reps: next.reps, rir: next.rir),
+              firstE1RM > 0,
+              first.reps > 0 else {
+            return nil
+        }
+        let e1RMRetention = min(1.2, max(0, nextE1RM / firstE1RM))
+        let repRetention = min(1.2, max(0, Double(next.reps) / Double(first.reps)))
+        return (e1RMRetention + repRetention) / 2
     }
 
     private static func recoveryComparison(
