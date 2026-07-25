@@ -23,3 +23,9 @@ Completed and committed from base `dc97897`.
 - Modified 7 source/test/fixture files: 396 insertions and 98 deletions.
 - No remaining fixed `recovery < 12`, `recovery < 22`, or `calibrationSessions` references.
 - AppStore changes are a minimal contract migration; historical set timing/heart-rate persistence remains outside this task as requested.
+
+## Fix Round 1
+
+- Calibration confidence now counts only the valid comparable pairs that provide the recovery window being compared. Missing HRR60/HRR120 baselines return insufficient history and keep confidence calibrating.
+- Personal-rest calibration now requires five structural pairs before selecting the retention-qualified subset. One retained rest is enough to form the range-clamped personal candidate.
+- RED/GREEN regressions cover no usable response windows across five timed pairs and five structural pairs with only four retained pairs.

@@ -27,10 +27,11 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertEqual(rest.upperSeconds, 300)
     }
 
-    func testPersonalComparableRestChangesMidpointWithoutLoweringEvidenceFloor() {
+    func testPersonalRestUsesRetainedSubsetAfterFiveComparablePairs() {
         let exerciseID = UUID()
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let historicalSets = (0..<5).flatMap { index -> [SetResult] in
+            let nextReps = index == 4 ? 6 : 8
             let first = SetResult(
                 exerciseID: exerciseID,
                 exerciseName: "杠铃深蹲",
@@ -48,7 +49,7 @@ final class TrainingEngineTests: XCTestCase {
                 exerciseName: "杠铃深蹲",
                 setNumber: 2,
                 loadKg: 100,
-                reps: 8,
+                reps: nextReps,
                 rir: 2,
                 completedAt: first.completedAt.addingTimeInterval(195),
                 setKind: .working,
@@ -79,6 +80,68 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertEqual(rest.lowerSeconds, 120)
         XCTAssertEqual(rest.recommendedSeconds, 195)
         XCTAssertEqual(rest.upperSeconds, 240)
+    }
+
+    func testRecoveryCalibrationCountsUsableResponseWindowsInsteadOfTimedPairs() {
+        let exerciseID = UUID()
+        let start = Date(timeIntervalSince1970: 1_700_100_000)
+        let sets = (0..<5).flatMap { index -> [SetResult] in
+            let first = SetResult(
+                exerciseID: exerciseID,
+                exerciseName: "杠铃深蹲",
+                setNumber: 1,
+                loadKg: 100,
+                reps: 8,
+                rir: 2,
+                completedAt: start.addingTimeInterval(Double(index) * 86_400),
+                setKind: .working,
+                startedAt: start.addingTimeInterval(Double(index) * 86_400 - 30),
+                actualRestSeconds: 180
+            )
+            let next = SetResult(
+                exerciseID: exerciseID,
+                exerciseName: "杠铃深蹲",
+                setNumber: 2,
+                loadKg: 100,
+                reps: 8,
+                rir: 2,
+                completedAt: first.completedAt.addingTimeInterval(180),
+                setKind: .working,
+                startedAt: first.completedAt.addingTimeInterval(150)
+            )
+            return [first, next]
+        }
+        let history = [WorkoutRecord(
+            sessionName: "腿",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(5 * 86_400),
+            readinessScore: 80,
+            sets: sets
+        )]
+        let response = SetHeartRateResponse(
+            peakBPM: 170,
+            peakDelaySeconds: 30,
+            hrr60: 20,
+            hrr120: nil,
+            sourceName: "FIT 3",
+            confidence: .derived
+        )
+
+        let calibration = TrainingEngine.personalRecoveryComparison(currentResponse: response, history: history)
+        let advice = LiveAdaptationEngine.adapt(
+            baseRecommendation: .init(nextLoadKg: 100, adjustment: .hold, reason: "基础", confidence: "中", restSeconds: 180, suggestedRemainingSets: 2, continuation: .continueTraining),
+            baseRest: .init(lowerSeconds: 120, recommendedSeconds: 180, upperSeconds: 240, confidence: "中", reasons: ["基础"], inputsUsed: ["RIR"]),
+            currentLoadKg: 100,
+            liveSignal: .init(response: response, personalComparison: calibration.comparison, sourceName: "FIT 3"),
+            calibrationPairs: calibration.calibrationPairs,
+            hasPain: false,
+            painAlertThresholdReached: false,
+            maximumHeartRateAlert: nil
+        )
+
+        XCTAssertEqual(calibration.comparison, .insufficientHistory)
+        XCTAssertEqual(calibration.calibrationPairs, 0)
+        XCTAssertEqual(advice.confidence, .calibrating)
     }
 
     func testLowRepHighRelativeLoadUsesThreeToFiveMinuteFloorOutsideCompoundContext() {

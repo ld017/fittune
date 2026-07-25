@@ -205,23 +205,29 @@ enum TrainingEngine {
     ) -> (comparison: PersonalRecoveryComparison, calibrationPairs: Int) {
         guard let currentResponse else { return (.insufficientHistory, 0) }
         let pairs = historicalComparablePairs(in: history)
-        guard pairs.count >= 5 else { return (.insufficientHistory, pairs.count) }
         let responses = pairs.compactMap(\.first.heartRateResponse)
-        let comparison60 = recoveryComparison(
-            current: currentResponse.hrr60,
-            baseline: responses.compactMap(\.hrr60),
-            minimumDifference: 5
-        )
-        let comparison120 = recoveryComparison(
-            current: currentResponse.hrr120,
-            baseline: responses.compactMap(\.hrr120),
-            minimumDifference: 8
-        )
-        let comparisons = [comparison60, comparison120]
-        guard comparisons.contains(where: { $0 != nil }) else {
-            return (.insufficientHistory, pairs.count)
+        var comparisons: [(isSlower: Bool, pairCount: Int)] = []
+
+        if let hrr60 = currentResponse.hrr60 {
+            let baseline = responses.compactMap(\.hrr60)
+            guard baseline.count >= 5 else { return (.insufficientHistory, baseline.count) }
+            comparisons.append((
+                recoveryComparison(current: hrr60, baseline: baseline, minimumDifference: 5) ?? false,
+                baseline.count
+            ))
         }
-        return (comparisons.contains { $0 == true } ? .slowerThanBaseline : .withinBaseline, pairs.count)
+        if let hrr120 = currentResponse.hrr120 {
+            let baseline = responses.compactMap(\.hrr120)
+            guard baseline.count >= 5 else { return (.insufficientHistory, baseline.count) }
+            comparisons.append((
+                recoveryComparison(current: hrr120, baseline: baseline, minimumDifference: 8) ?? false,
+                baseline.count
+            ))
+        }
+        guard let calibrationPairs = comparisons.map(\.pairCount).min() else {
+            return (.insufficientHistory, 0)
+        }
+        return (comparisons.contains { $0.isSlower } ? .slowerThanBaseline : .withinBaseline, calibrationPairs)
     }
 
     static func recommendStartingLoad(
@@ -1265,11 +1271,13 @@ enum TrainingEngine {
         evidenceRange: ClosedRange<Int>
     ) -> Int? {
         let currentExercise = canonicalExerciseKey(current.exerciseName)
-        let retainedRests = historicalComparablePairs(in: history)
+        let pairs = historicalComparablePairs(in: history)
             .filter { canonicalExerciseKey($0.first.exerciseName) == currentExercise && $0.first.resolvedSetKind == setKind }
+        guard pairs.count >= 5 else { return nil }
+        let retainedRests = pairs
             .filter { performanceRetention(first: $0.first, next: $0.next) >= 0.95 }
             .compactMap { $0.first.actualRestSeconds }
-        guard retainedRests.count >= 5 else { return nil }
+        guard !retainedRests.isEmpty else { return nil }
         let roundedUp = Int((median(retainedRests) / 15).rounded(.up)) * 15
         return min(evidenceRange.upperBound, max(evidenceRange.lowerBound, roundedUp))
     }
