@@ -188,6 +188,55 @@ struct MetricRange: Codable, Equatable {
     var provenance: MetricProvenance
 }
 
+struct EnergyEstimateDiagnostics: Codable, Equatable {
+    var primaryModel: String
+    var inputsUsed: [String]
+    var warnings: [String]
+    var comparisonEstimateKcal: Double?
+    var dataCoverage: Double
+}
+
+enum HeartRateIntensityZone: String, CaseIterable, Codable, Hashable {
+    case veryLight
+    case light
+    case moderate
+    case vigorous
+    case nearMaximum
+}
+
+struct HeartRateIntensitySummary: Codable, Equatable {
+    var secondsByZone: [HeartRateIntensityZone: Double]
+    var zoneLoadAU: Double
+    var aerobicBaseMinutes: Double
+    var vigorousMinutes: Double
+    var fatOxidationOpportunityMinutes: Double
+    var coverage: Double
+    var usedHeartRateReserve: Bool
+    var confidence: DataConfidence
+}
+
+struct HeartRateDriftResult: Codable, Equatable {
+    var percent: Double
+    var confidence: DataConfidence
+    var workloadCoverage: Double
+    var heartRateCoverage: Double
+}
+
+struct SetHeartRateResponse: Codable, Equatable {
+    var peakBPM: Double
+    var peakDelaySeconds: Int
+    var hrr60: Double?
+    var hrr120: Double?
+    var sourceName: String
+    var confidence: DataConfidence
+}
+
+enum PersonalRecoveryComparison: String, Codable, Equatable {
+    case insufficientHistory
+    case withinBaseline
+    case slowerThanBaseline
+}
+
 struct StrengthSummaryMetrics: Codable, Equatable {
     var volumeLoadKg: Double
     var workingSetCount: Int
@@ -198,6 +247,12 @@ struct StrengthSummaryMetrics: Codable, Equatable {
     var e1RMConfidence: DataConfidence
     var muscleLoad: [String: Double]
     var heartRateDecisions: [HeartRateDecisionEvent]? = nil
+    var averageSetDurationSeconds: Double? = nil
+    var averageActualRestSeconds: Double? = nil
+    var workToRestRatio: Double? = nil
+    var performanceRetention: Double? = nil
+    var restRecommendationAccuracy: Double? = nil
+    var heartRateResponses: [SetHeartRateResponse]? = nil
 }
 
 struct HeartRateDecisionEvent: Identifiable, Codable, Equatable {
@@ -219,6 +274,17 @@ struct CardioSummaryMetrics: Codable, Equatable {
     var heartRateRecovery60: Double?
     var vo2Max: Double?
     var vo2MaxConfidence: DataConfidence
+    var secondsByIntensityZone: [HeartRateIntensityZone: Double]? = nil
+    var zoneLoadAU: Double? = nil
+    var aerobicBaseMinutes: Double? = nil
+    var vigorousMinutes: Double? = nil
+    var fatOxidationOpportunityMinutes: Double? = nil
+    var cardiorespiratoryStimulus: Double? = nil
+    var heartRateDriftPercent: Double? = nil
+    var heartRateDriftConfidence: DataConfidence? = nil
+    var workloadConsistency: Double? = nil
+    var heartRateCoverage: Double? = nil
+    var workloadCoverage: Double? = nil
 }
 
 struct WorkoutSummary: Codable, Equatable {

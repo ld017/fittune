@@ -573,6 +573,7 @@ struct ExercisePrescription: Identifiable, Codable, Hashable {
     /// Explicit working-set target introduced in schema 14. A missing value
     /// preserves the legacy meaning where `sets` represented all sets.
     var workingSets: Int? = nil
+    var isCompound: Bool? = nil
 
     var resolvedWorkingSets: Int { max(1, workingSets ?? sets) }
 
@@ -706,6 +707,12 @@ struct SetResult: Identifiable, Codable, Equatable {
     var techniqueQuality: Int? = nil
     var feeling: SetFeeling? = nil
     var setKind: SetKind? = nil
+    var startedAt: Date? = nil
+    var restEndedAt: Date? = nil
+    var actualRestSeconds: Double? = nil
+    var heartRateResponse: SetHeartRateResponse? = nil
+    var isCompound: Bool? = nil
+    var restRecommendationSnapshot: RestRecommendation? = nil
 
     var resolvedSetKind: SetKind { setKind ?? .working }
 }
@@ -813,6 +820,10 @@ struct WorkoutRecord: Identifiable, Codable, Equatable {
     var summary: WorkoutSummary? = nil
     var summaryRevisions: [SummaryRevision]? = nil
     var heartRateDecisionLog: [HeartRateDecisionEvent]? = nil
+    var pauseIntervals: [WorkoutPauseInterval]? = nil
+    var energyDiagnostics: EnergyEstimateDiagnostics? = nil
+    var deviceActiveEnergyEstimateKcal: Double? = nil
+    var deviceEnergySource: MetricSource? = nil
 
     var resolvedCompletionStatus: WorkoutCompletionStatus {
         completionStatus ?? .completed
@@ -853,6 +864,12 @@ struct CardioWorkoutRecord: Identifiable, Codable, Equatable {
     var metricSamples: [WorkoutMetricSample]? = nil
     var summary: WorkoutSummary? = nil
     var summaryRevisions: [SummaryRevision]? = nil
+    var workloadSegments: [CardioWorkloadSegment]? = nil
+    var confirmedDistanceMeters: Double? = nil
+    var sensorDistanceMeters: Double? = nil
+    var energyDiagnostics: EnergyEstimateDiagnostics? = nil
+    var deviceActiveEnergyEstimateKcal: Double? = nil
+    var deviceEnergySource: MetricSource? = nil
 }
 
 struct BodyCompositionEntry: Identifiable, Codable, Equatable {
@@ -871,6 +888,7 @@ struct EnergyEstimate: Equatable {
     var upperBound: Double
     var method: String
     var confidence: String
+    var diagnostics: EnergyEstimateDiagnostics? = nil
 }
 
 struct DailyActiveEnergyEntry: Identifiable, Codable, Equatable {
@@ -989,8 +1007,18 @@ enum TrainingContinuation: String, Codable, Equatable {
 
 enum WorkoutDraftPhase: String, Codable, Equatable {
     case training
+    case setActive
     case resting
     case exerciseComplete
+}
+
+struct WorkoutPauseInterval: Codable, Equatable {
+    var startedAt: Date
+    var endedAt: Date?
+
+    var durationSeconds: TimeInterval? {
+        endedAt.map { max(0, $0.timeIntervalSince(startedAt)) }
+    }
 }
 
 struct RestRecommendation: Codable, Equatable {
@@ -1033,6 +1061,10 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     var heartRateDecisionLog: [HeartRateDecisionEvent]? = nil
     /// `nil` means a pre-schema-14 draft whose `sets` value includes warmups.
     var usesSeparateWarmups: Bool? = nil
+    var currentSetStartedAt: Date? = nil
+    var pauseIntervals: [WorkoutPauseInterval] = []
+    var currentPauseStartedAt: Date? = nil
+    var sessionRPE: Double? = nil
 
     var currentExercise: ExercisePrescription { session.exercises[exerciseIndex] }
 
@@ -1071,6 +1103,81 @@ struct WorkoutDraft: Identifiable, Codable, Equatable {
     }
 }
 
+extension WorkoutDraft {
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case sourceSessionID
+        case session
+        case startedAt
+        case updatedAt
+        case exerciseIndex
+        case setNumber
+        case warmupSetsByExercise
+        case setKindsByExercise
+        case workingLoadTargetByExercise
+        case loadKg
+        case reps
+        case rir
+        case techniqueQuality
+        case hasPain
+        case averageHeartRate
+        case measuredActiveEnergyKcal
+        case results
+        case recommendation
+        case restRecommendation
+        case restStartedAt
+        case phase
+        case userOverrodeSuggestedLoad
+        case planSnapshot
+        case changeEvents
+        case metricSamples
+        case liveRecoveryMilestonesApplied
+        case heartRateDecisionLog
+        case usesSeparateWarmups
+        case currentSetStartedAt
+        case pauseIntervals
+        case currentPauseStartedAt
+        case sessionRPE
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        sourceSessionID = try container.decode(UUID.self, forKey: .sourceSessionID)
+        session = try container.decode(TrainingSession.self, forKey: .session)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        exerciseIndex = try container.decode(Int.self, forKey: .exerciseIndex)
+        setNumber = try container.decode(Int.self, forKey: .setNumber)
+        warmupSetsByExercise = try container.decode([UUID: Int].self, forKey: .warmupSetsByExercise)
+        setKindsByExercise = try container.decode([UUID: [Int: SetKind]].self, forKey: .setKindsByExercise)
+        workingLoadTargetByExercise = try container.decode([UUID: Double].self, forKey: .workingLoadTargetByExercise)
+        loadKg = try container.decode(Double.self, forKey: .loadKg)
+        reps = try container.decode(Int.self, forKey: .reps)
+        rir = try container.decode(Int.self, forKey: .rir)
+        techniqueQuality = try container.decode(Int.self, forKey: .techniqueQuality)
+        hasPain = try container.decode(Bool.self, forKey: .hasPain)
+        averageHeartRate = try container.decode(Double.self, forKey: .averageHeartRate)
+        measuredActiveEnergyKcal = try container.decode(Double.self, forKey: .measuredActiveEnergyKcal)
+        results = try container.decode([SetResult].self, forKey: .results)
+        recommendation = try container.decodeIfPresent(SetRecommendation.self, forKey: .recommendation)
+        restRecommendation = try container.decodeIfPresent(RestRecommendation.self, forKey: .restRecommendation)
+        restStartedAt = try container.decodeIfPresent(Date.self, forKey: .restStartedAt)
+        phase = try container.decode(WorkoutDraftPhase.self, forKey: .phase)
+        userOverrodeSuggestedLoad = try container.decode(Bool.self, forKey: .userOverrodeSuggestedLoad)
+        planSnapshot = try container.decodeIfPresent(PlanSnapshot.self, forKey: .planSnapshot)
+        changeEvents = try container.decodeIfPresent([WorkoutChangeEvent].self, forKey: .changeEvents)
+        metricSamples = try container.decodeIfPresent([WorkoutMetricSample].self, forKey: .metricSamples)
+        liveRecoveryMilestonesApplied = try container.decode(Set<Int>.self, forKey: .liveRecoveryMilestonesApplied)
+        heartRateDecisionLog = try container.decodeIfPresent([HeartRateDecisionEvent].self, forKey: .heartRateDecisionLog)
+        usesSeparateWarmups = try container.decodeIfPresent(Bool.self, forKey: .usesSeparateWarmups)
+        currentSetStartedAt = try container.decodeIfPresent(Date.self, forKey: .currentSetStartedAt)
+        pauseIntervals = try container.decodeIfPresent([WorkoutPauseInterval].self, forKey: .pauseIntervals) ?? []
+        currentPauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .currentPauseStartedAt)
+        sessionRPE = try container.decodeIfPresent(Double.self, forKey: .sessionRPE)
+    }
+}
+
 struct DailyEnergySummary: Equatable {
     var restingKcal: Double?
     var strengthKcal: Double
@@ -1098,7 +1205,7 @@ struct StartingLoadRecommendation: Equatable {
 }
 
 struct AppSnapshot: Codable {
-    static let currentSchemaVersion = 14
+    static let currentSchemaVersion = 15
 
     var profile: UserProfile?
     var plan: TrainingPlan?

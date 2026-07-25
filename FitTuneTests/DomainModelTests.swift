@@ -48,8 +48,113 @@ final class DomainModelTests: XCTestCase {
         XCTAssertEqual(try roundTrip(prescription).phase, .finisher)
     }
 
-    func testCurrentSnapshotSchemaIsFourteen() {
-        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 14)
+    func testCurrentSnapshotSchemaIsFifteen() {
+        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 15)
+    }
+
+    func testScientificWorkoutFieldsRoundTripAndLegacyFieldsRemainOptional() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let segment = CardioWorkloadSegment(
+            startedAt: start,
+            endedAt: start.addingTimeInterval(600),
+            speedKph: 5,
+            inclinePercent: 8,
+            handrailSupport: .none,
+            source: .userEntered
+        )
+        let response = SetHeartRateResponse(
+            peakBPM: 168,
+            peakDelaySeconds: 30,
+            hrr60: 24,
+            hrr120: 38,
+            sourceName: "HUAWEI WATCH FIT 3",
+            confidence: .derived
+        )
+        let set = SetResult(
+            exerciseID: UUID(),
+            exerciseName: "杠铃深蹲",
+            setNumber: 1,
+            loadKg: 100,
+            reps: 5,
+            rir: 1,
+            completedAt: start.addingTimeInterval(40),
+            startedAt: start,
+            restEndedAt: start.addingTimeInterval(220),
+            actualRestSeconds: 180,
+            heartRateResponse: response
+        )
+
+        let data = try JSONEncoder().encode(set)
+        XCTAssertEqual(try JSONDecoder().decode(SetResult.self, from: data), set)
+        XCTAssertEqual(segment.durationSeconds, 600)
+        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 15)
+    }
+
+    func testSchemaFourteenSetStillDecodesWithoutScientificTimeline() throws {
+        let old = """
+        {
+          "id":"00000000-0000-0000-0000-000000000001",
+          "exerciseID":"00000000-0000-0000-0000-000000000002",
+          "exerciseName":"卧推",
+          "setNumber":1,
+          "loadKg":80,
+          "reps":8,
+          "rir":1,
+          "completedAt":"2026-07-26T10:00:00Z"
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let set = try decoder.decode(SetResult.self, from: Data(old.utf8))
+
+        XCTAssertNil(set.startedAt)
+        XCTAssertNil(set.restEndedAt)
+        XCTAssertNil(set.actualRestSeconds)
+        XCTAssertNil(set.heartRateResponse)
+    }
+
+    func testLegacyDraftsDecodeWithoutNewTimelineCollections() throws {
+        let cardioDraft = CardioSessionDraft(modality: .running, intensity: .zone2)
+        let cardioData = try JSONEncoder().encode(cardioDraft)
+        var cardioObject = try XCTUnwrap(JSONSerialization.jsonObject(with: cardioData) as? [String: Any])
+        cardioObject.removeValue(forKey: "workloadSegments")
+        cardioObject.removeValue(forKey: "workloadWarnings")
+        let decodedCardioDraft = try JSONDecoder().decode(
+            CardioSessionDraft.self,
+            from: JSONSerialization.data(withJSONObject: cardioObject)
+        )
+
+        let exercise = ExercisePrescription(
+            name: "卧推",
+            pattern: .horizontalPush,
+            sets: 3,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 1,
+            isPriority: true
+        )
+        let workoutDraft = WorkoutDraft(
+            sourceSessionID: UUID(),
+            session: TrainingSession(name: "胸", focus: "胸", exercises: [exercise]),
+            exerciseIndex: 0,
+            setNumber: 1,
+            loadKg: 80,
+            reps: 8,
+            rir: 1,
+            techniqueQuality: 4,
+            hasPain: false
+        )
+        let workoutData = try JSONEncoder().encode(workoutDraft)
+        var workoutObject = try XCTUnwrap(JSONSerialization.jsonObject(with: workoutData) as? [String: Any])
+        workoutObject.removeValue(forKey: "pauseIntervals")
+        let decodedWorkoutDraft = try JSONDecoder().decode(
+            WorkoutDraft.self,
+            from: JSONSerialization.data(withJSONObject: workoutObject)
+        )
+
+        XCTAssertEqual(decodedCardioDraft.workloadSegments, [])
+        XCTAssertEqual(decodedCardioDraft.workloadWarnings, [])
+        XCTAssertEqual(decodedWorkoutDraft.pauseIntervals, [])
     }
 
     func testLegacySnapshotWithoutSchemaVersionResolvesVersionSix() throws {

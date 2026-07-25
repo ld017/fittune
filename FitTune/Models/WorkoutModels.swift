@@ -12,6 +12,35 @@ enum CardioMetricKind: String, Codable, Equatable, Hashable {
     case strokeCount
 }
 
+enum HandrailSupport: String, CaseIterable, Codable, Identifiable {
+    case none
+    case occasional
+    case sustained
+
+    var id: String { rawValue }
+}
+
+enum CardioWorkloadSource: String, Codable {
+    case userEntered
+    case device
+    case derived
+}
+
+struct CardioWorkloadSegment: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var startedAt: Date
+    var endedAt: Date? = nil
+    var speedKph: Double? = nil
+    var inclinePercent: Double? = nil
+    var powerWatts: Double? = nil
+    var handrailSupport: HandrailSupport = .none
+    var source: CardioWorkloadSource
+
+    var durationSeconds: TimeInterval? {
+        endedAt.map { max(0, $0.timeIntervalSince(startedAt)) }
+    }
+}
+
 enum CardioSessionCapabilities {
     static func metrics(for modality: CardioModality, hasWatch: Bool) -> Set<CardioMetricKind> {
         var result: Set<CardioMetricKind> = [.heartRate]
@@ -48,6 +77,40 @@ struct CardioSessionDraft: Identifiable, Codable, Equatable {
     var metricSamples: [WorkoutMetricSample] = []
     var distanceMeters: Double = 0
     var dataGapReason: String? = nil
+    var workloadSegments: [CardioWorkloadSegment] = []
+    var confirmedDistanceMeters: Double? = nil
+    var workloadWarnings: [String] = []
+}
+
+extension CardioSessionDraft {
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case modality
+        case intensity
+        case startedAt
+        case updatedAt
+        case metricSamples
+        case distanceMeters
+        case dataGapReason
+        case workloadSegments
+        case confirmedDistanceMeters
+        case workloadWarnings
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        modality = try container.decode(CardioModality.self, forKey: .modality)
+        intensity = try container.decode(CardioIntensity.self, forKey: .intensity)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        metricSamples = try container.decode([WorkoutMetricSample].self, forKey: .metricSamples)
+        distanceMeters = try container.decode(Double.self, forKey: .distanceMeters)
+        dataGapReason = try container.decodeIfPresent(String.self, forKey: .dataGapReason)
+        workloadSegments = try container.decodeIfPresent([CardioWorkloadSegment].self, forKey: .workloadSegments) ?? []
+        confirmedDistanceMeters = try container.decodeIfPresent(Double.self, forKey: .confirmedDistanceMeters)
+        workloadWarnings = try container.decodeIfPresent([String].self, forKey: .workloadWarnings) ?? []
+    }
 }
 
 struct WarmupSetSuggestion: Codable, Equatable {

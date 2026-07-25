@@ -3,6 +3,32 @@ import XCTest
 
 @MainActor
 final class CardioSessionTests: XCTestCase {
+    func testCardioDraftPersistsInitialWorkloadAndConfirmedDistance() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let segment = CardioWorkloadSegment(
+            startedAt: start,
+            speedKph: 5,
+            inclinePercent: 8,
+            handrailSupport: .none,
+            source: .userEntered
+        )
+        let draft = CardioSessionDraft(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            startedAt: start,
+            workloadSegments: [segment],
+            confirmedDistanceMeters: 5_000
+        )
+
+        let restored = try JSONDecoder().decode(
+            CardioSessionDraft.self,
+            from: JSONEncoder().encode(draft)
+        )
+
+        XCTAssertEqual(restored.workloadSegments, [segment])
+        XCTAssertEqual(restored.confirmedDistanceMeters, 5_000)
+    }
+
     func testModalitiesExposeOnlySupportedMetrics() {
         XCTAssertTrue(CardioSessionCapabilities.metrics(for: .running, hasWatch: false).contains(.pace))
         XCTAssertTrue(CardioSessionCapabilities.metrics(for: .inclineWalking, hasWatch: false).contains(.incline))
