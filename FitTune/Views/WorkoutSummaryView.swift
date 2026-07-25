@@ -43,10 +43,6 @@ struct WorkoutSummaryView: View {
                 Text("心率来源：\(source) · \(confidenceText(presentation.summary.heartRateConfidence ?? .estimated))")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if let zones = presentation.summary.heartRateZones {
-                Text(zones.sorted(by: { $0.key < $1.key }).map { "\($0.key) \(Int(($0.value * 100).rounded()))%" }.joined(separator: " · "))
-                    .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-            }
         }
         .fitCard(padding: 20)
     }
@@ -217,7 +213,9 @@ struct WorkoutSummaryView: View {
             Text("效果与恢复").font(.headline)
             metricRangeRow("主动消耗", presentation.summary.activeEnergyKcal, unit: "kcal")
             metricRangeRow("预计恢复", presentation.summary.estimatedRecoveryHours, unit: "小时")
-            metricRangeRow("训练效果", presentation.summary.trainingEffect, unit: "/100")
+            if presentation.summary.strength != nil {
+                metricRangeRow("训练效果", presentation.summary.trainingEffect, unit: "/100")
+            }
             Divider()
             VStack(alignment: .leading, spacing: 2) {
                 Text("主动能量主模型")

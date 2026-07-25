@@ -83,6 +83,26 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .estimated)
     }
 
+    func testStrengthSummaryKeepsRecomputedModelCenterEstimatedWhenLegacyMeasuredEnergyExists() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let record = WorkoutRecord(
+            sessionName: "力量",
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            readinessScore: 80,
+            sets: [],
+            activeEnergyKcal: 220,
+            measuredActiveEnergyKcal: 192,
+            energyMethod: "2024 Adult Compendium 力量训练结构模型"
+        )
+
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.source, .historicalModel)
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.confidence, .estimated)
+        XCTAssertEqual(summary.activeEnergyKcal?.provenance.sourceName, "2024 Adult Compendium 力量训练结构模型")
+    }
+
     func testHuaweiRevisionChangesSummaryOnlyNotOriginalRawRecord() {
         let record = WorkoutRecord(sessionName: "背", startedAt: .now, completedAt: .now, readinessScore: 80, sets: [])
         let original = record
@@ -235,6 +255,15 @@ final class SummaryEngineTests: XCTestCase {
             .init(timestamp: start.addingTimeInterval(25), heartRateBPM: 160, provenance: provenance),
             .init(timestamp: start.addingTimeInterval(30), heartRateBPM: 160, provenance: provenance)
         ]
+        record.effect = TrainingEffect(
+            strengthScore: 0,
+            hypertrophyScore: 0,
+            aerobicScore: 88,
+            fatigueScore: 50,
+            estimatedRecoveryHours: 12,
+            summary: "legacy",
+            advice: "legacy"
+        )
 
         let summary = SummaryEngine.cardioSummary(
             for: record,
@@ -245,6 +274,9 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertEqual(summary.cardio?.percentageByIntensityZone?[.light] ?? -1, 1.0 / 6.0, accuracy: 0.001)
         XCTAssertEqual(summary.cardio?.percentageByIntensityZone?[.moderate] ?? -1, 1.0 / 6.0, accuracy: 0.001)
         XCTAssertEqual(summary.cardio?.percentageByIntensityZone?[.vigorous] ?? -1, 2.0 / 3.0, accuracy: 0.001)
+        XCTAssertNil(summary.heartRateZones)
+        XCTAssertNil(summary.trainingEffect)
+        XCTAssertGreaterThan(summary.cardio?.zoneLoadAU ?? 0, 0)
     }
 
     func testStrengthSummaryReportsCompleteTargetWorkingSetsFromPlanSnapshot() {

@@ -96,7 +96,7 @@ enum CardioEnergyEstimator {
                 lowerBound: power.lower,
                 upperBound: power.upper,
                 method: "骑行功率效率模型（18%–25%）",
-                confidence: power.coverage >= 0.8 ? "中高" : "中",
+                confidence: "中",
                 diagnostics: diagnostics
             )
         }

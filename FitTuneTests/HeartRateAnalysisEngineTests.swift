@@ -178,7 +178,7 @@ final class HeartRateAnalysisEngineTests: XCTestCase {
         XCTAssertEqual(response.hrr120, 40)
     }
 
-    func testRecoveryWindowRejectsSourceSwitchAndMissingSamples() throws {
+    func testRecoveryWindowRejectsSourceSwitchEvenWhenOriginalSourceResumes() throws {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let end = start.addingTimeInterval(30)
         let h10 = MetricProvenance(
@@ -198,9 +198,19 @@ final class HeartRateAnalysisEngineTests: XCTestCase {
             samples: [
                 .init(timestamp: peakAt, heartRateBPM: 170, provenance: h10),
                 .init(
+                    timestamp: peakAt.addingTimeInterval(30),
+                    heartRateBPM: 150,
+                    provenance: watch
+                ),
+                .init(
                     timestamp: peakAt.addingTimeInterval(60),
                     heartRateBPM: 140,
-                    provenance: watch
+                    provenance: h10
+                ),
+                .init(
+                    timestamp: peakAt.addingTimeInterval(120),
+                    heartRateBPM: 130,
+                    provenance: h10
                 )
             ],
             setStartedAt: start,

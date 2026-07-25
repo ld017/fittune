@@ -676,7 +676,9 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertEqual(record.activeEnergyKcal, 213.15, accuracy: 0.01)
         XCTAssertTrue(record.energyMethod?.contains("MET") == true)
-        XCTAssertTrue(record.source.contains("Apple Watch"))
+        XCTAssertEqual(record.source, "FitTune 模型估算")
+        XCTAssertFalse(record.summary?.activeEnergyKcal?.provenance.sourceName.contains("Apple Watch") == true)
+        XCTAssertEqual(record.energyDiagnostics?.comparisonEstimateKcal, 190)
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
@@ -901,6 +903,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNotEqual(updated.activeEnergyKcal, 5)
         XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
         XCTAssertTrue(updated.energyMethod?.contains("Keytel") == true)
+        XCTAssertEqual(updated.source, "FitTune 模型估算")
     }
 
     func testCurrentCardioEnergyRecordRecalculatesLegacyMechanicalEvidenceWithoutSamples() {

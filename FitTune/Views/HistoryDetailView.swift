@@ -80,7 +80,7 @@ struct CardioHistoryDetailView: View {
                 if let distance = current.distanceKm { LabeledContent("距离", value: String(format: "%.2f km", distance)) }
                 if let heartRate = current.averageHeartRate { LabeledContent("平均心率", value: "\(Int(heartRate.rounded())) bpm") }
                 LabeledContent("主动消耗", value: "\(Int(current.activeEnergyKcal.rounded())) kcal")
-                LabeledContent("数据来源", value: current.source)
+                LabeledContent("主动消耗来源", value: current.energyMethod ?? current.source)
                 if let gap = current.dataGapReason { Label(gap, systemImage: "exclamationmark.triangle.fill").foregroundStyle(FitTheme.warning) }
             }
             if let samples = current.metricSamples, !samples.isEmpty {

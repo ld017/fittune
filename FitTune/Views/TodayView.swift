@@ -539,8 +539,9 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("最近：\(latest.modality.title) · \(latest.durationMinutes) 分钟 · \(Int(latest.activeEnergyKcal.rounded())) kcal")
                         .font(.subheadline.bold())
-                    if let effect = latest.effect {
-                        Text("有氧负荷 \(effect.aerobicScore)/100 · 恢复 \(effect.recoveryLowerHours ?? effect.estimatedRecoveryHours)–\(effect.recoveryUpperHours ?? effect.estimatedRecoveryHours) 小时")
+                    if let cardio = latest.summary?.cardio,
+                       let zoneLoad = cardio.zoneLoadAU {
+                        Text("心率区间负荷 \(zoneLoad.formatted(.number.precision(.fractionLength(1)))) AU · 较高强度 \((cardio.vigorousMinutes ?? 0).formatted(.number.precision(.fractionLength(1)))) 分钟")
                             .font(.caption)
                             .foregroundStyle(FitTheme.secondaryText)
                     }

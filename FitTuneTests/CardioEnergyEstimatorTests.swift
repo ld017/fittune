@@ -208,6 +208,7 @@ final class CardioEnergyEstimatorTests: XCTestCase {
         XCTAssertTrue(estimate.method.contains("功率"))
         XCTAssertEqual(estimate.lowerBound, 618.3, accuracy: 1)
         XCTAssertEqual(estimate.upperBound, 885.9, accuracy: 1)
+        XCTAssertEqual(estimate.confidence, "中")
     }
 
     func testLowCoverageCyclingPowerFallsBackToMET() {

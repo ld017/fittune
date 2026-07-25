@@ -57,7 +57,6 @@ enum SummaryEngine {
             targetWorkingSetCount: targetWorkingSetCount,
             targetSetCompletion: targetSetCompletion
         )
-        let energyMeasured = record.measuredActiveEnergyKcal.map { $0 > 0 } ?? false
         return WorkoutSummary(
             generatedAt: .now,
             algorithmVersion: algorithmVersion,
@@ -67,11 +66,9 @@ enum SummaryEngine {
                 value: record.activeEnergyKcal,
                 lowerBound: record.energyLowerBoundKcal,
                 upperBound: record.energyUpperBoundKcal,
-                source: energyMeasured ? .appleWatch : .historicalModel,
+                source: .historicalModel,
                 sourceName: record.energyMethod ?? "力量训练估算",
-                confidence: energyMeasured
-                    ? .measured
-                    : energyConfidence(method: record.energyMethod),
+                confidence: energyConfidence(method: record.energyMethod),
                 algorithmVersion: record.energyAlgorithmVersion
             ),
             estimatedRecoveryHours: metricRange(value: Double(record.effect?.estimatedRecoveryHours ?? 24), spread: 0.30, source: .historicalModel, name: "训练量与接近力竭模型", confidence: .estimated),
@@ -81,7 +78,7 @@ enum SummaryEngine {
             heartRateCurve: samples,
             heartRateSourceName: dominantHeartRateSource(samples),
             heartRateConfidence: heartRateConfidence(samples),
-            heartRateZones: heartRateZones(samples, maximumHeartRate: maximumHeartRate),
+            heartRateZones: nil,
             heartRateGapCount: heartRateGapCount(samples)
         )
     }
@@ -165,13 +162,13 @@ enum SummaryEngine {
                 algorithmVersion: record.energyAlgorithmVersion
             ),
             estimatedRecoveryHours: metricRange(value: Double(record.effect?.estimatedRecoveryHours ?? 12), spread: 0.35, source: .historicalModel, name: "有氧负荷模型", confidence: .estimated),
-            trainingEffect: record.effect.map { metricRange(value: Double($0.aerobicScore), spread: 0.15, source: .historicalModel, name: "有氧效果规则", confidence: .derived) },
+            trainingEffect: nil,
             dataCoverage: intensity?.coverage,
             cardio: cardio,
             heartRateCurve: samples,
             heartRateSourceName: dominantHeartRateSource(samples),
             heartRateConfidence: heartRateConfidence(samples),
-            heartRateZones: heartRateZones(samples, maximumHeartRate: maximumHeartRate),
+            heartRateZones: nil,
             heartRateGapCount: heartRateGapCount(samples)
         )
     }
@@ -193,19 +190,6 @@ enum SummaryEngine {
         let dates = samples.filter { $0.heartRateBPM != nil }.map(\.timestamp).sorted()
         guard !dates.isEmpty else { return nil }
         return zip(dates, dates.dropFirst()).filter { $1.timeIntervalSince($0) > 15 }.count
-    }
-
-    private static func heartRateZones(_ samples: [WorkoutMetricSample], maximumHeartRate: Double?) -> [String: Double]? {
-        guard let maximumHeartRate, maximumHeartRate > 0 else { return nil }
-        let values = samples.compactMap(\.heartRateBPM)
-        guard !values.isEmpty else { return nil }
-        var counts: [String: Int] = [:]
-        for bpm in values {
-            let ratio = bpm / maximumHeartRate
-            let zone = ratio < 0.60 ? "Z1" : ratio < 0.70 ? "Z2" : ratio < 0.80 ? "Z3" : ratio < 0.90 ? "Z4" : "Z5"
-            counts[zone, default: 0] += 1
-        }
-        return counts.mapValues { Double($0) / Double(values.count) }
     }
 
     private static func average(_ values: [Double]) -> Double? {

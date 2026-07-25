@@ -267,7 +267,7 @@ final class AppStore {
         current.energyMethod = estimate.method
         current.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         current.energyDiagnostics = estimate.diagnostics
-        if measured != nil { current.source = "Apple Watch 设备实测" }
+        current.source = "FitTune 模型估算"
         current.summary = SummaryEngine.cardioSummary(
             for: current,
             restingHeartRate: resolvedRestingHeartRate,
@@ -623,7 +623,7 @@ final class AppStore {
             distanceKm: distanceKm,
             averageHeartRate: heartRates.isEmpty ? nil : heartRates.reduce(0, +) / Double(heartRates.count),
             activeEnergyKcal: estimate.kilocalories,
-            source: watchEnergy == nil ? "FitTune 实时采集" : "Apple Watch 设备实测",
+            source: "FitTune 模型估算",
             speedKph: latestWorkload?.speedKph,
             inclinePercent: latestWorkload?.inclinePercent,
             powerWatts: latestWorkload?.powerWatts,

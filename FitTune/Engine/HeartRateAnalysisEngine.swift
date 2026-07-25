@@ -56,11 +56,13 @@ enum HeartRateAnalysisEngine {
         }
         guard let peak = peaks.max(by: { $0.bpm < $1.bpm }) else { return nil }
 
-        let recovery = validHeartRateSamples(samples).filter { sample in
+        let recoveryWindow = validHeartRateSamples(samples).filter { sample in
             sample.timestamp > peak.timestamp
-                && sample.sourceName == peak.sourceName
+                && sample.timestamp <= peak.timestamp.addingTimeInterval(125)
                 && (nextSetStartedAt.map { sample.timestamp < $0 } ?? true)
         }
+        let sourceSwitched = recoveryWindow.contains { $0.sourceName != peak.sourceName }
+        let recovery = sourceSwitched ? [] : recoveryWindow
         let hrr60 = medianHeartRate(in: recovery, from: peak.timestamp.addingTimeInterval(55), through: peak.timestamp.addingTimeInterval(65))
             .map { peak.bpm - $0 }
         let hrr120 = medianHeartRate(in: recovery, from: peak.timestamp.addingTimeInterval(115), through: peak.timestamp.addingTimeInterval(125))
