@@ -49,13 +49,12 @@ enum CardioEnergyEstimator {
         let acsm = acsmCandidate(input: input, segments: segments)
         var warnings: [String] = []
         var requiredSpread = 0.0
+        if acsm != nil, let warning = distanceWarning(input: input, segments: segments) {
+            warnings.append(warning)
+            requiredSpread = 0.25
+        }
 
         if let acsm, !hasSustainedHandrail {
-            let distanceWarning = distanceWarning(input: input, segments: segments)
-            if distanceWarning != nil {
-                warnings.append(distanceWarning!)
-                requiredSpread = 0.25
-            }
             if segments.contains(where: { $0.handrailSupport == .occasional }) {
                 warnings.append("偶尔扶把会增加坡度走耗能的不确定性。")
                 requiredSpread = max(requiredSpread, 0.25)
@@ -105,7 +104,7 @@ enum CardioEnergyEstimator {
                 warnings: warnings,
                 comparison: deviceComparison
             )
-            let result = estimate(value: heartRate.kcal, spread: heartRate.coverage >= 0.8 ? 0.20 : 0.25, method: "Keytel 心率 + 有氧 MET 缺口填补", confidence: heartRate.coverage >= 0.8 ? "中" : "低至中", diagnostics: diagnostics)
+            let result = estimate(value: heartRate.kcal, spread: max(heartRate.coverage >= 0.8 ? 0.20 : 0.25, requiredSpread), method: "Keytel 心率 + 有氧 MET 缺口填补", confidence: heartRate.coverage >= 0.8 ? "中" : "低至中", diagnostics: diagnostics)
             return includingUnsupportedACSMUpperCheck(result, acsm: hasSustainedHandrail ? acsm : nil)
         }
 
@@ -126,7 +125,7 @@ enum CardioEnergyEstimator {
             warnings: warnings,
             comparison: deviceComparison
         )
-        let result = estimate(value: fallback, spread: hasSustainedHandrail ? 0.30 : 0.25, method: "2024 Adult Compendium MET", confidence: "低至中", diagnostics: diagnostics)
+        let result = estimate(value: fallback, spread: max(hasSustainedHandrail ? 0.30 : 0.25, requiredSpread), method: "2024 Adult Compendium MET", confidence: "低至中", diagnostics: diagnostics)
         return includingUnsupportedACSMUpperCheck(result, acsm: hasSustainedHandrail ? acsm : nil)
     }
 
@@ -191,7 +190,7 @@ enum CardioEnergyEstimator {
         let powered = segments.filter { ($0.powerWatts ?? 0) > 0 }
         let seconds = powered.reduce(0) { $0 + $1.seconds }
         let duration = input.completedAt.timeIntervalSince(input.startedAt)
-        guard seconds > 0 else { return nil }
+        guard seconds / duration >= 0.6 else { return nil }
         let powers = powered.compactMap(\.powerWatts)
         let mean = powers.reduce(0, +) / Double(powers.count)
         guard mean > 0, (powers.max() ?? mean) - (powers.min() ?? mean) <= mean * 0.10 else { return nil }

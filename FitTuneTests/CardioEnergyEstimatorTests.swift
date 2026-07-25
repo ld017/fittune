@@ -86,11 +86,11 @@ final class CardioEnergyEstimatorTests: XCTestCase {
             (
                 "power",
                 input(modality: .cycling, workloadSegments: [
-                    .init(startedAt: start, endedAt: start.addingTimeInterval(1_800), powerWatts: 200, source: .device)
+                    .init(startedAt: start, endedAt: start.addingTimeInterval(2_700), powerWatts: 200, source: .device)
                 ]),
-                578.3,
-                522.3,
-                656.2
+                654.4,
+                570.3,
+                771.1
             )
         ]
 
@@ -117,6 +117,7 @@ final class CardioEnergyEstimatorTests: XCTestCase {
             workloadSegments: [walkingSegment(speedKph: 5, inclinePercent: 8)]
         ))
         let sustained = CardioEnergyEstimator.estimate(input(
+            confirmedDistanceKm: 2,
             workloadSegments: [walkingSegment(speedKph: 5, inclinePercent: 8, handrailSupport: .sustained)]
         ))
         let occasional = CardioEnergyEstimator.estimate(input(
@@ -129,6 +130,7 @@ final class CardioEnergyEstimatorTests: XCTestCase {
         XCTAssertTrue(sustained.method.contains("MET"))
         XCTAssertGreaterThanOrEqual(sustained.upperBound, 427)
         XCTAssertTrue(sustained.diagnostics?.warnings.contains { $0.contains("427") && $0.contains("上限") } == true)
+        XCTAssertTrue(sustained.diagnostics?.warnings.contains { $0.contains("距离") } == true)
         XCTAssertTrue(occasional.method.contains("ACSM"))
         XCTAssertGreaterThanOrEqual(occasional.upperBound / occasional.kilocalories, 1.25)
     }
@@ -165,6 +167,19 @@ final class CardioEnergyEstimatorTests: XCTestCase {
         XCTAssertTrue(estimate.method.contains("功率"))
         XCTAssertEqual(estimate.lowerBound, 618.3, accuracy: 1)
         XCTAssertEqual(estimate.upperBound, 885.9, accuracy: 1)
+    }
+
+    func testLowCoverageCyclingPowerFallsBackToMET() {
+        let estimate = CardioEnergyEstimator.estimate(input(
+            modality: .cycling,
+            workloadSegments: [
+                .init(startedAt: start, endedAt: start.addingTimeInterval(1_200), powerWatts: 200, source: .device)
+            ]
+        ))
+
+        XCTAssertEqual(estimate.kilocalories, 426.3, accuracy: 0.1)
+        XCTAssertTrue(estimate.method.contains("MET"))
+        XCTAssertFalse(estimate.method.contains("功率"))
     }
 
     func testDeviceOnlyImportUsesWideDeviceRangeButManualValueStaysComparison() {
