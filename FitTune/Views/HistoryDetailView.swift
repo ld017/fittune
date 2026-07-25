@@ -25,7 +25,7 @@ struct StrengthHistoryDetailView: View {
                         Text("第 \(set.setNumber) 组 · \(set.loadKg.formatted(.number.precision(.fractionLength(0...1)))) kg × \(set.reps) · RIR \(set.rir)")
                             .font(.caption).foregroundStyle(.secondary)
                         if let startedAt = set.startedAt {
-                            Text("本组 \(formatDuration(set.completedAt.timeIntervalSince(startedAt)))\(set.actualRestSeconds.map { " · 实际休息 \(formatDuration($0))" } ?? "")")
+                            Text("本组 \(formatDuration(WorkoutTimeline.effectiveDuration(from: startedAt, to: set.completedAt, pauseIntervals: current.pauseIntervals ?? [])))\(set.actualRestSeconds.map { " · 实际休息 \(formatDuration($0))" } ?? "")")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }

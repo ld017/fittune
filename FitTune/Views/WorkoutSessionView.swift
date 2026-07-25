@@ -217,7 +217,7 @@ struct WorkoutSessionView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .disabled(draft.exerciseIndex == 0)
+                .disabled(draft.currentPauseStartedAt != nil || draft.exerciseIndex == 0)
                 Button {
                     if !store.advanceDraftToNextExercise() {
                         requestSave(status: .partial)
@@ -227,6 +227,7 @@ struct WorkoutSessionView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .disabled(draft.currentPauseStartedAt != nil)
             }
 
             HStack(spacing: 10) {
@@ -382,11 +383,13 @@ struct WorkoutSessionView: View {
                 Label("开始本组", systemImage: "play.fill")
             }
             .buttonStyle(PrimaryActionButtonStyle())
+            .disabled(draft.currentPauseStartedAt != nil)
         case .setActive:
             Button { store.completeCurrentDraftSet() } label: {
                 Label("完成本组", systemImage: "checkmark")
             }
             .buttonStyle(PrimaryActionButtonStyle())
+            .disabled(draft.currentPauseStartedAt != nil)
         case .resting, .exerciseComplete:
             EmptyView()
         }
@@ -466,6 +469,7 @@ struct WorkoutSessionView: View {
                     Label("准备下一组", systemImage: "forward.fill")
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
+                .disabled(draft.currentPauseStartedAt != nil)
             }
         }
         .fitCard(padding: 18)
@@ -484,6 +488,7 @@ struct WorkoutSessionView: View {
                     Label("进入下一个动作", systemImage: "arrow.right")
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
+                .disabled(draft.currentPauseStartedAt != nil)
             } else {
                 Button { requestSave(status: .completed) } label: {
                     Label("完成本次训练", systemImage: "flag.checkered")
@@ -582,20 +587,12 @@ struct WorkoutSessionView: View {
 
     private func activeSetElapsedSeconds(_ draft: WorkoutDraft, at date: Date) -> Int {
         guard let startedAt = draft.currentSetStartedAt else { return 0 }
-        let end = max(startedAt, date)
-        let completedPauseSeconds = draft.pauseIntervals.reduce(0.0) { total, pause in
-            guard let pauseEnd = pause.endedAt else { return total }
-            let overlapStart = max(startedAt, pause.startedAt)
-            let overlapEnd = min(end, pauseEnd)
-            return total + max(0, overlapEnd.timeIntervalSince(overlapStart))
-        }
-        let openPauseSeconds: Double
-        if let pauseStartedAt = draft.currentPauseStartedAt {
-            openPauseSeconds = max(0, end.timeIntervalSince(max(startedAt, pauseStartedAt)))
-        } else {
-            openPauseSeconds = 0
-        }
-        return max(0, Int(end.timeIntervalSince(startedAt) - completedPauseSeconds - openPauseSeconds))
+        return Int(WorkoutTimeline.effectiveDuration(
+            from: startedAt,
+            to: max(startedAt, date),
+            pauseIntervals: draft.pauseIntervals,
+            currentPauseStartedAt: draft.currentPauseStartedAt
+        ))
     }
 
     @ViewBuilder

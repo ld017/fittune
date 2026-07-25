@@ -42,3 +42,46 @@ No new model or engine behavior was added by this four-view task; the new work i
 ## Concern
 
 The iPhone 17 Pro simulator booted, but the install/launch command stalled before confirming that FitTune was available. It was stopped without claiming any rendered-screen evidence. Default and accessibility-large visual acceptance for the cardio live page, strength preparation/set/rest states, and both summaries remains deferred to Task 13 as directed by the controller.
+
+## Fix Round 1
+
+- Explicit pause now freezes set completion, next-set preparation, and exercise navigation in both the store and the strength-session controls. Resume restores those actions; advisory rest, heart-rate, and history states still do not lock them.
+- Added `WorkoutTimeline.effectiveDuration` as the shared pause-aware duration calculation for the live timer, strength summary, and history detail. It clamps pauses to the measured interval and merges overlaps before subtracting them.
+- Added set metadata alongside each heart-rate response so summaries retain the source exercise and original set number. The legacy response-only field remains decodable; old summaries use neutral “恢复记录” labels instead of inventing set numbers.
+
+### TDD evidence
+
+```sh
+swift test --filter WorkoutLifecycleTests.testPauseFreezes
+# RED: 6 assertion failures; paused store operations advanced phases/results
+# GREEN: 2 tests, 0 failures
+
+swift test --filter SummaryEngineTests.testStrengthSummarySubtractsOverlappingPausesFromSetDuration
+# RED: average 30 vs 15; ratio 1/3 vs 1/6
+# GREEN: 1 test, 0 failures
+
+swift test --filter SummaryEngineTests.testStrengthSummaryPreservesOriginalSetNumberWhenEarlierResponseIsMissing
+# RED: StrengthSummaryMetrics had no heartRateResponseSets member
+# GREEN: 1 test, 0 failures
+
+swift test --filter SummaryEngineTests.testStrengthSummaryDecodesLegacyHeartRateResponsesWithoutSetMetadata
+# GREEN: 1 test, 0 failures
+```
+
+### Final verification
+
+```sh
+swift test --filter WorkoutLifecycleTests
+# 12 tests, 0 failures
+
+swift test --filter SummaryEngineTests
+# 15 tests, 0 failures
+
+xcodebuild -project FitTune.xcodeproj -scheme FitTune -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+# exit 0
+
+git diff --check
+# exit 0
+```
+
+The known visual-inspection concern remains deferred to Task 13; this fix round adds no new concern.

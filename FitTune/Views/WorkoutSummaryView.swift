@@ -118,12 +118,24 @@ struct WorkoutSummaryView: View {
                     LabeledContent("可比组表现保留", value: retention.formatted(.percent.precision(.fractionLength(0))))
                 }
             }
-            if let responses = value.heartRateResponses, !responses.isEmpty {
+            if let responseSets = value.heartRateResponseSets, !responseSets.isEmpty {
+                Divider()
+                Text("逐组峰值与恢复").font(.subheadline.bold())
+                ForEach(Array(responseSets.enumerated()), id: \.offset) { _, item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(item.exerciseName) · 第 \(item.setNumber) 组 · 峰值 \(Int(item.response.peakBPM.rounded())) bpm · 延后 \(item.response.peakDelaySeconds) 秒")
+                            .font(.caption.bold().monospacedDigit())
+                        Text(heartRateRecoveryText(item.response))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else if let responses = value.heartRateResponses, !responses.isEmpty {
                 Divider()
                 Text("逐组峰值与恢复").font(.subheadline.bold())
                 ForEach(Array(responses.enumerated()), id: \.offset) { index, response in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("第 \(index + 1) 组 · 峰值 \(Int(response.peakBPM.rounded())) bpm · 延后 \(response.peakDelaySeconds) 秒")
+                        Text("恢复记录 \(index + 1) · 峰值 \(Int(response.peakBPM.rounded())) bpm · 延后 \(response.peakDelaySeconds) 秒")
                             .font(.caption.bold().monospacedDigit())
                         Text(heartRateRecoveryText(response))
                             .font(.caption)

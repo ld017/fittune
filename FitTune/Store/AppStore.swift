@@ -1256,6 +1256,7 @@ final class AppStore {
 
     func completeCurrentDraftSet(at completedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
+              draft.currentPauseStartedAt == nil,
               draft.phase == .training || draft.phase == .setActive,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
@@ -1334,6 +1335,7 @@ final class AppStore {
 
     func advanceDraftToNextSet(at restEndedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
+              draft.currentPauseStartedAt == nil,
               draft.phase == .resting,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
@@ -1511,6 +1513,7 @@ final class AppStore {
     @discardableResult
     func advanceDraftToNextExercise(at restEndedAt: Date = .now) -> Bool {
         guard var draft = activeWorkoutDraft,
+              draft.currentPauseStartedAt == nil,
               draft.exerciseIndex + 1 < draft.session.exercises.count else { return false }
         guard closeCurrentRest(in: &draft, at: restEndedAt) else { return false }
         draft.exerciseIndex += 1
@@ -1522,7 +1525,9 @@ final class AppStore {
 
     @discardableResult
     func returnDraftToPreviousExercise() -> Bool {
-        guard var draft = activeWorkoutDraft, draft.exerciseIndex > 0 else { return false }
+        guard var draft = activeWorkoutDraft,
+              draft.currentPauseStartedAt == nil,
+              draft.exerciseIndex > 0 else { return false }
         draft.exerciseIndex -= 1
         prepareDraftForCurrentExercise(&draft)
         activeWorkoutDraft = draft

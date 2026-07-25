@@ -231,6 +231,12 @@ struct SetHeartRateResponse: Codable, Equatable {
     var confidence: DataConfidence
 }
 
+struct StrengthSetHeartRateSummary: Codable, Equatable {
+    var exerciseName: String
+    var setNumber: Int
+    var response: SetHeartRateResponse
+}
+
 enum PersonalRecoveryComparison: String, Codable, Equatable {
     case insufficientHistory
     case withinBaseline
@@ -252,7 +258,9 @@ struct StrengthSummaryMetrics: Codable, Equatable {
     var workToRestRatio: Double? = nil
     var performanceRetention: Double? = nil
     var restRecommendationAccuracy: Double? = nil
+    /// Legacy response-only representation retained for decoding persisted summaries.
     var heartRateResponses: [SetHeartRateResponse]? = nil
+    var heartRateResponseSets: [StrengthSetHeartRateSummary]? = nil
     var targetWorkingSetCount: Int? = nil
     var targetSetCompletion: Double? = nil
 }

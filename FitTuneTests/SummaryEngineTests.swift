@@ -134,6 +134,69 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertFalse(summary.strength?.heartRateResponses?.isEmpty ?? true)
     }
 
+    func testStrengthSummarySubtractsOverlappingPausesFromSetDuration() {
+        var record = makeTimedStrengthRecord()
+        let firstStart = record.sets[0].startedAt!
+        let secondStart = record.sets[1].startedAt!
+        record.pauseIntervals = [
+            WorkoutPauseInterval(
+                startedAt: firstStart.addingTimeInterval(5),
+                endedAt: firstStart.addingTimeInterval(20)
+            ),
+            WorkoutPauseInterval(
+                startedAt: firstStart.addingTimeInterval(10),
+                endedAt: firstStart.addingTimeInterval(25)
+            ),
+            WorkoutPauseInterval(
+                startedAt: secondStart.addingTimeInterval(10),
+                endedAt: secondStart.addingTimeInterval(20)
+            )
+        ]
+
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+
+        XCTAssertEqual(summary.strength?.averageSetDurationSeconds, 15)
+        XCTAssertEqual(summary.strength?.workToRestRatio ?? -1, 1.0 / 6.0, accuracy: 0.001)
+    }
+
+    func testStrengthSummaryPreservesOriginalSetNumberWhenEarlierResponseIsMissing() {
+        var record = makeTimedStrengthRecord()
+        record.sets[0].heartRateResponse = nil
+
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+
+        XCTAssertEqual(summary.strength?.heartRateResponseSets?.map(\.setNumber), [2])
+        XCTAssertEqual(summary.strength?.heartRateResponseSets?.map(\.exerciseName), ["杠铃深蹲"])
+    }
+
+    func testStrengthSummaryDecodesLegacyHeartRateResponsesWithoutSetMetadata() throws {
+        let json = """
+        {
+          "volumeLoadKg": 800,
+          "workingSetCount": 1,
+          "warmupSetCount": 0,
+          "failureRate": 0,
+          "e1RMConfidence": "derived",
+          "muscleLoad": {},
+          "heartRateResponses": [
+            {
+              "peakBPM": 165,
+              "peakDelaySeconds": 30,
+              "hrr60": 22,
+              "hrr120": 36,
+              "sourceName": "H10",
+              "confidence": "derived"
+            }
+          ]
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(StrengthSummaryMetrics.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.heartRateResponses?.count, 1)
+        XCTAssertNil(decoded.heartRateResponseSets)
+    }
+
     func testCardioSummaryPersistsHRRMethodAndFallbackConfidence() {
         let record = makeSteadyInclineRecord(durationMinutes: 30, heartRateBPM: 125)
 

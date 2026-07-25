@@ -46,6 +46,14 @@ enum SummaryEngine {
                 : nil,
             performanceRetention: TrainingEngine.comparableSetPerformanceRetention(for: working),
             heartRateResponses: record.sets.compactMap(\.heartRateResponse),
+            heartRateResponseSets: record.sets.compactMap { set in
+                guard let response = set.heartRateResponse else { return nil }
+                return StrengthSetHeartRateSummary(
+                    exerciseName: set.exerciseName,
+                    setNumber: set.setNumber,
+                    response: response
+                )
+            },
             targetWorkingSetCount: targetWorkingSetCount,
             targetSetCompletion: targetSetCompletion
         )
@@ -211,7 +219,11 @@ enum SummaryEngine {
                   set.completedAt <= record.completedAt else {
                 return nil
             }
-            let duration = set.completedAt.timeIntervalSince(startedAt)
+            let duration = WorkoutTimeline.effectiveDuration(
+                from: startedAt,
+                to: set.completedAt,
+                pauseIntervals: record.pauseIntervals ?? []
+            )
             return duration > 0 ? duration : nil
         }
     }

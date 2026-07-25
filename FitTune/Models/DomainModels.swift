@@ -1021,6 +1021,47 @@ struct WorkoutPauseInterval: Codable, Equatable {
     }
 }
 
+enum WorkoutTimeline {
+    static func effectiveDuration(
+        from startedAt: Date,
+        to endedAt: Date,
+        pauseIntervals: [WorkoutPauseInterval],
+        currentPauseStartedAt: Date? = nil
+    ) -> TimeInterval {
+        guard endedAt > startedAt else { return 0 }
+        var overlaps = pauseIntervals.compactMap { pause -> (start: Date, end: Date)? in
+            guard let pauseEndedAt = pause.endedAt else { return nil }
+            let start = max(startedAt, pause.startedAt)
+            let end = min(endedAt, pauseEndedAt)
+            return end > start ? (start, end) : nil
+        }
+        if let currentPauseStartedAt {
+            let start = max(startedAt, currentPauseStartedAt)
+            if endedAt > start {
+                overlaps.append((start, endedAt))
+            }
+        }
+        overlaps.sort { $0.start < $1.start }
+
+        var pausedSeconds = 0.0
+        var merged: (start: Date, end: Date)?
+        for overlap in overlaps {
+            if let current = merged, overlap.start <= current.end {
+                merged = (current.start, max(current.end, overlap.end))
+            } else {
+                if let current = merged {
+                    pausedSeconds += current.end.timeIntervalSince(current.start)
+                }
+                merged = overlap
+            }
+        }
+        if let merged {
+            pausedSeconds += merged.end.timeIntervalSince(merged.start)
+        }
+        return max(0, endedAt.timeIntervalSince(startedAt) - pausedSeconds)
+    }
+}
+
 struct RestRecommendation: Codable, Equatable {
     var lowerSeconds: Int
     var recommendedSeconds: Int

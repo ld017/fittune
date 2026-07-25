@@ -91,6 +91,62 @@ final class WorkoutLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testPauseFreezesActiveSetCompletionUntilResume() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCurrentDraftSet(at: start)
+        store.pauseWorkout(at: start.addingTimeInterval(10))
+
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .setActive)
+        XCTAssertTrue(store.activeWorkoutDraft?.results.isEmpty == true)
+
+        store.resumeWorkout(at: start.addingTimeInterval(40))
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(50))
+
+        XCTAssertEqual(store.activeWorkoutDraft?.results.count, 1)
+    }
+
+    @MainActor
+    func testPauseFreezesSetStartUntilResume() {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.pauseWorkout(at: start)
+
+        store.startCurrentDraftSet(at: start.addingTimeInterval(10))
+
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .training)
+        XCTAssertNil(store.activeWorkoutDraft?.currentSetStartedAt)
+
+        store.resumeWorkout(at: start.addingTimeInterval(20))
+        store.startCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        XCTAssertEqual(store.activeWorkoutDraft?.phase, .setActive)
+        XCTAssertEqual(store.activeWorkoutDraft?.currentSetStartedAt, start.addingTimeInterval(30))
+    }
+
+    @MainActor
+    func testPauseFreezesRestAndExerciseNavigationUntilResume() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let setStore = makeStrengthStore()
+        setStore.startCurrentDraftSet(at: start)
+        setStore.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        setStore.pauseWorkout(at: start.addingTimeInterval(40))
+
+        setStore.advanceDraftToNextSet(at: start.addingTimeInterval(180))
+
+        XCTAssertEqual(setStore.activeWorkoutDraft?.phase, .resting)
+        XCTAssertEqual(setStore.activeWorkoutDraft?.setNumber, 1)
+
+        let exerciseStore = makeTwoExerciseStrengthStore()
+        exerciseStore.pauseWorkout(at: start)
+
+        XCTAssertFalse(exerciseStore.advanceDraftToNextExercise(at: start.addingTimeInterval(10)))
+        XCTAssertEqual(exerciseStore.activeWorkoutDraft?.exerciseIndex, 0)
+    }
+
+    @MainActor
     func testNextSetStartFinalizesPreviousResponseAtCutoff() throws {
         let store = makeStrengthStore()
         let start = Date(timeIntervalSince1970: 1_700_000_000)
