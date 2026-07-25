@@ -623,6 +623,11 @@ enum TrainingEngine {
         averageHeartRate: Double? = nil,
         speedKph: Double? = nil,
         inclinePercent: Double? = nil,
+        inclineInputMode: TreadmillInclineInputMode? = nil,
+        inclineLevel: Double? = nil,
+        machineMaximumLevel: Double? = nil,
+        maximumGradeCalibration: TreadmillGradeCalibration? = nil,
+        handrailSupport: HandrailSupport = .none,
         powerWatts: Double? = nil,
         floorsClimbed: Double? = nil,
         sessionRPE: Double? = nil,
@@ -643,11 +648,35 @@ enum TrainingEngine {
             averageHeartRate: averageHeartRate,
             speedKph: speedKph,
             inclinePercent: inclinePercent,
+            inclineInputMode: inclineInputMode,
+            inclineLevel: inclineLevel,
+            machineMaximumLevel: machineMaximumLevel,
+            maximumGradeCalibration: maximumGradeCalibration,
+            handrailSupport: handrailSupport,
             powerWatts: powerWatts,
             measuredActiveEnergy: measuredActiveEnergy,
             metricSamples: metricSamples,
             startedAt: startedAt
         )
+        let workloadStart = startedAt ?? date
+        let workloadSegments: [CardioWorkloadSegment]? =
+            speedKph != nil || inclinePercent != nil || inclineLevel != nil || powerWatts != nil || handrailSupport != .none
+            ? [
+                CardioWorkloadSegment(
+                    startedAt: workloadStart,
+                    endedAt: workloadStart.addingTimeInterval(Double(minutes) * 60),
+                    speedKph: speedKph,
+                    inclinePercent: inclinePercent,
+                    inclineInputMode: inclineInputMode,
+                    inclineLevel: inclineLevel,
+                    machineMaximumLevel: machineMaximumLevel,
+                    maximumGradeCalibration: maximumGradeCalibration,
+                    powerWatts: powerWatts,
+                    handrailSupport: handrailSupport,
+                    source: .userEntered
+                )
+            ]
+            : nil
         var record = CardioWorkoutRecord(
             date: date,
             modality: modality,
@@ -659,7 +688,7 @@ enum TrainingEngine {
             source: source,
             externalID: externalID,
             speedKph: speedKph,
-            inclinePercent: inclinePercent,
+            inclinePercent: workloadSegments?.first?.resolvedInclinePercent ?? inclinePercent,
             powerWatts: powerWatts,
             floorsClimbed: floorsClimbed,
             sessionRPE: sessionRPE,
@@ -667,7 +696,12 @@ enum TrainingEngine {
             energyLowerBoundKcal: estimate.lowerBound,
             energyUpperBoundKcal: estimate.upperBound,
             energyAlgorithmVersion: EnergyEngine.algorithmVersion,
-            metricSamples: metricSamples
+            metricSamples: metricSamples,
+            workloadSegments: workloadSegments,
+            confirmedDistanceMeters: distanceKm.map { $0 * 1_000 },
+            energyDiagnostics: estimate.diagnostics,
+            deviceActiveEnergyEstimateKcal: measuredActiveEnergy,
+            deviceEnergySource: measuredActiveEnergy == nil ? nil : .unknown
         )
         record.effect = evaluateCardioWorkout(record)
         return record
@@ -683,6 +717,11 @@ enum TrainingEngine {
         averageHeartRate: Double? = nil,
         speedKph: Double? = nil,
         inclinePercent: Double? = nil,
+        inclineInputMode: TreadmillInclineInputMode? = nil,
+        inclineLevel: Double? = nil,
+        machineMaximumLevel: Double? = nil,
+        maximumGradeCalibration: TreadmillGradeCalibration? = nil,
+        handrailSupport: HandrailSupport = .none,
         powerWatts: Double? = nil,
         measuredActiveEnergy: Double? = nil,
         metricSamples: [WorkoutMetricSample] = [],
@@ -694,13 +733,18 @@ enum TrainingEngine {
             minutes > 0 && distance > 0 ? distance / (Double(minutes) / 60) : nil
         }
         let legacySegments: [CardioWorkloadSegment]
-        if resolvedSpeed != nil || powerWatts != nil {
+        if resolvedSpeed != nil || inclinePercent != nil || inclineLevel != nil || powerWatts != nil || handrailSupport != .none {
             legacySegments = [CardioWorkloadSegment(
                 startedAt: start,
                 endedAt: completedAt,
                 speedKph: resolvedSpeed,
                 inclinePercent: inclinePercent,
+                inclineInputMode: inclineInputMode,
+                inclineLevel: inclineLevel,
+                machineMaximumLevel: machineMaximumLevel,
+                maximumGradeCalibration: maximumGradeCalibration,
                 powerWatts: powerWatts,
+                handrailSupport: handrailSupport,
                 source: .userEntered
             )]
         } else {

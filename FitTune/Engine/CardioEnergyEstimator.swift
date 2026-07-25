@@ -22,6 +22,7 @@ enum CardioEnergyEstimator {
         var endedAt: Date
         var speedKph: Double?
         var inclinePercent: Double?
+        var hasUncalibratedMachineLevel: Bool
         var powerWatts: Double?
         var handrailSupport: HandrailSupport
 
@@ -46,8 +47,12 @@ enum CardioEnergyEstimator {
         let fallback = metEnergy(input: input)
         let deviceComparison = usableDeviceEnergy(input)
         let hasSustainedHandrail = segments.contains { $0.handrailSupport == .sustained }
-        let acsm = acsmCandidate(input: input, segments: segments)
+        let hasUncalibratedMachineLevel = segments.contains { $0.hasUncalibratedMachineLevel }
+        let acsm = hasUncalibratedMachineLevel ? nil : acsmCandidate(input: input, segments: segments)
         var warnings: [String] = []
+        if hasUncalibratedMachineLevel {
+            warnings.append("跑步机档位未完成实际最大坡度校准；档位不跨机器通用，ACSM 中心估算已改用心率/MET。")
+        }
         var requiredSpread = 0.0
         if acsm != nil, let warning = distanceWarning(input: input, segments: segments) {
             warnings.append(warning)
@@ -142,7 +147,9 @@ enum CardioEnergyEstimator {
                     startedAt: start,
                     endedAt: end,
                     speedKph: workload.speedKph,
-                    inclinePercent: workload.inclinePercent,
+                    inclinePercent: workload.resolvedInclinePercent,
+                    hasUncalibratedMachineLevel: workload.resolvedInclineInputMode == .machineLevel
+                        && workload.resolvedInclinePercent == nil,
                     powerWatts: workload.powerWatts,
                     handrailSupport: workload.handrailSupport
                 )

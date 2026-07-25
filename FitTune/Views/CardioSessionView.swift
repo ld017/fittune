@@ -7,6 +7,16 @@ struct CardioSessionView: View {
     @State private var motion = MotionLocationSource()
     @State private var showExitDialog = false
     @State private var showDiscardAlert = false
+    @State private var liveSpeedKph = 0.0
+    @State private var liveInclinePercent = 20.0
+    @State private var liveInclineMode: TreadmillInclineInputMode = .percentGrade
+    @State private var liveInclineLevel = 20.0
+    @State private var liveMachineMaximumLevel = 20.0
+    @State private var liveCalibrationRise = 0.0
+    @State private var liveCalibrationRun = 0.0
+    @State private var livePowerWatts = 0.0
+    @State private var liveHandrailSupport: HandrailSupport = .none
+    @State private var confirmedDistanceKm = 0.0
 
     var body: some View {
         ZStack {
@@ -17,6 +27,7 @@ struct CardioSessionView: View {
                     ScrollView {
                         VStack(spacing: 18) {
                             sessionMetrics(draft)
+                            workloadControls(draft)
                             sourceCard(draft)
                             Button { finish(.completed) } label: {
                                 Label("完成有氧训练", systemImage: "flag.checkered")
@@ -29,7 +40,11 @@ struct CardioSessionView: View {
             }
         }
         .interactiveDismissDisabled()
-        .onAppear { startSensorsIfNeeded(); updateLiveActivity() }
+        .onAppear {
+            if let draft = store.activeCardioDraft { loadControls(from: draft) }
+            startSensorsIfNeeded()
+            updateLiveActivity()
+        }
         .onChange(of: liveSensors.latestSample?.id) { _, _ in
             if let sample = liveSensors.latestSample, liveSensors.latestValidity == .valid {
                 store.appendCardioMetricSample(sample)
@@ -95,12 +110,61 @@ struct CardioSessionView: View {
                     .font(.system(size: 48, weight: .black, design: .rounded).monospacedDigit())
                 HStack(spacing: 10) {
                     MetricChip(value: liveSensors.latestSample?.heartRateBPM.map { "\(Int($0.rounded()))" } ?? "—", label: "实时 bpm", tint: FitTheme.danger)
-                    MetricChip(value: String(format: "%.2f", draft.distanceMeters / 1000), label: "距离 km", tint: FitTheme.accentBlue)
+                        .frame(height: 76)
+                    MetricChip(value: String(format: "%.2f", draft.distanceMeters / 1000), label: "传感器距离 km", tint: FitTheme.accentBlue)
+                        .frame(height: 76)
                     MetricChip(value: draft.metricSamples.compactMap(\.cadence).last.map { "\(Int($0.rounded()))" } ?? "—", label: "步频/踏频")
+                        .frame(height: 76)
                 }
             }
             .fitCard(padding: 22)
         }
+    }
+
+    @ViewBuilder
+    private func workloadControls(_ draft: CardioSessionDraft) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("实时负荷").font(.headline)
+                Spacer()
+                Text(workloadSummary(for: draft.modality)).font(.caption.bold()).foregroundStyle(FitTheme.accent)
+                    .multilineTextAlignment(.trailing)
+            }
+            if [.running, .briskWalking, .inclineWalking].contains(draft.modality) {
+                NumericInputControl(title: "当前速度", value: speedBinding, range: 0...30, step: 0.1, unit: "km/h")
+            }
+            if draft.modality == .inclineWalking {
+                Picker("坡度输入", selection: inclineModeBinding) {
+                    ForEach(TreadmillInclineInputMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if liveInclineMode == .percentGrade {
+                    NumericInputControl(title: "当前坡度", value: inclineBinding, range: 0...40, step: 0.5, unit: "%")
+                } else {
+                    NumericInputControl(title: "当前档位", value: inclineLevelBinding, range: 0...100, step: 1, unit: "级")
+                    NumericInputControl(title: "最高档位", value: maximumLevelBinding, range: 1...100, step: 1, unit: "级")
+                    NumericInputControl(title: "最高档抬升", value: calibrationRiseBinding, range: 0...1000, step: 0.5, unit: "cm")
+                    NumericInputControl(title: "水平长度", value: calibrationRunBinding, range: 0...1000, step: 0.5, unit: "cm")
+                    if liveCalibration?.maximumGradePercent == nil {
+                        Label("档位未校准：仅记录档位，耗能中心改用心率/MET。", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(FitTheme.warning)
+                    }
+                }
+                Picker("扶把", selection: handrailBinding) {
+                    ForEach(HandrailSupport.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+            if [.cycling, .rowing].contains(draft.modality) {
+                NumericInputControl(title: "当前功率", value: powerBinding, range: 0...1000, step: 5, unit: "W")
+            }
+            if [.running, .briskWalking, .inclineWalking].contains(draft.modality) {
+                NumericInputControl(title: "跑步机确认距离", value: distanceBinding, range: 0...300, step: 0.01, unit: "km")
+                Text("传感器距离与跑步机确认距离分开保留；确认距离用于最终记录。")
+                    .font(.caption2).foregroundStyle(FitTheme.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func sourceCard(_ draft: CardioSessionDraft) -> some View {
@@ -109,6 +173,9 @@ struct CardioSessionView: View {
             Text(liveSensors.statusMessage).font(.caption).foregroundStyle(.secondary)
             if let gap = draft.dataGapReason {
                 Label(gap, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(FitTheme.warning)
+            }
+            ForEach(draft.workloadWarnings, id: \.self) {
+                Label($0, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(FitTheme.warning)
             }
             if draft.modality == .swimming && liveSensors.activeLiveSource?.kind != .appleWatch {
                 Text("划水次数：不可用（无 Apple Watch 数据，不进行虚假估算）").font(.caption).foregroundStyle(FitTheme.warning)
@@ -123,6 +190,84 @@ struct CardioSessionView: View {
         motion.onSample = { store.appendCardioMetricSample($0) }
         motion.onDataGap = { store.markCardioDataGap($0) }
         motion.start(modality: draft.modality, from: draft.startedAt)
+    }
+
+    private func loadControls(from draft: CardioSessionDraft) {
+        let workload = draft.currentWorkload
+        liveSpeedKph = workload?.speedKph ?? 0
+        liveInclineMode = workload?.resolvedInclineInputMode ?? .percentGrade
+        liveInclinePercent = workload?.inclinePercent ?? 20
+        liveInclineLevel = workload?.inclineLevel ?? 20
+        liveMachineMaximumLevel = workload?.machineMaximumLevel ?? 20
+        liveCalibrationRise = workload?.maximumGradeCalibration?.rise ?? 0
+        liveCalibrationRun = workload?.maximumGradeCalibration?.horizontalRun ?? 0
+        livePowerWatts = workload?.powerWatts ?? 0
+        liveHandrailSupport = workload?.handrailSupport ?? .none
+        confirmedDistanceKm = (draft.confirmedDistanceMeters ?? 0) / 1_000
+    }
+
+    private func persistWorkload() {
+        guard let modality = store.activeCardioDraft?.modality else { return }
+        let inclineWalking = modality == .inclineWalking
+        store.updateCardioWorkload(
+            speedKph: [.running, .briskWalking, .inclineWalking].contains(modality) && liveSpeedKph > 0 ? liveSpeedKph : nil,
+            inclinePercent: inclineWalking && liveInclineMode == .percentGrade ? liveInclinePercent : nil,
+            inclineInputMode: inclineWalking ? liveInclineMode : nil,
+            inclineLevel: inclineWalking && liveInclineMode == .machineLevel ? liveInclineLevel : nil,
+            machineMaximumLevel: inclineWalking && liveInclineMode == .machineLevel ? liveMachineMaximumLevel : nil,
+            maximumGradeCalibration: inclineWalking && liveInclineMode == .machineLevel ? liveCalibration : nil,
+            powerWatts: [.cycling, .rowing].contains(modality) && livePowerWatts > 0 ? livePowerWatts : nil,
+            handrailSupport: inclineWalking ? liveHandrailSupport : .none
+        )
+    }
+
+    private var liveCalibration: TreadmillGradeCalibration? {
+        guard liveCalibrationRise > 0 || liveCalibrationRun > 0 else { return nil }
+        return .init(rise: liveCalibrationRise, horizontalRun: liveCalibrationRun)
+    }
+
+    private func workloadSummary(for modality: CardioModality) -> String {
+        if modality == .inclineWalking, liveInclineMode == .machineLevel {
+            let grade = liveCalibration?.maximumGradePercent.map {
+                $0 * min(1, max(0, liveInclineLevel / liveMachineMaximumLevel))
+            }
+            return grade.map { "档位 \(Int(liveInclineLevel))/\(Int(liveMachineMaximumLevel)) · \($0.formatted(.number.precision(.fractionLength(1))))%" }
+                ?? "档位 \(Int(liveInclineLevel))/\(Int(liveMachineMaximumLevel)) · 未校准"
+        }
+        if modality == .inclineWalking {
+            return "\(liveSpeedKph.formatted(.number.precision(.fractionLength(1)))) km/h · \(liveInclinePercent.formatted(.number.precision(.fractionLength(1))))%"
+        }
+        if [.cycling, .rowing].contains(modality) {
+            return "\(Int(livePowerWatts.rounded())) W"
+        }
+        if [.running, .briskWalking].contains(modality) {
+            return "\(liveSpeedKph.formatted(.number.precision(.fractionLength(1)))) km/h"
+        }
+        return "实时采集中"
+    }
+
+    private func workloadBinding(_ value: Binding<Double>) -> Binding<Double> {
+        Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0; persistWorkload() })
+    }
+
+    private var speedBinding: Binding<Double> { workloadBinding($liveSpeedKph) }
+    private var inclineBinding: Binding<Double> { workloadBinding($liveInclinePercent) }
+    private var inclineLevelBinding: Binding<Double> { workloadBinding($liveInclineLevel) }
+    private var maximumLevelBinding: Binding<Double> { workloadBinding($liveMachineMaximumLevel) }
+    private var calibrationRiseBinding: Binding<Double> { workloadBinding($liveCalibrationRise) }
+    private var calibrationRunBinding: Binding<Double> { workloadBinding($liveCalibrationRun) }
+    private var powerBinding: Binding<Double> { workloadBinding($livePowerWatts) }
+    private var inclineModeBinding: Binding<TreadmillInclineInputMode> {
+        Binding(get: { liveInclineMode }, set: { liveInclineMode = $0; persistWorkload() })
+    }
+    private var handrailBinding: Binding<HandrailSupport> {
+        Binding(get: { liveHandrailSupport }, set: { liveHandrailSupport = $0; persistWorkload() })
+    }
+    private var distanceBinding: Binding<Double> {
+        Binding(get: { confirmedDistanceKm }, set: {
+            confirmedDistanceKm = $0
+            store.setConfirmedCardioDistance(meters: $0 > 0 ? $0 * 1_000 : nil)
+        })
     }
 
     private func finish(_ status: WorkoutCompletionStatus) {

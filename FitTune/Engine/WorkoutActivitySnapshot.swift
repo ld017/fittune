@@ -41,18 +41,38 @@ struct WorkoutActivitySnapshot: Codable, Hashable {
     }
 
     static func cardio(draft: CardioSessionDraft, heartRate: Double?) -> WorkoutActivitySnapshot {
-        WorkoutActivitySnapshot(
+        let workload = draft.currentWorkload
+        return WorkoutActivitySnapshot(
             sessionID: draft.id,
             startedAt: draft.startedAt,
             title: draft.modality.title,
-            currentItem: "有氧训练",
-            progress: draft.intensity.title,
+            currentItem: cardioWorkloadText(workload),
+            progress: draft.modality == .inclineWalking
+                ? workload.map { "\(draft.intensity.title) · 扶把：\($0.handrailSupport.title)" } ?? draft.intensity.title
+                : draft.intensity.title,
             heartRate: heartRate.map { Int($0.rounded()) },
             restEndsAt: nil,
             isCardio: true,
             distanceMeters: draft.distanceMeters > 0 ? draft.distanceMeters : nil,
             cadence: draft.metricSamples.compactMap(\.cadence).last
         )
+    }
+
+    private static func cardioWorkloadText(_ workload: CardioWorkloadSegment?) -> String {
+        guard let workload else { return "有氧训练" }
+        var values: [String] = []
+        if let speed = workload.speedKph {
+            values.append("\(speed.formatted(.number.precision(.fractionLength(1)))) km/h")
+        }
+        if workload.resolvedInclineInputMode == .machineLevel, let level = workload.inclineLevel {
+            values.append("档位 \(Int(level.rounded()))")
+        } else if let grade = workload.resolvedInclinePercent {
+            values.append("\(grade.formatted(.number.precision(.fractionLength(1))))%")
+        }
+        if let power = workload.powerWatts {
+            values.append("\(Int(power.rounded())) W")
+        }
+        return values.isEmpty ? "有氧训练" : values.joined(separator: " · ")
     }
 }
 

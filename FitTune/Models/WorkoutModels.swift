@@ -18,6 +18,38 @@ enum HandrailSupport: String, CaseIterable, Codable, Identifiable {
     case sustained
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .none: "不扶"
+        case .occasional: "偶尔"
+        case .sustained: "持续"
+        }
+    }
+}
+
+enum TreadmillInclineInputMode: String, CaseIterable, Codable, Identifiable {
+    case percentGrade
+    case machineLevel
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .percentGrade: "坡度 %"
+        case .machineLevel: "机器档位"
+        }
+    }
+}
+
+struct TreadmillGradeCalibration: Codable, Equatable {
+    var rise: Double
+    var horizontalRun: Double
+
+    var maximumGradePercent: Double? {
+        guard rise > 0, horizontalRun > 0 else { return nil }
+        return rise / horizontalRun * 100
+    }
 }
 
 enum CardioWorkloadSource: String, Codable {
@@ -32,9 +64,30 @@ struct CardioWorkloadSegment: Identifiable, Codable, Equatable {
     var endedAt: Date? = nil
     var speedKph: Double? = nil
     var inclinePercent: Double? = nil
+    var inclineInputMode: TreadmillInclineInputMode? = nil
+    var inclineLevel: Double? = nil
+    var machineMaximumLevel: Double? = nil
+    var maximumGradeCalibration: TreadmillGradeCalibration? = nil
     var powerWatts: Double? = nil
     var handrailSupport: HandrailSupport = .none
     var source: CardioWorkloadSource
+
+    var resolvedInclineInputMode: TreadmillInclineInputMode {
+        inclineInputMode ?? .percentGrade
+    }
+
+    var resolvedInclinePercent: Double? {
+        switch resolvedInclineInputMode {
+        case .percentGrade:
+            return inclinePercent
+        case .machineLevel:
+            guard let level = inclineLevel,
+                  let maximumLevel = machineMaximumLevel,
+                  maximumLevel > 0,
+                  let maximumGrade = maximumGradeCalibration?.maximumGradePercent else { return nil }
+            return maximumGrade * min(1, max(0, level / maximumLevel))
+        }
+    }
 
     var durationSeconds: TimeInterval? {
         endedAt.map { max(0, $0.timeIntervalSince(startedAt)) }
@@ -80,6 +133,10 @@ struct CardioSessionDraft: Identifiable, Codable, Equatable {
     var workloadSegments: [CardioWorkloadSegment] = []
     var confirmedDistanceMeters: Double? = nil
     var workloadWarnings: [String] = []
+
+    var currentWorkload: CardioWorkloadSegment? {
+        workloadSegments.last(where: { $0.endedAt == nil }) ?? workloadSegments.last
+    }
 }
 
 extension CardioSessionDraft {

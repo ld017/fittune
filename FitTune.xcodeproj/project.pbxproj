@@ -83,6 +83,9 @@
 		B00000000000000000000042 /* DailyHealthSnapshotReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */; };
 		B00000000000000000000043 /* DailyHealthSnapshotReducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */; };
 		B00000000000000000000044 /* HealthDataSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000047 /* HealthDataSyncCoordinator.swift */; };
+		B00000000000000000000045 /* CardioEnergyEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000048 /* CardioEnergyEstimator.swift */; };
+		B00000000000000000000046 /* StrengthEnergyEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000049 /* StrengthEnergyEstimator.swift */; };
+		B00000000000000000000047 /* HeartRateAnalysisEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004A /* HeartRateAnalysisEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -216,6 +219,9 @@
 		C00000000000000000000045 /* DailyHealthSnapshotReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshotReducer.swift; sourceTree = "<group>"; };
 		C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyHealthSnapshotReducerTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000047 /* HealthDataSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthDataSyncCoordinator.swift; sourceTree = "<group>"; };
+		C00000000000000000000048 /* CardioEnergyEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardioEnergyEstimator.swift; sourceTree = "<group>"; };
+		C00000000000000000000049 /* StrengthEnergyEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthEnergyEstimator.swift; sourceTree = "<group>"; };
+		C0000000000000000000004A /* HeartRateAnalysisEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAnalysisEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -298,6 +304,9 @@
 				C00000000000000000000029 /* SummaryEngine.swift */,
 				C0000000000000000000002D /* TrendEngine.swift */,
 				C0000000000000000000002F /* EnergyEngine.swift */,
+				C00000000000000000000048 /* CardioEnergyEstimator.swift */,
+				C00000000000000000000049 /* StrengthEnergyEstimator.swift */,
+				C0000000000000000000004A /* HeartRateAnalysisEngine.swift */,
 				C00000000000000000000038 /* WorkoutActivitySnapshot.swift */,
 			);
 			path = Engine;
@@ -637,6 +646,9 @@
 				B00000000000000000000026 /* SummaryEngine.swift in Sources */,
 				B0000000000000000000002A /* TrendEngine.swift in Sources */,
 				B0000000000000000000002C /* EnergyEngine.swift in Sources */,
+				B00000000000000000000045 /* CardioEnergyEstimator.swift in Sources */,
+				B00000000000000000000046 /* StrengthEnergyEstimator.swift in Sources */,
+				B00000000000000000000047 /* HeartRateAnalysisEngine.swift in Sources */,
 				B00000000000000000000035 /* WorkoutActivitySnapshot.swift in Sources */,
 				B00000000000000000000036 /* WorkoutActivityAttributes.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,

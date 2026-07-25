@@ -88,6 +88,118 @@ final class CardioSessionTests: XCTestCase {
         XCTAssertEqual(draft.workloadSegments[1].speedKph, 5.5)
     }
 
+    func testCardioEntryConfigurationStartsLiveSessionWithoutDroppingInputs() {
+        let store = AppStore(defaults: makeDefaults())
+        store.startCardioSession(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            speedKph: 5.2,
+            inclinePercent: 9,
+            powerWatts: nil,
+            handrailSupport: .occasional
+        )
+
+        XCTAssertEqual(store.activeCardioDraft?.currentWorkload?.speedKph, 5.2)
+        XCTAssertEqual(store.activeCardioDraft?.currentWorkload?.inclinePercent, 9)
+        XCTAssertEqual(store.activeCardioDraft?.currentWorkload?.handrailSupport, .occasional)
+    }
+
+    func testMachineLevelCalibrationResolvesGradeAndSurvivesPersistence() throws {
+        let segment = CardioWorkloadSegment(
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            speedKph: 5,
+            inclineInputMode: .machineLevel,
+            inclineLevel: 10,
+            machineMaximumLevel: 20,
+            maximumGradeCalibration: .init(rise: 30, horizontalRun: 100),
+            handrailSupport: .none,
+            source: .userEntered
+        )
+
+        let restored = try JSONDecoder().decode(
+            CardioWorkloadSegment.self,
+            from: JSONEncoder().encode(segment)
+        )
+
+        XCTAssertEqual(restored.resolvedInclinePercent, 15)
+        XCTAssertEqual(restored.inclineLevel, 10)
+        XCTAssertEqual(restored.machineMaximumLevel, 20)
+        XCTAssertEqual(restored.maximumGradeCalibration, .init(rise: 30, horizontalRun: 100))
+    }
+
+    func testMachineLevelWorkloadChangeCreatesSegmentAndKeepsCalibration() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let calibration = TreadmillGradeCalibration(rise: 20, horizontalRun: 100)
+        store.startCardioSession(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            speedKph: 5,
+            inclineInputMode: .machineLevel,
+            inclineLevel: 20,
+            machineMaximumLevel: 20,
+            maximumGradeCalibration: calibration,
+            handrailSupport: .none,
+            at: start
+        )
+
+        store.updateCardioWorkload(
+            speedKph: 5.5,
+            inclineInputMode: .machineLevel,
+            inclineLevel: 20,
+            machineMaximumLevel: 20,
+            maximumGradeCalibration: calibration,
+            powerWatts: nil,
+            handrailSupport: .none,
+            at: start.addingTimeInterval(60)
+        )
+
+        let draft = try XCTUnwrap(store.activeCardioDraft)
+        XCTAssertEqual(draft.workloadSegments.count, 2)
+        XCTAssertEqual(draft.currentWorkload?.speedKph, 5.5)
+        XCTAssertEqual(draft.currentWorkload?.resolvedInclinePercent, 20)
+        XCTAssertEqual(draft.currentWorkload?.maximumGradeCalibration, calibration)
+    }
+
+    func testLegacyWorkloadWithoutInclineModeDecodesAsPercentGrade() throws {
+        let json = """
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "startedAt": 0,
+          "speedKph": 5,
+          "inclinePercent": 8,
+          "handrailSupport": "none",
+          "source": "userEntered"
+        }
+        """.data(using: .utf8)!
+
+        let restored = try JSONDecoder().decode(CardioWorkloadSegment.self, from: json)
+
+        XCTAssertEqual(restored.resolvedInclinePercent, 8)
+        XCTAssertEqual(restored.resolvedInclineInputMode, .percentGrade)
+    }
+
+    func testManualMachineLevelWorkoutRecordsLevelAndUsesMETUntilCalibrated() throws {
+        let record = TrainingEngine.makeCardioWorkout(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            minutes: 30,
+            weightKg: 70,
+            speedKph: 5,
+            inclineInputMode: .machineLevel,
+            inclineLevel: 20,
+            machineMaximumLevel: 20,
+            maximumGradeCalibration: nil,
+            handrailSupport: .none
+        )
+
+        let workload = try XCTUnwrap(record.workloadSegments?.first)
+        XCTAssertEqual(workload.inclineLevel, 20)
+        XCTAssertEqual(workload.machineMaximumLevel, 20)
+        XCTAssertTrue(record.energyMethod?.contains("MET") == true)
+        XCTAssertTrue(record.energyDiagnostics?.warnings.contains { $0.contains("档位") && $0.contains("校准") } == true)
+    }
+
     func testIdenticalCardioWorkloadUpdateDoesNotCreateAnotherSegment() throws {
         let store = AppStore(defaults: makeDefaults())
         let start = Date(timeIntervalSince1970: 1_700_000_000)

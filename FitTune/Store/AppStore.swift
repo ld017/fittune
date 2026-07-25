@@ -428,6 +428,10 @@ final class AppStore {
         intensity: CardioIntensity,
         speedKph: Double? = nil,
         inclinePercent: Double? = nil,
+        inclineInputMode: TreadmillInclineInputMode? = nil,
+        inclineLevel: Double? = nil,
+        machineMaximumLevel: Double? = nil,
+        maximumGradeCalibration: TreadmillGradeCalibration? = nil,
         powerWatts: Double? = nil,
         handrailSupport: HandrailSupport = .none,
         at startedAt: Date = .now
@@ -439,12 +443,16 @@ final class AppStore {
             startedAt: startedAt,
             updatedAt: startedAt
         )
-        if speedKph != nil || inclinePercent != nil || powerWatts != nil || handrailSupport != .none {
+        if speedKph != nil || inclinePercent != nil || inclineLevel != nil || powerWatts != nil || handrailSupport != .none {
             draft.workloadSegments = [
                 CardioWorkloadSegment(
                     startedAt: startedAt,
                     speedKph: speedKph,
                     inclinePercent: inclinePercent,
+                    inclineInputMode: inclineInputMode,
+                    inclineLevel: inclineLevel,
+                    machineMaximumLevel: machineMaximumLevel,
+                    maximumGradeCalibration: maximumGradeCalibration,
                     powerWatts: powerWatts,
                     handrailSupport: handrailSupport,
                     source: .userEntered
@@ -457,19 +465,27 @@ final class AppStore {
 
     func updateCardioWorkload(
         speedKph: Double?,
-        inclinePercent: Double?,
+        inclinePercent: Double? = nil,
+        inclineInputMode: TreadmillInclineInputMode? = nil,
+        inclineLevel: Double? = nil,
+        machineMaximumLevel: Double? = nil,
+        maximumGradeCalibration: TreadmillGradeCalibration? = nil,
         powerWatts: Double?,
         handrailSupport: HandrailSupport,
         at changedAt: Date = .now
     ) {
         guard var draft = activeCardioDraft else { return }
         guard changedAt > draft.startedAt else { return }
-        let hasWorkload = speedKph != nil || inclinePercent != nil || powerWatts != nil || handrailSupport != .none
+        let hasWorkload = speedKph != nil || inclinePercent != nil || inclineLevel != nil || powerWatts != nil || handrailSupport != .none
         if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
             let current = draft.workloadSegments[openIndex]
             guard changedAt > current.startedAt else { return }
             guard current.speedKph != speedKph
                     || current.inclinePercent != inclinePercent
+                    || current.inclineInputMode != inclineInputMode
+                    || current.inclineLevel != inclineLevel
+                    || current.machineMaximumLevel != machineMaximumLevel
+                    || current.maximumGradeCalibration != maximumGradeCalibration
                     || current.powerWatts != powerWatts
                     || current.handrailSupport != handrailSupport else { return }
             draft.workloadSegments[openIndex].endedAt = changedAt
@@ -481,6 +497,10 @@ final class AppStore {
                 startedAt: changedAt,
                 speedKph: speedKph,
                 inclinePercent: inclinePercent,
+                inclineInputMode: inclineInputMode,
+                inclineLevel: inclineLevel,
+                machineMaximumLevel: machineMaximumLevel,
+                maximumGradeCalibration: maximumGradeCalibration,
                 powerWatts: powerWatts,
                 handrailSupport: handrailSupport,
                 source: .userEntered

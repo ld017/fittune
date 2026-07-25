@@ -135,6 +135,47 @@ final class CardioEnergyEstimatorTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(occasional.upperBound / occasional.kilocalories, 1.25)
     }
 
+    func testUncalibratedMachineLevelDemotesACSMCenterToMET() {
+        let estimate = CardioEnergyEstimator.estimate(input(workloadSegments: [
+            .init(
+                startedAt: start,
+                endedAt: start.addingTimeInterval(3_600),
+                speedKph: 5,
+                inclineInputMode: .machineLevel,
+                inclineLevel: 20,
+                machineMaximumLevel: 20,
+                handrailSupport: .none,
+                source: .userEntered
+            )
+        ]))
+
+        XCTAssertTrue(estimate.method.contains("MET"))
+        XCTAssertFalse(estimate.method.contains("ACSM"))
+        XCTAssertTrue(estimate.diagnostics?.warnings.contains { $0.contains("档位") && $0.contains("校准") } == true)
+    }
+
+    func testCalibratedMachineLevelConvertsToActualGradeForACSM() {
+        let levelEstimate = CardioEnergyEstimator.estimate(input(workloadSegments: [
+            .init(
+                startedAt: start,
+                endedAt: start.addingTimeInterval(3_600),
+                speedKph: 5,
+                inclineInputMode: .machineLevel,
+                inclineLevel: 10,
+                machineMaximumLevel: 20,
+                maximumGradeCalibration: .init(rise: 30, horizontalRun: 100),
+                handrailSupport: .none,
+                source: .userEntered
+            )
+        ]))
+        let percentEstimate = CardioEnergyEstimator.estimate(input(workloadSegments: [
+            walkingSegment(speedKph: 5, inclinePercent: 15)
+        ]))
+
+        XCTAssertTrue(levelEstimate.method.contains("ACSM"))
+        XCTAssertEqual(levelEstimate.kilocalories, percentEstimate.kilocalories, accuracy: 0.01)
+    }
+
     func testHeartRateFillsOnlyCoveredIntervalsAndMETFillsGap() {
         let source = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
         let samples = stride(from: 0.0, through: 1_200, by: 10).map {

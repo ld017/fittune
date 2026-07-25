@@ -19,7 +19,13 @@ struct TodayView: View {
     @State private var cardioAverageHR = 0.0
     @State private var cardioMeasuredKcal = 0.0
     @State private var cardioSpeedKph = 0.0
-    @State private var cardioInclinePercent = 0.0
+    @State private var cardioInclinePercent = 20.0
+    @State private var cardioInclineMode: TreadmillInclineInputMode = .percentGrade
+    @State private var cardioInclineLevel = 20.0
+    @State private var cardioMachineMaximumLevel = 20.0
+    @State private var cardioCalibrationRise = 0.0
+    @State private var cardioCalibrationRun = 0.0
+    @State private var cardioHandrailSupport: HandrailSupport = .none
     @State private var cardioPowerWatts = 0.0
     @State private var cardioFloors = 0.0
     @State private var cardioSessionRPE = 5.0
@@ -541,7 +547,7 @@ struct TodayView: View {
                 .padding(12)
                 .background(FitTheme.elevated, in: RoundedRectangle(cornerRadius: 12))
             }
-            Text("可选爬坡、楼梯、游泳、跑步、骑行、划船、椭圆机、快走或跳绳；手表主动消耗优先于 MET 估算。")
+            Text("可选爬坡、楼梯、游泳、跑步、骑行、划船、椭圆机、快走或跳绳；设备主动消耗会作为独立对照并保留来源。")
                 .font(.caption)
                 .foregroundStyle(FitTheme.secondaryText)
         }
@@ -567,7 +573,28 @@ struct TodayView: View {
                             NumericInputControl(title: "距离（可选）", value: $cardioDistanceKm, range: 0...300, step: 0.1, unit: "km")
                             if [.running, .briskWalking, .inclineWalking].contains(cardioModality) {
                                 NumericInputControl(title: "平均速度（可选）", value: $cardioSpeedKph, range: 0...30, step: 0.1, unit: "km/h")
-                                NumericInputControl(title: "坡度（可选）", value: $cardioInclinePercent, range: 0...40, step: 0.5, unit: "%")
+                            }
+                            if cardioModality == .inclineWalking {
+                                Picker("坡度输入", selection: $cardioInclineMode) {
+                                    ForEach(TreadmillInclineInputMode.allCases) { Text($0.title).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
+                                if cardioInclineMode == .percentGrade {
+                                    NumericInputControl(title: "当前坡度", value: $cardioInclinePercent, range: 0...40, step: 0.5, unit: "%")
+                                } else {
+                                    NumericInputControl(title: "当前档位", value: $cardioInclineLevel, range: 0...100, step: 1, unit: "级")
+                                    NumericInputControl(title: "最高档位", value: $cardioMachineMaximumLevel, range: 1...100, step: 1, unit: "级")
+                                    NumericInputControl(title: "最高档抬升", value: $cardioCalibrationRise, range: 0...1000, step: 0.5, unit: "cm")
+                                    NumericInputControl(title: "水平长度", value: $cardioCalibrationRun, range: 0...1000, step: 0.5, unit: "cm")
+                                    Text(machineCalibrationText)
+                                        .font(.caption)
+                                        .foregroundStyle(cardioGradeCalibration == nil ? FitTheme.warning : FitTheme.secondaryText)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                Picker("扶把", selection: $cardioHandrailSupport) {
+                                    ForEach(HandrailSupport.allCases) { Text($0.title).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
                             }
                             if [.cycling, .rowing].contains(cardioModality) {
                                 NumericInputControl(title: "平均功率（可选）", value: $cardioPowerWatts, range: 0...1000, step: 5, unit: "W")
@@ -589,7 +616,12 @@ struct TodayView: View {
                             distanceKm: cardioDistanceKm > 0 ? cardioDistanceKm : nil,
                             averageHeartRate: cardioAverageHR > 0 ? cardioAverageHR : nil,
                             speedKph: cardioSpeedKph > 0 ? cardioSpeedKph : nil,
-                            inclinePercent: cardioInclinePercent > 0 ? cardioInclinePercent : nil,
+                            inclinePercent: cardioModality == .inclineWalking && cardioInclineMode == .percentGrade ? cardioInclinePercent : nil,
+                            inclineInputMode: cardioModality == .inclineWalking ? cardioInclineMode : nil,
+                            inclineLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioInclineLevel : nil,
+                            machineMaximumLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioMachineMaximumLevel : nil,
+                            maximumGradeCalibration: cardioGradeCalibration,
+                            handrailSupport: cardioModality == .inclineWalking ? cardioHandrailSupport : .none,
                             measuredActiveEnergy: cardioMeasuredKcal > 0 ? cardioMeasuredKcal : nil
                         )
                         VStack(alignment: .leading, spacing: 5) {
@@ -610,7 +642,12 @@ struct TodayView: View {
                                 distanceKm: cardioDistanceKm > 0 ? cardioDistanceKm : nil,
                                 averageHeartRate: cardioAverageHR > 0 ? cardioAverageHR : nil,
                                 speedKph: cardioSpeedKph > 0 ? cardioSpeedKph : nil,
-                                inclinePercent: cardioInclinePercent > 0 ? cardioInclinePercent : nil,
+                                inclinePercent: cardioModality == .inclineWalking && cardioInclineMode == .percentGrade ? cardioInclinePercent : nil,
+                                inclineInputMode: cardioModality == .inclineWalking ? cardioInclineMode : nil,
+                                inclineLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioInclineLevel : nil,
+                                machineMaximumLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioMachineMaximumLevel : nil,
+                                maximumGradeCalibration: cardioGradeCalibration,
+                                handrailSupport: cardioModality == .inclineWalking ? cardioHandrailSupport : .none,
                                 powerWatts: cardioPowerWatts > 0 ? cardioPowerWatts : nil,
                                 floorsClimbed: cardioFloors > 0 ? cardioFloors : nil,
                                 sessionRPE: cardioSessionRPE,
@@ -621,7 +658,18 @@ struct TodayView: View {
                         }
                         .buttonStyle(PrimaryActionButtonStyle())
                         Button {
-                            store.startCardioSession(modality: cardioModality, intensity: cardioIntensity)
+                            store.startCardioSession(
+                                modality: cardioModality,
+                                intensity: cardioIntensity,
+                                speedKph: cardioSpeedKph > 0 ? cardioSpeedKph : nil,
+                                inclinePercent: cardioModality == .inclineWalking && cardioInclineMode == .percentGrade ? cardioInclinePercent : nil,
+                                inclineInputMode: cardioModality == .inclineWalking ? cardioInclineMode : nil,
+                                inclineLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioInclineLevel : nil,
+                                machineMaximumLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioMachineMaximumLevel : nil,
+                                maximumGradeCalibration: cardioGradeCalibration,
+                                powerWatts: cardioPowerWatts > 0 ? cardioPowerWatts : nil,
+                                handrailSupport: cardioModality == .inclineWalking ? cardioHandrailSupport : .none
+                            )
                             showCardioEntry = false
                         } label: {
                             Label("开始实时记录", systemImage: "record.circle")
@@ -635,6 +683,21 @@ struct TodayView: View {
             .navigationTitle("记录有氧训练")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showCardioEntry = false } } }
         }
+    }
+
+    private var cardioGradeCalibration: TreadmillGradeCalibration? {
+        guard cardioModality == .inclineWalking,
+              cardioInclineMode == .machineLevel,
+              cardioCalibrationRise > 0 || cardioCalibrationRun > 0 else { return nil }
+        return TreadmillGradeCalibration(rise: cardioCalibrationRise, horizontalRun: cardioCalibrationRun)
+    }
+
+    private var machineCalibrationText: String {
+        guard let maximumGrade = cardioGradeCalibration?.maximumGradePercent else {
+            return "各机器档位不通用。按“抬升 ÷ 水平长度 × 100”校准后才使用 ACSM；未校准时改用心率/MET。"
+        }
+        let currentGrade = maximumGrade * min(1, max(0, cardioInclineLevel / cardioMachineMaximumLevel))
+        return "最高档实测坡度 \(maximumGrade.formatted(.number.precision(.fractionLength(1))))%；当前约 \(currentGrade.formatted(.number.precision(.fractionLength(1))))%。"
     }
 
     private func syncWatchWorkouts() {
