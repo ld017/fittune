@@ -645,6 +645,39 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
+    func testFinishedCardioUsesConfirmedDistanceAndKeepsDeviceEnergyAsComparison() throws {
+        let store = configuredStore(weightKg: 70)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCardioSession(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            speedKph: 5,
+            inclinePercent: 8,
+            at: start
+        )
+        store.appendCardioMetricSample(watchEnergySample(kcal: 166, at: start))
+        store.appendCardioMetricSample(
+            .init(
+                timestamp: start.addingTimeInterval(1_800),
+                distanceMeters: 4_000,
+                provenance: .init(source: .phoneSensor, sourceName: "iPhone", confidence: .measured, coverage: 1)
+            )
+        )
+        store.setConfirmedCardioDistance(meters: 5_000)
+
+        let record = try XCTUnwrap(store.finishCardioSession(
+            status: .completed,
+            at: start.addingTimeInterval(3_600)
+        ))
+
+        XCTAssertEqual(record.activeEnergyKcal, 427, accuracy: 1)
+        XCTAssertEqual(record.energyDiagnostics?.comparisonEstimateKcal, 166)
+        XCTAssertEqual(record.distanceKm, 5)
+        XCTAssertEqual(record.confirmedDistanceMeters, 5_000)
+        XCTAssertEqual(record.sensorDistanceMeters, 4_000)
+        XCTAssertEqual(record.workloadSegments?.first?.endedAt, start.addingTimeInterval(3_600))
+    }
+
     func testStrengthSaveCalculatesEnergyAfterAttachingHeartRateSeries() throws {
         let store = AppStore(defaults: makeDefaults())
         var user = testProfile(goal: .hypertrophy, split: .fullBody)
@@ -797,6 +830,43 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNotEqual(updated.activeEnergyKcal, 5)
         XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
         XCTAssertTrue(updated.energyMethod?.contains("Keytel") == true)
+    }
+
+    func testCurrentCardioEnergyRecordRecalculatesLegacyMechanicalEvidenceWithoutSamples() {
+        let store = configuredStore(weightKg: 70)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let record = CardioWorkoutRecord(
+            date: start,
+            modality: .inclineWalking,
+            intensity: .zone2,
+            durationMinutes: 60,
+            activeEnergyKcal: 100,
+            source: "旧记录",
+            speedKph: 5,
+            inclinePercent: 8
+        )
+
+        let current = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(current.activeEnergyKcal, 427, accuracy: 1)
+        XCTAssertEqual(current.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
+    }
+
+    func testCurrentCardioEnergyRecordWithoutEvidenceRetainsSavedEnergyAndAddsLegacyWarning() {
+        let store = AppStore(defaults: makeDefaults())
+        let record = CardioWorkoutRecord(
+            date: Date(timeIntervalSince1970: 1_700_000_000),
+            modality: .inclineWalking,
+            intensity: .zone2,
+            durationMinutes: 60,
+            activeEnergyKcal: 100,
+            source: "旧记录"
+        )
+
+        let current = store.currentEnergyRecord(record)
+
+        XCTAssertEqual(current.activeEnergyKcal, 100)
+        XCTAssertTrue(current.energyDiagnostics?.warnings.contains { $0.contains("历史") } == true)
     }
 
     func testCurrentStrengthEnergyRecordKeepsSavedValueWithoutUsableHeartRate() {
@@ -1046,6 +1116,31 @@ final class AppStoreTests: XCTestCase {
             bodyWeightKg: 70,
             loadIncrementKg: 2.5,
             splitPreference: split
+        )
+    }
+
+    private func configuredStore(weightKg: Double) -> AppStore {
+        let store = AppStore(defaults: makeDefaults())
+        store.weightHistory = [
+            WeightEntry(
+                date: Date(timeIntervalSince1970: 1_699_999_000),
+                kilograms: weightKg,
+                source: "测试"
+            )
+        ]
+        return store
+    }
+
+    private func watchEnergySample(kcal: Double, at date: Date) -> WorkoutMetricSample {
+        WorkoutMetricSample(
+            timestamp: date,
+            activeEnergyKcal: kcal,
+            provenance: MetricProvenance(
+                source: .appleWatch,
+                sourceName: "Apple Watch",
+                confidence: .estimated,
+                coverage: 1
+            )
         )
     }
 }

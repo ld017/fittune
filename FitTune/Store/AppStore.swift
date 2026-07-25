@@ -203,42 +203,99 @@ final class AppStore {
     }
 
     func currentEnergyRecord(_ record: CardioWorkoutRecord) -> CardioWorkoutRecord {
-        guard record.energyAlgorithmVersion != EnergyEngine.algorithmVersion,
-              let samples = record.metricSamples,
-              !samples.isEmpty else { return record }
+        guard record.energyAlgorithmVersion != EnergyEngine.algorithmVersion else { return record }
         let completedAt = record.date.addingTimeInterval(Double(record.durationMinutes) * 60)
+        let samples = record.metricSamples ?? []
         let measured = TrainingEngine.appleWatchActiveEnergy(from: samples)
-        guard measured != nil || TrainingEngine.hasUsableHeartRateSeries(
+        let hasUsableSamples = measured != nil || TrainingEngine.hasUsableHeartRateSeries(
             samples,
             startedAt: record.date,
             completedAt: completedAt
-        ) else { return record }
+        )
+        let legacySegments = cardioLegacySegments(for: record, completedAt: completedAt)
+        guard hasUsableSamples || !legacySegments.isEmpty else {
+            var current = record
+            var diagnostics = current.energyDiagnostics ?? EnergyEstimateDiagnostics(
+                primaryModel: "保留历史有氧估算",
+                inputsUsed: [],
+                warnings: [],
+                comparisonEstimateKcal: nil,
+                dataCoverage: 0
+            )
+            let warning = "历史有氧记录缺少可用的速度/坡度、功率或原始心率数据，保留原有热量估算。"
+            if !diagnostics.warnings.contains(warning) {
+                diagnostics.warnings.append(warning)
+            }
+            current.energyDiagnostics = diagnostics
+            return current
+        }
         var current = record
-        let estimate = TrainingEngine.cardioEnergyEstimate(
-            modality: record.modality,
-            intensity: record.intensity,
-            minutes: record.durationMinutes,
-            weightKg: latestWeight ?? profile?.bodyWeightKg ?? 70,
-            profile: profile,
-            distanceKm: record.distanceKm,
-            averageHeartRate: record.averageHeartRate,
-            speedKph: record.speedKph,
-            inclinePercent: record.inclinePercent,
-            measuredActiveEnergy: measured,
-            metricSamples: samples,
-            startedAt: record.date
+        let deviceEnergy = record.deviceActiveEnergyEstimateKcal ?? measured
+        let estimate = CardioEnergyEstimator.estimate(
+            CardioEnergyInput(
+                modality: record.modality,
+                intensity: record.intensity,
+                startedAt: record.date,
+                completedAt: completedAt,
+                weightKg: latestWeight ?? profile?.bodyWeightKg ?? 70,
+                profile: profile,
+                confirmedDistanceKm: record.confirmedDistanceMeters.map { $0 / 1_000 } ?? record.distanceKm,
+                sensorDistanceKm: record.sensorDistanceMeters.map { $0 / 1_000 },
+                workloadSegments: legacySegments,
+                metricSamples: samples,
+                deviceEstimateKcal: deviceEnergy,
+                deviceEnergySource: record.deviceEnergySource ?? (measured == nil ? nil : .appleWatch),
+                importedDeviceOnly: false
+            )
         )
         current.activeEnergyKcal = estimate.kilocalories
         current.energyLowerBoundKcal = estimate.lowerBound
         current.energyUpperBoundKcal = estimate.upperBound
         current.energyMethod = estimate.method
         current.energyAlgorithmVersion = EnergyEngine.algorithmVersion
+        current.energyDiagnostics = estimate.diagnostics
         if measured != nil { current.source = "Apple Watch 设备实测" }
         current.summary = SummaryEngine.cardioSummary(
             for: current,
             maximumHeartRate: resolvedMaximumHeartRate
         )
         return current
+    }
+
+    private func cardioLegacySegments(
+        for record: CardioWorkoutRecord,
+        completedAt: Date
+    ) -> [CardioWorkloadSegment] {
+        let validSavedSegments = (record.workloadSegments ?? []).filter { segment in
+            let validSpeed = segment.speedKph.map { (1...25).contains($0) } ?? false
+            let validPower = segment.powerWatts.map { $0 > 0 } ?? false
+            let validIncline = segment.inclinePercent.map { (0...40).contains($0) } ?? true
+            return validIncline && (validSpeed || validPower)
+        }
+        if !validSavedSegments.isEmpty { return validSavedSegments }
+
+        guard let speed = record.speedKph,
+              (1...25).contains(speed),
+              record.inclinePercent.map({ (0...40).contains($0) }) ?? true else {
+            guard let power = record.powerWatts, power > 0 else { return [] }
+            return [
+                CardioWorkloadSegment(
+                    startedAt: record.date,
+                    endedAt: completedAt,
+                    powerWatts: power,
+                    source: .userEntered
+                )
+            ]
+        }
+        return [
+            CardioWorkloadSegment(
+                startedAt: record.date,
+                endedAt: completedAt,
+                speedKph: speed,
+                inclinePercent: record.inclinePercent,
+                source: .userEntered
+            )
+        ]
     }
 
     private func savedEnergyRange(
@@ -353,9 +410,77 @@ final class AppStore {
         return RecoveryDimensionValue(provenance: .unavailable)
     }
 
-    func startCardioSession(modality: CardioModality, intensity: CardioIntensity) {
+    func startCardioSession(
+        modality: CardioModality,
+        intensity: CardioIntensity,
+        speedKph: Double? = nil,
+        inclinePercent: Double? = nil,
+        powerWatts: Double? = nil,
+        handrailSupport: HandrailSupport = .none,
+        at startedAt: Date = .now
+    ) {
         guard activeCardioDraft == nil, activeWorkoutDraft == nil else { return }
-        activeCardioDraft = CardioSessionDraft(modality: modality, intensity: intensity)
+        var draft = CardioSessionDraft(
+            modality: modality,
+            intensity: intensity,
+            startedAt: startedAt,
+            updatedAt: startedAt
+        )
+        if speedKph != nil || inclinePercent != nil || powerWatts != nil || handrailSupport != .none {
+            draft.workloadSegments = [
+                CardioWorkloadSegment(
+                    startedAt: startedAt,
+                    speedKph: speedKph,
+                    inclinePercent: inclinePercent,
+                    powerWatts: powerWatts,
+                    handrailSupport: handrailSupport,
+                    source: .userEntered
+                )
+            ]
+        }
+        activeCardioDraft = draft
+        persist()
+    }
+
+    func updateCardioWorkload(
+        speedKph: Double?,
+        inclinePercent: Double?,
+        powerWatts: Double?,
+        handrailSupport: HandrailSupport,
+        at changedAt: Date = .now
+    ) {
+        guard var draft = activeCardioDraft else { return }
+        let hasWorkload = speedKph != nil || inclinePercent != nil || powerWatts != nil || handrailSupport != .none
+        if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
+            let current = draft.workloadSegments[openIndex]
+            guard current.speedKph != speedKph
+                    || current.inclinePercent != inclinePercent
+                    || current.powerWatts != powerWatts
+                    || current.handrailSupport != handrailSupport else { return }
+            draft.workloadSegments[openIndex].endedAt = changedAt
+        } else if !hasWorkload {
+            return
+        }
+        draft.workloadSegments.append(
+            CardioWorkloadSegment(
+                startedAt: changedAt,
+                speedKph: speedKph,
+                inclinePercent: inclinePercent,
+                powerWatts: powerWatts,
+                handrailSupport: handrailSupport,
+                source: .userEntered
+            )
+        )
+        draft.updatedAt = changedAt
+        activeCardioDraft = draft
+        persist()
+    }
+
+    func setConfirmedCardioDistance(meters: Double?) {
+        guard var draft = activeCardioDraft else { return }
+        draft.confirmedDistanceMeters = meters
+        draft.updatedAt = .now
+        activeCardioDraft = draft
         persist()
     }
 
@@ -389,26 +514,61 @@ final class AppStore {
 
     @discardableResult
     func finishCardioSession(status: WorkoutCompletionStatus, at completedAt: Date = .now) -> CardioWorkoutRecord? {
-        guard let draft = activeCardioDraft else { return nil }
+        guard var draft = activeCardioDraft else { return nil }
+        if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
+            draft.workloadSegments[openIndex].endedAt = completedAt
+        }
         let minutes = max(1, Int(completedAt.timeIntervalSince(draft.startedAt) / 60))
         let heartRates = draft.metricSamples.compactMap(\.heartRateBPM)
         let watchEnergy = TrainingEngine.appleWatchActiveEnergy(from: draft.metricSamples)
-        var record = TrainingEngine.makeCardioWorkout(
+        let confirmedDistanceKm = draft.confirmedDistanceMeters.map { $0 / 1_000 }
+        let sensorDistanceKm = draft.distanceMeters > 0 ? draft.distanceMeters / 1_000 : nil
+        let distanceKm = confirmedDistanceKm ?? sensorDistanceKm
+        let estimate = CardioEnergyEstimator.estimate(
+            CardioEnergyInput(
+                modality: draft.modality,
+                intensity: draft.intensity,
+                startedAt: draft.startedAt,
+                completedAt: completedAt,
+                weightKg: latestWeight ?? profile?.bodyWeightKg ?? 70,
+                profile: profile,
+                confirmedDistanceKm: confirmedDistanceKm,
+                sensorDistanceKm: sensorDistanceKm,
+                workloadSegments: draft.workloadSegments,
+                metricSamples: draft.metricSamples,
+                deviceEstimateKcal: watchEnergy,
+                deviceEnergySource: watchEnergy == nil ? nil : .appleWatch,
+                importedDeviceOnly: false
+            )
+        )
+        let latestWorkload = draft.workloadSegments.last
+        var record = CardioWorkoutRecord(
+            date: draft.startedAt,
             modality: draft.modality,
             intensity: draft.intensity,
-            minutes: minutes,
-            weightKg: latestWeight ?? 70,
-            profile: profile,
-            distanceKm: draft.distanceMeters > 0 ? draft.distanceMeters / 1000 : nil,
+            durationMinutes: minutes,
+            distanceKm: distanceKm,
             averageHeartRate: heartRates.isEmpty ? nil : heartRates.reduce(0, +) / Double(heartRates.count),
-            measuredActiveEnergy: watchEnergy,
+            activeEnergyKcal: estimate.kilocalories,
             source: watchEnergy == nil ? "FitTune 实时采集" : "Apple Watch 设备实测",
-            date: draft.startedAt,
+            speedKph: latestWorkload?.speedKph,
+            inclinePercent: latestWorkload?.inclinePercent,
+            powerWatts: latestWorkload?.powerWatts,
+            energyMethod: estimate.method,
+            energyLowerBoundKcal: estimate.lowerBound,
+            energyUpperBoundKcal: estimate.upperBound,
+            energyAlgorithmVersion: EnergyEngine.algorithmVersion,
+            completionStatus: status,
+            dataGapReason: draft.dataGapReason,
             metricSamples: draft.metricSamples,
-            startedAt: draft.startedAt
+            workloadSegments: draft.workloadSegments,
+            confirmedDistanceMeters: draft.confirmedDistanceMeters,
+            sensorDistanceMeters: draft.distanceMeters > 0 ? draft.distanceMeters : nil,
+            energyDiagnostics: estimate.diagnostics,
+            deviceActiveEnergyEstimateKcal: watchEnergy,
+            deviceEnergySource: watchEnergy == nil ? nil : .appleWatch
         )
-        record.completionStatus = status
-        record.dataGapReason = draft.dataGapReason
+        record.effect = TrainingEngine.evaluateCardioWorkout(record)
         record.summary = SummaryEngine.cardioSummary(for: record, maximumHeartRate: resolvedMaximumHeartRate)
         cardioWorkouts.insert(record, at: 0)
         activeCardioDraft = nil

@@ -60,6 +60,57 @@ final class CardioSessionTests: XCTestCase {
         XCTAssertEqual(restored.activeCardioDraft?.distanceMeters, 100)
     }
 
+    func testLiveCardioKeepsAndSegmentsInitialTreadmillWorkload() throws {
+        let defaults = makeDefaults()
+        let store = AppStore(defaults: defaults)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        store.startCardioSession(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            speedKph: 5,
+            inclinePercent: 8,
+            powerWatts: nil,
+            handrailSupport: .none,
+            at: start
+        )
+        store.updateCardioWorkload(
+            speedKph: 5.5,
+            inclinePercent: 10,
+            powerWatts: nil,
+            handrailSupport: .occasional,
+            at: start.addingTimeInterval(1_800)
+        )
+
+        let draft = try XCTUnwrap(store.activeCardioDraft)
+        XCTAssertEqual(draft.workloadSegments.count, 2)
+        XCTAssertEqual(draft.workloadSegments[0].endedAt, start.addingTimeInterval(1_800))
+        XCTAssertEqual(draft.workloadSegments[1].speedKph, 5.5)
+    }
+
+    func testIdenticalCardioWorkloadUpdateDoesNotCreateAnotherSegment() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCardioSession(
+            modality: .cycling,
+            intensity: .zone2,
+            powerWatts: 180,
+            at: start
+        )
+
+        store.updateCardioWorkload(
+            speedKph: nil,
+            inclinePercent: nil,
+            powerWatts: 180,
+            handrailSupport: .none,
+            at: start.addingTimeInterval(600)
+        )
+
+        let draft = try XCTUnwrap(store.activeCardioDraft)
+        XCTAssertEqual(draft.workloadSegments.count, 1)
+        XCTAssertNil(draft.workloadSegments[0].endedAt)
+    }
+
     func testPermissionInterruptionCreatesPartialResultWithGapReason() throws {
         let store = AppStore(defaults: makeDefaults())
         store.startCardioSession(modality: .cycling, intensity: .zone2)
