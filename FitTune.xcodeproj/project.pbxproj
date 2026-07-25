@@ -86,6 +86,10 @@
 		B00000000000000000000045 /* CardioEnergyEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000048 /* CardioEnergyEstimator.swift */; };
 		B00000000000000000000046 /* StrengthEnergyEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000049 /* StrengthEnergyEstimator.swift */; };
 		B00000000000000000000047 /* HeartRateAnalysisEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004A /* HeartRateAnalysisEngine.swift */; };
+		B00000000000000000000048 /* HeartRateAnalysisEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004B /* HeartRateAnalysisEngineTests.swift */; };
+		B00000000000000000000049 /* CardioEnergyEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004C /* CardioEnergyEstimatorTests.swift */; };
+		B0000000000000000000004A /* StrengthEnergyEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */; };
+		B0000000000000000000004B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004E /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -222,6 +226,10 @@
 		C00000000000000000000048 /* CardioEnergyEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardioEnergyEstimator.swift; sourceTree = "<group>"; };
 		C00000000000000000000049 /* StrengthEnergyEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthEnergyEstimator.swift; sourceTree = "<group>"; };
 		C0000000000000000000004A /* HeartRateAnalysisEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAnalysisEngine.swift; sourceTree = "<group>"; };
+		C0000000000000000000004B /* HeartRateAnalysisEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAnalysisEngineTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000004C /* CardioEnergyEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardioEnergyEstimatorTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthEnergyEstimatorTests.swift; sourceTree = "<group>"; };
+		C0000000000000000000004E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -368,6 +376,7 @@
 			children = (
 				C00000000000000000000012 /* FitTune.entitlements */,
 				C0000000000000000000000F /* PrivacyInfo.xcprivacy */,
+				C0000000000000000000004E /* Assets.xcassets */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -392,6 +401,9 @@
 				C0000000000000000000003F /* ExerciseReplacementEngineTests.swift */,
 				C00000000000000000000041 /* PlanEditingEngineTests.swift */,
 				C00000000000000000000046 /* DailyHealthSnapshotReducerTests.swift */,
+				C0000000000000000000004B /* HeartRateAnalysisEngineTests.swift */,
+				C0000000000000000000004C /* CardioEnergyEstimatorTests.swift */,
+				C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -593,6 +605,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B0000000000000000000000F /* PrivacyInfo.xcprivacy in Resources */,
+				B0000000000000000000004B /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -705,6 +718,9 @@
 				B0000000000000000000003C /* ExerciseReplacementEngineTests.swift in Sources */,
 				B0000000000000000000003E /* PlanEditingEngineTests.swift in Sources */,
 				B00000000000000000000043 /* DailyHealthSnapshotReducerTests.swift in Sources */,
+				B00000000000000000000048 /* HeartRateAnalysisEngineTests.swift in Sources */,
+				B00000000000000000000049 /* CardioEnergyEstimatorTests.swift in Sources */,
+				B0000000000000000000004A /* StrengthEnergyEstimatorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -734,13 +750,13 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -756,13 +772,13 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -779,13 +795,13 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FitTuneWatch/FitTuneWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWatch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -802,12 +818,12 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FitTuneWatch/FitTuneWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWatch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -870,7 +886,8 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FitTune/Resources/FitTune.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -889,7 +906,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -905,7 +922,8 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FitTune/Resources/FitTune.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTune/Resources/Info.plist;
@@ -923,7 +941,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
