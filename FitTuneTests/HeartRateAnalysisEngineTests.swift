@@ -2,6 +2,36 @@ import XCTest
 @testable import FitTune
 
 final class HeartRateAnalysisEngineTests: XCTestCase {
+    func testFatOxidationOpportunityUsesInclusiveFortyToSixtyFivePercentHRRBounds() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "H10",
+            confidence: .measured,
+            coverage: 1
+        )
+
+        func fatOpportunitySeconds(for heartRate: Double) throws -> Double {
+            let summary = try XCTUnwrap(HeartRateAnalysisEngine.intensitySummary(
+                samples: [
+                    .init(timestamp: start, heartRateBPM: heartRate, provenance: source),
+                    .init(timestamp: start.addingTimeInterval(10), heartRateBPM: heartRate, provenance: source)
+                ],
+                startedAt: start,
+                completedAt: start.addingTimeInterval(10),
+                restingHeartRate: 60,
+                maximumHeartRate: 180
+            ))
+            return summary.fatOxidationOpportunityMinutes * 60
+        }
+
+        XCTAssertEqual(try fatOpportunitySeconds(for: 107), 0, accuracy: 0.001)
+        XCTAssertEqual(try fatOpportunitySeconds(for: 108), 10, accuracy: 0.001)
+        XCTAssertEqual(try fatOpportunitySeconds(for: 132), 10, accuracy: 0.001)
+        XCTAssertEqual(try fatOpportunitySeconds(for: 138), 10, accuracy: 0.001)
+        XCTAssertEqual(try fatOpportunitySeconds(for: 139), 0, accuracy: 0.001)
+    }
+
     func testIntensityUsesElapsedTimeInsteadOfSampleCount() throws {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let source = MetricProvenance(

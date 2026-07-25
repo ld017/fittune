@@ -134,6 +134,91 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertFalse(summary.strength?.heartRateResponses?.isEmpty ?? true)
     }
 
+    func testCardioSummaryPersistsHRRMethodAndFallbackConfidence() {
+        let record = makeSteadyInclineRecord(durationMinutes: 30, heartRateBPM: 125)
+
+        let hrrSummary = SummaryEngine.cardioSummary(
+            for: record,
+            restingHeartRate: 60,
+            maximumHeartRate: 180
+        )
+        let fallbackSummary = SummaryEngine.cardioSummary(
+            for: record,
+            maximumHeartRate: 180
+        )
+
+        XCTAssertEqual(hrrSummary.cardio?.usedHeartRateReserve, true)
+        XCTAssertEqual(hrrSummary.cardio?.intensityConfidence, .derived)
+        XCTAssertEqual(fallbackSummary.cardio?.usedHeartRateReserve, false)
+        XCTAssertEqual(fallbackSummary.cardio?.intensityConfidence, .estimated)
+        XCTAssertNil(fallbackSummary.cardio?.fatOxidationOpportunityMinutes)
+    }
+
+    func testCardioSummaryUsesElapsedTimeForIntensityPercentages() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let provenance = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
+        var record = CardioWorkoutRecord(
+            date: start,
+            modality: .cycling,
+            intensity: .intervals,
+            durationMinutes: 1,
+            activeEnergyKcal: 1,
+            source: "FitTune"
+        )
+        record.metricSamples = [
+            .init(timestamp: start, heartRateBPM: 100, provenance: provenance),
+            .init(timestamp: start.addingTimeInterval(5), heartRateBPM: 100, provenance: provenance),
+            .init(timestamp: start.addingTimeInterval(10), heartRateBPM: 160, provenance: provenance),
+            .init(timestamp: start.addingTimeInterval(25), heartRateBPM: 160, provenance: provenance),
+            .init(timestamp: start.addingTimeInterval(30), heartRateBPM: 160, provenance: provenance)
+        ]
+
+        let summary = SummaryEngine.cardioSummary(
+            for: record,
+            restingHeartRate: 60,
+            maximumHeartRate: 180
+        )
+
+        XCTAssertEqual(summary.cardio?.percentageByIntensityZone?[.light] ?? -1, 1.0 / 6.0, accuracy: 0.001)
+        XCTAssertEqual(summary.cardio?.percentageByIntensityZone?[.moderate] ?? -1, 1.0 / 6.0, accuracy: 0.001)
+        XCTAssertEqual(summary.cardio?.percentageByIntensityZone?[.vigorous] ?? -1, 2.0 / 3.0, accuracy: 0.001)
+    }
+
+    func testStrengthSummaryReportsCompleteTargetWorkingSetsFromPlanSnapshot() {
+        let summary = SummaryEngine.strengthSummary(
+            for: makePlanSnapshotStrengthRecord(completedWorkingSets: 2),
+            bodyWeightKg: 70
+        )
+
+        XCTAssertEqual(summary.strength?.targetWorkingSetCount, 2)
+        XCTAssertEqual(summary.strength?.targetSetCompletion, 1)
+    }
+
+    func testStrengthSummaryReportsPartialTargetWorkingSetsFromPlanSnapshot() {
+        let summary = SummaryEngine.strengthSummary(
+            for: makePlanSnapshotStrengthRecord(completedWorkingSets: 1),
+            bodyWeightKg: 70
+        )
+
+        XCTAssertEqual(summary.strength?.targetWorkingSetCount, 2)
+        XCTAssertEqual(summary.strength?.targetSetCompletion, 0.5)
+    }
+
+    func testStrengthSummaryLeavesTargetWorkingSetCompletionUnavailableWithoutPlanSnapshot() {
+        let record = WorkoutRecord(
+            sessionName: "腿",
+            startedAt: .now,
+            completedAt: .now.addingTimeInterval(60),
+            readinessScore: 80,
+            sets: []
+        )
+
+        let summary = SummaryEngine.strengthSummary(for: record, bodyWeightKg: 70)
+
+        XCTAssertNil(summary.strength?.targetWorkingSetCount)
+        XCTAssertNil(summary.strength?.targetSetCompletion)
+    }
+
     private func makeSteadyInclineRecord(
         durationMinutes: Int,
         heartRateBPM: Double
@@ -257,6 +342,49 @@ final class SummaryEngineTests: XCTestCase {
                 )
             ],
             sessionRPE: 8
+        )
+    }
+
+    private func makePlanSnapshotStrengthRecord(completedWorkingSets: Int) -> WorkoutRecord {
+        let exerciseID = UUID()
+        let prescription = ExercisePrescription(
+            id: exerciseID,
+            name: "杠铃深蹲",
+            pattern: .squat,
+            sets: 2,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 1,
+            isPriority: true,
+            workingSets: 2
+        )
+        let snapshot = PlanSnapshot(
+            sourcePlanRuleVersion: "test",
+            sourceSessionID: UUID(),
+            planTitle: "测试计划",
+            sessionName: "腿",
+            goal: .generalFitness,
+            split: .fullBody,
+            equipment: .fullGym,
+            exercises: [prescription]
+        )
+        return WorkoutRecord(
+            sessionName: "腿",
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            completedAt: Date(timeIntervalSince1970: 1_700_000_600),
+            readinessScore: 80,
+            sets: (1...completedWorkingSets).map { number in
+                SetResult(
+                    exerciseID: exerciseID,
+                    exerciseName: "杠铃深蹲",
+                    setNumber: number,
+                    loadKg: 100,
+                    reps: 8,
+                    rir: 1,
+                    setKind: .working
+                )
+            },
+            planSnapshot: snapshot
         )
     }
 }

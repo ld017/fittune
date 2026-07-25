@@ -680,6 +680,42 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
+    func testFinishedCardioUsesProfileRestingHeartRateForHRRSummary() throws {
+        let store = AppStore(defaults: makeDefaults())
+        var profile = testProfile(goal: .generalFitness, split: .fullBody)
+        profile.restingHeartRate = 60
+        profile.measuredMaxHeartRate = 180
+        store.finishOnboarding(with: profile)
+
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "H10",
+            confidence: .measured,
+            coverage: 1
+        )
+        store.startCardioSession(modality: .cycling, intensity: .zone2, at: start)
+        for seconds in stride(from: 0.0, through: 60.0, by: 10) {
+            store.appendCardioMetricSample(
+                .init(
+                    timestamp: start.addingTimeInterval(seconds),
+                    heartRateBPM: 125,
+                    provenance: source
+                )
+            )
+        }
+
+        let record = try XCTUnwrap(store.finishCardioSession(
+            status: .completed,
+            at: start.addingTimeInterval(60)
+        ))
+
+        XCTAssertEqual(record.summary?.cardio?.usedHeartRateReserve, true)
+        XCTAssertEqual(record.summary?.cardio?.intensityConfidence, .derived)
+        XCTAssertGreaterThan(record.summary?.cardio?.aerobicBaseMinutes ?? 0, 0)
+        XCTAssertEqual(record.summary?.cardio?.vigorousMinutes, 0)
+    }
+
     func testFinishedCardioUsesConfirmedDistanceAndKeepsDeviceEnergyAsComparison() throws {
         let store = configuredStore(weightKg: 70)
         let start = Date(timeIntervalSince1970: 1_700_000_000)

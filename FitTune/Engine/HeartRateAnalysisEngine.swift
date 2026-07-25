@@ -97,6 +97,7 @@ enum HeartRateAnalysisEngine {
         guard let maximumHeartRate, maximumHeartRate > 0 else { return nil }
 
         var secondsByZone = Dictionary(uniqueKeysWithValues: HeartRateIntensityZone.allCases.map { ($0, 0.0) })
+        var fatOxidationOpportunitySeconds = 0.0
         for interval in intervals {
             let percent: Double
             if usesReserve, let restingHeartRate {
@@ -105,6 +106,9 @@ enum HeartRateAnalysisEngine {
                 percent = interval.bpm / maximumHeartRate * 100
             }
             secondsByZone[zone(for: percent), default: 0] += interval.duration
+            if usesReserve, (40...65).contains(percent) {
+                fatOxidationOpportunitySeconds += interval.duration
+            }
         }
 
         let multiplier: [HeartRateIntensityZone: Double] = [
@@ -119,7 +123,7 @@ enum HeartRateAnalysisEngine {
         }
         let aerobicBase = (secondsByZone[.moderate] ?? 0) / 60
         let vigorous = ((secondsByZone[.vigorous] ?? 0) + (secondsByZone[.nearMaximum] ?? 0)) / 60
-        let fatOxidation = ((secondsByZone[.light] ?? 0) + (secondsByZone[.moderate] ?? 0)) / 60
+        let fatOxidation = fatOxidationOpportunitySeconds / 60
         let coverage = intervals.reduce(0.0) { $0 + $1.duration } / duration
 
         return HeartRateIntensitySummary(
@@ -130,7 +134,9 @@ enum HeartRateAnalysisEngine {
             fatOxidationOpportunityMinutes: fatOxidation,
             coverage: min(1, coverage),
             usedHeartRateReserve: usesReserve,
-            confidence: intervals.contains { $0.confidence == .estimated } ? .estimated : .derived
+            confidence: !usesReserve || intervals.contains { $0.confidence == .estimated }
+                ? .estimated
+                : .derived
         )
     }
 

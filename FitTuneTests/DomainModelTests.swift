@@ -90,6 +90,51 @@ final class DomainModelTests: XCTestCase {
         XCTAssertEqual(AppSnapshot.currentSchemaVersion, 15)
     }
 
+    func testLegacySummaryMetricsDecodeWithoutScientificSummaryFields() throws {
+        let strength = StrengthSummaryMetrics(
+            volumeLoadKg: 1_000,
+            workingSetCount: 2,
+            warmupSetCount: 1,
+            failureRate: 0,
+            bestE1RMKg: 100,
+            relativeStrength: 1.4,
+            e1RMConfidence: .derived,
+            muscleLoad: ["腿": 1_000]
+        )
+        var strengthObject = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(strength)) as? [String: Any])
+        strengthObject.removeValue(forKey: "targetWorkingSetCount")
+        strengthObject.removeValue(forKey: "targetSetCompletion")
+        let decodedStrength = try JSONDecoder().decode(
+            StrengthSummaryMetrics.self,
+            from: JSONSerialization.data(withJSONObject: strengthObject)
+        )
+
+        XCTAssertNil(decodedStrength.targetWorkingSetCount)
+        XCTAssertNil(decodedStrength.targetSetCompletion)
+
+        let cardio = CardioSummaryMetrics(
+            distanceKm: 5,
+            paceSecondsPerKm: 360,
+            averageCadence: 170,
+            strokeCount: nil,
+            heartRateRecovery60: nil,
+            vo2Max: nil,
+            vo2MaxConfidence: .unavailable
+        )
+        var cardioObject = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(cardio)) as? [String: Any])
+        cardioObject.removeValue(forKey: "usedHeartRateReserve")
+        cardioObject.removeValue(forKey: "intensityConfidence")
+        cardioObject.removeValue(forKey: "percentageByIntensityZone")
+        let decodedCardio = try JSONDecoder().decode(
+            CardioSummaryMetrics.self,
+            from: JSONSerialization.data(withJSONObject: cardioObject)
+        )
+
+        XCTAssertNil(decodedCardio.usedHeartRateReserve)
+        XCTAssertNil(decodedCardio.intensityConfidence)
+        XCTAssertNil(decodedCardio.percentageByIntensityZone)
+    }
+
     func testSchemaFourteenSetStillDecodesWithoutScientificTimeline() throws {
         let old = """
         {

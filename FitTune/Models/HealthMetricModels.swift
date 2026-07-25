@@ -253,6 +253,8 @@ struct StrengthSummaryMetrics: Codable, Equatable {
     var performanceRetention: Double? = nil
     var restRecommendationAccuracy: Double? = nil
     var heartRateResponses: [SetHeartRateResponse]? = nil
+    var targetWorkingSetCount: Int? = nil
+    var targetSetCompletion: Double? = nil
 }
 
 struct HeartRateDecisionEvent: Identifiable, Codable, Equatable {
@@ -285,6 +287,9 @@ struct CardioSummaryMetrics: Codable, Equatable {
     var workloadConsistency: Double? = nil
     var heartRateCoverage: Double? = nil
     var workloadCoverage: Double? = nil
+    var usedHeartRateReserve: Bool? = nil
+    var intensityConfidence: DataConfidence? = nil
+    var percentageByIntensityZone: [HeartRateIntensityZone: Double]? = nil
 }
 
 struct WorkoutSummary: Codable, Equatable {

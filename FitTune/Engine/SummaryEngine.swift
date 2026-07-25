@@ -22,6 +22,13 @@ enum SummaryEngine {
         }
         let totalSetTime = setDurations.reduce(0, +)
         let totalRestTime = actualRests.reduce(0, +)
+        let targetWorkingSetCount = record.planSnapshot.map { snapshot in
+            snapshot.exercises.reduce(0) { $0 + $1.resolvedWorkingSets }
+        }
+        let targetSetCompletion = targetWorkingSetCount.flatMap { target -> Double? in
+            guard target > 0 else { return nil }
+            return min(1, Double(working.count) / Double(target))
+        }
         let strength = StrengthSummaryMetrics(
             volumeLoadKg: volume,
             workingSetCount: working.count,
@@ -38,7 +45,9 @@ enum SummaryEngine {
                 ? totalSetTime / totalRestTime
                 : nil,
             performanceRetention: TrainingEngine.comparableSetPerformanceRetention(for: working),
-            heartRateResponses: record.sets.compactMap(\.heartRateResponse)
+            heartRateResponses: record.sets.compactMap(\.heartRateResponse),
+            targetWorkingSetCount: targetWorkingSetCount,
+            targetSetCompletion: targetSetCompletion
         )
         let energyMeasured = record.measuredActiveEnergyKcal.map { $0 > 0 } ?? false
         return WorkoutSummary(
@@ -95,6 +104,11 @@ enum SummaryEngine {
             startedAt: startedAt,
             completedAt: completedAt
         )
+        let intensityPercentages = intensity.flatMap { summary -> [HeartRateIntensityZone: Double]? in
+            let coveredSeconds = summary.secondsByZone.values.reduce(0, +)
+            guard coveredSeconds > 0 else { return nil }
+            return summary.secondsByZone.mapValues { $0 / coveredSeconds }
+        }
         let cardio = CardioSummaryMetrics(
             distanceKm: distance,
             paceSecondsPerKm: pace,
@@ -107,7 +121,9 @@ enum SummaryEngine {
             zoneLoadAU: intensity?.zoneLoadAU,
             aerobicBaseMinutes: intensity?.aerobicBaseMinutes,
             vigorousMinutes: intensity?.vigorousMinutes,
-            fatOxidationOpportunityMinutes: intensity?.fatOxidationOpportunityMinutes,
+            fatOxidationOpportunityMinutes: intensity?.usedHeartRateReserve == true
+                ? intensity?.fatOxidationOpportunityMinutes
+                : nil,
             heartRateDriftPercent: drift?.percent,
             heartRateDriftConfidence: drift?.confidence,
             heartRateCoverage: intensity?.coverage,
@@ -115,7 +131,10 @@ enum SummaryEngine {
                 record.workloadSegments ?? [],
                 startedAt: startedAt,
                 completedAt: completedAt
-            )
+            ),
+            usedHeartRateReserve: intensity?.usedHeartRateReserve,
+            intensityConfidence: intensity?.confidence,
+            percentageByIntensityZone: intensityPercentages
         )
         let source = sourceForCardio(record.source)
         let measured = record.energyMethod?.contains("设备实测") == true

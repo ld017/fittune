@@ -69,6 +69,14 @@ final class AppStore {
         return profile?.ageYears.map { 208 - 0.7 * Double($0) }
     }
 
+    private var resolvedRestingHeartRate: Double? {
+        guard let restingHeartRate = profile?.restingHeartRate,
+              restingHeartRate > 0 else {
+            return nil
+        }
+        return restingHeartRate
+    }
+
     var nextSession: TrainingSession? {
         guard let session = scheduledSession else { return nil }
         return adaptedSession(session)
@@ -261,6 +269,7 @@ final class AppStore {
         if measured != nil { current.source = "Apple Watch 设备实测" }
         current.summary = SummaryEngine.cardioSummary(
             for: current,
+            restingHeartRate: resolvedRestingHeartRate,
             maximumHeartRate: resolvedMaximumHeartRate
         )
         return current
@@ -576,7 +585,11 @@ final class AppStore {
             deviceEnergySource: watchEnergy == nil ? nil : .appleWatch
         )
         record.effect = TrainingEngine.evaluateCardioWorkout(record)
-        record.summary = SummaryEngine.cardioSummary(for: record, maximumHeartRate: resolvedMaximumHeartRate)
+        record.summary = SummaryEngine.cardioSummary(
+            for: record,
+            restingHeartRate: resolvedRestingHeartRate,
+            maximumHeartRate: resolvedMaximumHeartRate
+        )
         cardioWorkouts.insert(record, at: 0)
         activeCardioDraft = nil
         persist()
@@ -619,7 +632,11 @@ final class AppStore {
     func clearCardioMetrics(id: UUID) {
         guard let index = cardioWorkouts.firstIndex(where: { $0.id == id }) else { return }
         cardioWorkouts[index].metricSamples = []
-        cardioWorkouts[index].summary = SummaryEngine.cardioSummary(for: cardioWorkouts[index], maximumHeartRate: resolvedMaximumHeartRate)
+        cardioWorkouts[index].summary = SummaryEngine.cardioSummary(
+            for: cardioWorkouts[index],
+            restingHeartRate: resolvedRestingHeartRate,
+            maximumHeartRate: resolvedMaximumHeartRate
+        )
         persist()
     }
 
