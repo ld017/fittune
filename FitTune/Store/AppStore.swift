@@ -1027,6 +1027,9 @@ final class AppStore {
               workoutDraft.sourceSessionID == editorDraft.sourceSessionID else {
             throw PlanEditError.missingExercise
         }
+        guard canMutateActiveWorkout(workoutDraft) else {
+            throw PlanEditError.workoutPaused
+        }
         guard !editorDraft.exercises.isEmpty else {
             throw PlanEditError.cannotRemoveLastExercise
         }
@@ -1087,6 +1090,9 @@ final class AppStore {
               let sessionIndex = currentPlan.sessions.firstIndex(where: { $0.id == workoutDraft.sourceSessionID }) else {
             throw PlanEditError.missingExercise
         }
+        guard canMutateActiveWorkout(workoutDraft) else {
+            throw PlanEditError.workoutPaused
+        }
         currentPlan.sessions[sessionIndex].name = workoutDraft.session.name
         currentPlan.sessions[sessionIndex].focus = workoutDraft.session.focus
         currentPlan.sessions[sessionIndex].exercises = workoutDraft.session.exercises
@@ -1136,7 +1142,8 @@ final class AppStore {
     }
 
     func updateWorkoutDraft(_ mutation: (inout WorkoutDraft) -> Void) {
-        guard var draft = activeWorkoutDraft else { return }
+        guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft) else { return }
         mutation(&draft)
         draft.updatedAt = .now
         activeWorkoutDraft = draft
@@ -1146,7 +1153,7 @@ final class AppStore {
     func startCurrentDraftSet(at startedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
               draft.phase == .training,
-              draft.currentPauseStartedAt == nil,
+              canMutateActiveWorkout(draft),
               startedAt >= (draft.results.last?.restEndedAt ?? draft.results.last?.completedAt ?? startedAt) else { return }
         finalizePreviousSetResponse(in: &draft, nextSetStartedAt: startedAt)
         draft.currentSetStartedAt = startedAt
@@ -1256,7 +1263,7 @@ final class AppStore {
 
     func completeCurrentDraftSet(at completedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
-              draft.currentPauseStartedAt == nil,
+              canMutateActiveWorkout(draft),
               draft.phase == .training || draft.phase == .setActive,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
@@ -1335,7 +1342,7 @@ final class AppStore {
 
     func advanceDraftToNextSet(at restEndedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
-              draft.currentPauseStartedAt == nil,
+              canMutateActiveWorkout(draft),
               draft.phase == .resting,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
@@ -1382,6 +1389,7 @@ final class AppStore {
 
     func setDraftPlannedSets(_ requestedSets: Int) {
         guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exerciseID = draft.session.exercises[draft.exerciseIndex].id
@@ -1408,6 +1416,7 @@ final class AppStore {
 
     func setDraftWarmupSets(_ requestedSets: Int) {
         guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
@@ -1443,6 +1452,7 @@ final class AppStore {
 
     func setDraftCurrentSetKind(_ kind: SetKind) {
         guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exerciseID = draft.session.exercises[draft.exerciseIndex].id
@@ -1457,6 +1467,7 @@ final class AppStore {
 
     func replaceDraftCurrentExercise(with option: ExerciseOption) {
         guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let current = draft.session.exercises[draft.exerciseIndex]
@@ -1483,7 +1494,9 @@ final class AppStore {
     }
 
     func addDraftExercise(_ option: ExerciseOption) {
-        guard var draft = activeWorkoutDraft, let profile else { return }
+        guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
+              let profile else { return }
         draft.session.exercises.append(TrainingEngine.makePrescription(for: option, profile: profile))
         var changes = draft.changeEvents ?? []
         changes.append(WorkoutChangeEvent(kind: .exerciseAdded, exerciseName: option.name, detail: "用户在训练中添加"))
@@ -1495,6 +1508,7 @@ final class AppStore {
 
     func removeDraftCurrentExercise() {
         guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
               draft.session.exercises.count > 1,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
@@ -1513,7 +1527,7 @@ final class AppStore {
     @discardableResult
     func advanceDraftToNextExercise(at restEndedAt: Date = .now) -> Bool {
         guard var draft = activeWorkoutDraft,
-              draft.currentPauseStartedAt == nil,
+              canMutateActiveWorkout(draft),
               draft.exerciseIndex + 1 < draft.session.exercises.count else { return false }
         guard closeCurrentRest(in: &draft, at: restEndedAt) else { return false }
         draft.exerciseIndex += 1
@@ -1526,7 +1540,7 @@ final class AppStore {
     @discardableResult
     func returnDraftToPreviousExercise() -> Bool {
         guard var draft = activeWorkoutDraft,
-              draft.currentPauseStartedAt == nil,
+              canMutateActiveWorkout(draft),
               draft.exerciseIndex > 0 else { return false }
         draft.exerciseIndex -= 1
         prepareDraftForCurrentExercise(&draft)
@@ -1598,6 +1612,10 @@ final class AppStore {
         draft.results[resultIndex].restEndedAt = restEndedAt
         draft.results[resultIndex].actualRestSeconds = restEndedAt.timeIntervalSince(restStartedAt)
         return true
+    }
+
+    private func canMutateActiveWorkout(_ draft: WorkoutDraft) -> Bool {
+        draft.currentPauseStartedAt == nil
     }
 
     private func finalizePreviousSetResponse(in draft: inout WorkoutDraft, nextSetStartedAt: Date) {

@@ -1136,12 +1136,12 @@ final class AppStoreTests: XCTestCase {
         store.startWorkout(TrainingSession(name: "胸", focus: "胸", exercises: [exercise]))
         let completedPauseStart = Date.now.addingTimeInterval(-1_200)
         let openPauseStart = Date.now.addingTimeInterval(-300)
+        store.completeCurrentDraftSet(at: completedPauseStart.addingTimeInterval(-60))
         store.updateWorkoutDraft {
-            $0.sessionRPE = 4.5
             $0.pauseIntervals = [WorkoutPauseInterval(startedAt: completedPauseStart, endedAt: completedPauseStart.addingTimeInterval(120))]
-            $0.currentPauseStartedAt = openPauseStart
         }
-        store.completeCurrentDraftSet()
+        store.pauseWorkout(at: openPauseStart)
+        store.setWorkoutSessionRPE(4.5)
 
         let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
 

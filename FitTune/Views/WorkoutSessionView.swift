@@ -51,6 +51,12 @@ struct WorkoutSessionView: View {
             requestSave(status: .partial)
         }
         .onChange(of: store.activeWorkoutDraft?.updatedAt) { _, _ in updateLiveActivity() }
+        .onChange(of: store.activeWorkoutDraft?.currentPauseStartedAt) { _, pauseStartedAt in
+            guard pauseStartedAt != nil else { return }
+            showExerciseLibrary = false
+            showWorkoutEditor = false
+            replacementExercise = nil
+        }
         .confirmationDialog("离开当前训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
             Button("继续未完成训练") { showExitDialog = false }
             Button("保存并结束") { requestSave(status: .partial) }
@@ -280,6 +286,7 @@ struct WorkoutSessionView: View {
                 .foregroundStyle(FitTheme.secondaryText)
         }
         .fitCard(padding: 18)
+        .disabled(draft.currentPauseStartedAt != nil)
     }
 
     @ViewBuilder
@@ -353,6 +360,7 @@ struct WorkoutSessionView: View {
             .padding(.top, 12)
         }
         .fitCard(padding: 18)
+        .disabled(draft.currentPauseStartedAt != nil)
     }
 
     @ViewBuilder
@@ -473,6 +481,7 @@ struct WorkoutSessionView: View {
             }
         }
         .fitCard(padding: 18)
+        .disabled(draft.currentPauseStartedAt != nil)
     }
 
     private func exerciseCompleteCard(_ draft: WorkoutDraft, exercise: ExercisePrescription) -> some View {
@@ -550,6 +559,7 @@ struct WorkoutSessionView: View {
                                                         Spacer()
                                                     }
                                                 }
+                                                .disabled(store.activeWorkoutDraft?.currentPauseStartedAt != nil)
                                                 Button { store.toggleFavoriteExercise(option.id) } label: {
                                                     Image(systemName: store.favoriteExerciseIDs.contains(option.id) ? "star.fill" : "star")
                                                         .foregroundStyle(store.favoriteExerciseIDs.contains(option.id) ? FitTheme.warning : FitTheme.secondaryText)

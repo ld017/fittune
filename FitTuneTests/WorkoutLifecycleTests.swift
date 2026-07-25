@@ -147,6 +147,83 @@ final class WorkoutLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testPauseFreezesDraftInputsSetConfigurationAndRestExtension() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        store.pauseWorkout(at: start.addingTimeInterval(40))
+        let before = try XCTUnwrap(store.activeWorkoutDraft)
+
+        store.updateWorkoutDraft {
+            $0.loadKg = 999
+            $0.reps = 99
+            $0.rir = 9
+            $0.techniqueQuality = 1
+            $0.restRecommendation?.recommendedSeconds += 30
+        }
+        store.setDraftCurrentSetKind(.drop)
+        store.setDraftPlannedSets(10)
+        store.setDraftWarmupSets(6)
+
+        let paused = try XCTUnwrap(store.activeWorkoutDraft)
+        XCTAssertEqual(paused.loadKg, before.loadKg)
+        XCTAssertEqual(paused.reps, before.reps)
+        XCTAssertEqual(paused.rir, before.rir)
+        XCTAssertEqual(paused.techniqueQuality, before.techniqueQuality)
+        XCTAssertEqual(paused.restRecommendation, before.restRecommendation)
+        XCTAssertEqual(paused.currentSetKind, before.currentSetKind)
+        XCTAssertEqual(paused.totalWorkingSets, before.totalWorkingSets)
+        XCTAssertEqual(paused.currentWarmupSets, before.currentWarmupSets)
+
+        store.resumeWorkout(at: start.addingTimeInterval(50))
+        store.updateWorkoutDraft { $0.loadKg = 42.5 }
+
+        XCTAssertEqual(store.activeWorkoutDraft?.loadKg, 42.5)
+    }
+
+    @MainActor
+    func testPauseFreezesExerciseReplacementRemovalAndEditorCommit() throws {
+        let store = makeTwoExerciseStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let before = try XCTUnwrap(store.activeWorkoutDraft?.session)
+        let replacement = ExerciseOption(
+            name: "高脚杯深蹲",
+            pattern: .squat,
+            equipment: .dumbbell,
+            category: .quadriceps,
+            subcategory: .squat,
+            stableID: "test.pause.goblet-squat"
+        )
+        store.pauseWorkout(at: start)
+
+        store.replaceDraftCurrentExercise(with: replacement)
+        store.removeDraftCurrentExercise()
+        var editor = try XCTUnwrap(store.makeActiveWorkoutEditorDraft())
+        editor.sessionName = "暂停时不应改名"
+
+        XCTAssertThrowsError(try store.commitActiveWorkoutEditorDraft(editor)) { error in
+            XCTAssertEqual(error as? PlanEditError, .workoutPaused)
+        }
+        XCTAssertEqual(store.activeWorkoutDraft?.session, before)
+    }
+
+    @MainActor
+    func testPauseStillAllowsSessionRPEAndSaveExit() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        store.pauseWorkout(at: start.addingTimeInterval(40))
+
+        store.setWorkoutSessionRPE(8)
+        let record = try XCTUnwrap(store.saveActiveWorkout(status: .partial, at: start.addingTimeInterval(60)))
+
+        XCTAssertEqual(record.sessionRPE, 8)
+        XCTAssertEqual(record.pauseIntervals?.last?.endedAt, start.addingTimeInterval(60))
+        XCTAssertNil(store.activeWorkoutDraft)
+    }
+
+    @MainActor
     func testNextSetStartFinalizesPreviousResponseAtCutoff() throws {
         let store = makeStrengthStore()
         let start = Date(timeIntervalSince1970: 1_700_000_000)

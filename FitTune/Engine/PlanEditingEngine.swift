@@ -17,6 +17,7 @@ enum PlanEditError: Error, Equatable {
     case missingExercise
     case lockedExercise
     case cannotRemoveLastExercise
+    case workoutPaused
 }
 
 enum PlanEditingEngine {

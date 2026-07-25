@@ -241,6 +241,8 @@ struct PlanEditorView: View {
             dismiss()
         } catch PlanEditError.lockedExercise {
             errorMessage = "已经记录训练组的动作不能被替换、删除或改动。"
+        } catch PlanEditError.workoutPaused {
+            errorMessage = "训练已暂停。继续训练后才能修改动作与训练参数。"
         } catch {
             errorMessage = "原训练计划已发生变化，请关闭后重新打开编辑器。"
         }

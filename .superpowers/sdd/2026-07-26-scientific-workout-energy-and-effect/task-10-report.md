@@ -85,3 +85,36 @@ git diff --check
 ```
 
 The known visual-inspection concern remains deferred to Task 13; this fix round adds no new concern.
+
+## Fix Round 2
+
+- Centralized the explicit-pause check in `canMutateActiveWorkout` and applied it to generic draft edits, set configuration, workflow transitions, exercise add/replace/remove, active-workout editor commits, and source-plan layout saves.
+- While paused, the strength view disables the exercise/configuration, set-input, and rest cards; any open exercise library/editor/replacement flow is dismissed. Resume and all save/discard exit paths remain available.
+- Added a dedicated paused-editor error so a stale editor cannot commit after an external pause.
+- Updated the open-pause save test to complete its set before pausing, matching the new full-freeze contract while preserving its RPE and pause-closing assertions.
+
+### TDD evidence
+
+```sh
+swift test --filter 'WorkoutLifecycleTests.testPauseFreezesDraftInputsSetConfigurationAndRestExtension|WorkoutLifecycleTests.testPauseFreezesExerciseReplacementRemovalAndEditorCommit'
+# RED: 2 tests, 10 assertion failures
+# GREEN: 2 tests, 0 failures
+```
+
+### Final verification
+
+```sh
+swift test --filter WorkoutLifecycleTests
+# 15 tests, 0 failures
+
+swift test --filter AppStoreTests
+# 43 tests, 0 failures
+
+xcodebuild -project FitTune.xcodeproj -scheme FitTune -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build -quiet
+# exit 0
+
+git diff --check
+# exit 0
+```
+
+Advisory rest, heart-rate, and history behavior outside an explicit user pause is unchanged. The known visual-inspection concern remains deferred to Task 13.
