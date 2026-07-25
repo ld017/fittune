@@ -2,6 +2,58 @@ import XCTest
 @testable import FitTune
 
 final class WorkoutLifecycleTests: XCTestCase {
+    @MainActor
+    func testExplicitSetStartAndNextSetPersistActualTimeline() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(35))
+        store.advanceDraftToNextSet(at: start.addingTimeInterval(215))
+
+        let set = try XCTUnwrap(store.activeWorkoutDraft?.results.first)
+        XCTAssertEqual(set.startedAt, start)
+        XCTAssertEqual(set.completedAt, start.addingTimeInterval(35))
+        XCTAssertEqual(set.restEndedAt, start.addingTimeInterval(215))
+        XCTAssertEqual(set.actualRestSeconds, 180)
+    }
+
+    @MainActor
+    func testDelayedPeakIsAttachedToMostRecentlyCompletedSet() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "FIT 3",
+            confidence: .measured,
+            coverage: 1
+        )
+
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        store.advanceDraftToNextSet(at: start.addingTimeInterval(45))
+        store.startCurrentDraftSet(at: start.addingTimeInterval(60))
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(90))
+        store.appendLiveMetricSample(
+            .init(timestamp: start.addingTimeInterval(120), heartRateBPM: 170, provenance: source),
+            validity: .valid,
+            now: start.addingTimeInterval(120)
+        )
+
+        let sets = try XCTUnwrap(store.activeWorkoutDraft?.results)
+        XCTAssertNil(sets.first?.heartRateResponse)
+        XCTAssertEqual(sets.last?.heartRateResponse?.peakBPM, 170)
+    }
+
+    @MainActor
+    func testLegacyCompletionWithoutExplicitStartLeavesTimelineLowConfidence() throws {
+        let store = makeStrengthStore()
+
+        store.completeCurrentDraftSet(at: Date(timeIntervalSince1970: 1_700_000_030))
+
+        XCTAssertNil(try XCTUnwrap(store.activeWorkoutDraft?.results.first).startedAt)
+    }
+
     func testLockScreenSnapshotUsesCurrentUserPlannedSetAndHeartRate() {
         let exercise = ExercisePrescription(name: "杠铃卧推", pattern: .horizontalPush, sets: 5, repLower: 6, repUpper: 8, targetRIR: 0, isPriority: true, equipmentKind: .barbell)
         let session = TrainingSession(name: "胸", focus: "胸", exercises: [exercise])
@@ -44,5 +96,25 @@ final class WorkoutLifecycleTests: XCTestCase {
         XCTAssertTrue(snapshot.isCardio)
         XCTAssertEqual(snapshot.distanceMeters, 2_340)
         XCTAssertEqual(snapshot.cadence, 166)
+    }
+
+    @MainActor
+    private func makeStrengthStore() -> AppStore {
+        let suite = "FitTuneTests.StrengthTimeline.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AppStore(defaults: defaults)
+        let exercise = ExercisePrescription(
+            name: "杠铃深蹲",
+            pattern: .squat,
+            sets: 3,
+            repLower: 5,
+            repUpper: 8,
+            targetRIR: 1,
+            isPriority: true,
+            workingSets: 3
+        )
+        store.startWorkout(TrainingSession(name: "腿", focus: "股四头", exercises: [exercise]))
+        return store
     }
 }

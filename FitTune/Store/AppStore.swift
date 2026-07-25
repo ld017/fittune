@@ -1069,6 +1069,45 @@ final class AppStore {
         persist()
     }
 
+    func startCurrentDraftSet(at startedAt: Date = .now) {
+        guard var draft = activeWorkoutDraft,
+              draft.phase == .training,
+              draft.currentPauseStartedAt == nil else { return }
+        draft.currentSetStartedAt = startedAt
+        draft.phase = .setActive
+        draft.updatedAt = startedAt
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func pauseWorkout(at startedAt: Date = .now) {
+        guard var draft = activeWorkoutDraft,
+              draft.currentPauseStartedAt == nil else { return }
+        draft.currentPauseStartedAt = startedAt
+        draft.updatedAt = startedAt
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func resumeWorkout(at endedAt: Date = .now) {
+        guard var draft = activeWorkoutDraft,
+              let startedAt = draft.currentPauseStartedAt,
+              endedAt >= startedAt else { return }
+        draft.pauseIntervals.append(WorkoutPauseInterval(startedAt: startedAt, endedAt: endedAt))
+        draft.currentPauseStartedAt = nil
+        draft.updatedAt = endedAt
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func setWorkoutSessionRPE(_ rpe: Double?) {
+        guard var draft = activeWorkoutDraft else { return }
+        draft.sessionRPE = rpe.map { min(10, max(0, $0)) }
+        draft.updatedAt = .now
+        activeWorkoutDraft = draft
+        persist()
+    }
+
     func appendLiveMetricSample(
         _ sample: WorkoutMetricSample,
         validity: LiveMetricValidity,
@@ -1082,40 +1121,33 @@ final class AppStore {
         draft.averageHeartRate = samples.compactMap(\.heartRateBPM).reduce(0, +) / Double(max(1, samples.compactMap(\.heartRateBPM).count))
 
         if draft.phase == .resting,
-           let restStartedAt = draft.restStartedAt,
+           let resultIndex = draft.results.lastIndex(where: { $0.startedAt != nil }),
+           let setStartedAt = draft.results[resultIndex].startedAt,
            let recommendation = draft.recommendation,
            let restRecommendation = draft.restRecommendation {
-            let elapsed = max(0, Int(now.timeIntervalSince(restStartedAt)))
-            let milestone = elapsed >= 120 ? 120 : (elapsed >= 60 ? 60 : 0)
-            if milestone > 0, !draft.liveRecoveryMilestonesApplied.contains(milestone) {
-                let recent = samples.filter { $0.timestamp >= restStartedAt.addingTimeInterval(-180) }
-                let peak = recent.compactMap(\.heartRateBPM).max()
-                let response: SetHeartRateResponse?
-                if let peak, let current = sample.heartRateBPM {
-                    response = SetHeartRateResponse(
-                        peakBPM: peak,
-                        peakDelaySeconds: milestone,
-                        hrr60: milestone == 60 ? max(0, peak - current) : nil,
-                        hrr120: milestone == 120 ? max(0, peak - current) : nil,
-                        sourceName: sample.provenance.sourceName,
-                        confidence: .derived
-                    )
-                } else {
-                    response = nil
-                }
+            let result = draft.results[resultIndex]
+            let response = HeartRateAnalysisEngine.setResponse(
+                samples: samples,
+                setStartedAt: setStartedAt,
+                setCompletedAt: result.completedAt,
+                nextSetStartedAt: nil
+            )
+            if response != result.heartRateResponse {
+                draft.results[resultIndex].heartRateResponse = response
                 let recovery = TrainingEngine.personalRecoveryComparison(
                     currentResponse: response,
+                    currentSet: result,
                     history: workoutHistory
                 )
                 let live = LiveAdaptationEngine.adapt(
                     baseRecommendation: recommendation,
                     baseRest: restRecommendation,
-                    currentLoadKg: draft.results.last?.loadKg ?? draft.loadKg,
+                    currentLoadKg: result.loadKg,
                     liveSignal: LiveHeartRateSignal(
                         response: response,
                         personalComparison: recovery.comparison,
-                        sourceName: sample.provenance.sourceName,
-                        currentHeartRate: sample.heartRateBPM,
+                        sourceName: response?.sourceName ?? sample.provenance.sourceName,
+                        currentHeartRate: sample.heartRateBPM
                     ),
                     calibrationPairs: recovery.calibrationPairs,
                     hasPain: draft.hasPain,
@@ -1126,20 +1158,19 @@ final class AppStore {
                 draft.recommendation?.adjustment = live.adjustment
                 draft.recommendation?.reason = live.reasons.joined(separator: "；")
                 draft.restRecommendation = live.rest
-                if let peak, let current = sample.heartRateBPM, let result = draft.results.last {
+                if let response, let current = sample.heartRateBPM {
                     var log = draft.heartRateDecisionLog ?? []
                     log.append(HeartRateDecisionEvent(
                         setResultID: result.id,
-                        secondsAfterSet: milestone,
-                        peakBPM: peak,
+                        secondsAfterSet: response.peakDelaySeconds,
+                        peakBPM: response.peakBPM,
                         currentBPM: current,
-                        recoveryBPM: max(0, peak - current),
-                        sourceName: sample.provenance.sourceName,
+                        recoveryBPM: max(0, response.peakBPM - current),
+                        sourceName: response.sourceName,
                         effect: live.reasons.last ?? "心率未改变建议"
                     ))
                     draft.heartRateDecisionLog = log
                 }
-                draft.liveRecoveryMilestonesApplied.insert(milestone)
             }
         }
         draft.updatedAt = now
@@ -1147,28 +1178,35 @@ final class AppStore {
         persist()
     }
 
-    func completeCurrentDraftSet() {
+    func completeCurrentDraftSet(at completedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
-              draft.phase == .training,
+              draft.phase == .training || draft.phase == .setActive,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
+        guard draft.phase != .setActive || (draft.currentSetStartedAt?.compare(completedAt) != .orderedDescending) else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
         guard draft.setNumber >= 1,
               draft.setNumber <= draft.totalPlannedSets,
               !draft.results.contains(where: { $0.exerciseID == exercise.id && $0.setNumber == draft.setNumber }) else { return }
 
         let previous = draft.results.last { $0.exerciseID == exercise.id }
-        let result = SetResult(
+        var result = SetResult(
             exerciseID: exercise.id,
             exerciseName: exercise.name,
             setNumber: draft.setNumber,
             loadKg: draft.loadKg,
             reps: draft.reps,
             rir: draft.rir,
+            completedAt: completedAt,
             movementPattern: exercise.pattern,
             techniqueQuality: draft.techniqueQuality,
             feeling: nil,
-            setKind: draft.currentSetKind
+            setKind: draft.currentSetKind,
+            startedAt: draft.currentSetStartedAt,
+            isCompound: exercise.isCompound ?? [
+                .squat, .hinge, .horizontalPush, .horizontalPull,
+                .verticalPush, .verticalPull, .singleLeg
+            ].contains(exercise.pattern)
         )
         draft.results.append(result)
         let exerciseHistory = draft.results.filter { $0.exerciseID == exercise.id }
@@ -1207,22 +1245,26 @@ final class AppStore {
             ),
             history: workoutHistory
         )
-        draft.restStartedAt = .now
-        draft.liveRecoveryMilestonesApplied = []
+        result.restRecommendationSnapshot = draft.restRecommendation
+        draft.results[draft.results.count - 1] = result
+        draft.restStartedAt = completedAt
+        draft.currentSetStartedAt = nil
         draft.phase = draft.setNumber >= draft.totalPlannedSets ? .exerciseComplete : .resting
         draft.userOverrodeSuggestedLoad = false
-        draft.updatedAt = .now
+        draft.updatedAt = completedAt
         activeWorkoutDraft = draft
         persist()
     }
 
-    func advanceDraftToNextSet() {
+    func advanceDraftToNextSet(at restEndedAt: Date = .now) {
         guard var draft = activeWorkoutDraft,
               draft.phase == .resting,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
         let exercise = draft.session.exercises[draft.exerciseIndex]
         guard draft.setNumber < draft.totalPlannedSets else { return }
+
+        closeCurrentRest(in: &draft, at: restEndedAt)
 
         let previousKind = draft.currentSetKind
         draft.setNumber += 1
@@ -1255,7 +1297,7 @@ final class AppStore {
         draft.restRecommendation = nil
         draft.restStartedAt = nil
         draft.userOverrodeSuggestedLoad = false
-        draft.updatedAt = .now
+        draft.updatedAt = restEndedAt
         activeWorkoutDraft = draft
         persist()
     }
@@ -1391,9 +1433,10 @@ final class AppStore {
     }
 
     @discardableResult
-    func advanceDraftToNextExercise() -> Bool {
+    func advanceDraftToNextExercise(at restEndedAt: Date = .now) -> Bool {
         guard var draft = activeWorkoutDraft,
               draft.exerciseIndex + 1 < draft.session.exercises.count else { return false }
+        closeCurrentRest(in: &draft, at: restEndedAt)
         draft.exerciseIndex += 1
         prepareDraftForCurrentExercise(&draft)
         activeWorkoutDraft = draft
@@ -1412,7 +1455,7 @@ final class AppStore {
     }
 
     @discardableResult
-    func saveActiveWorkout(status: WorkoutCompletionStatus) -> WorkoutRecord? {
+    func saveActiveWorkout(status: WorkoutCompletionStatus, at completedAt: Date = .now) -> WorkoutRecord? {
         guard let draft = activeWorkoutDraft else { return nil }
         guard !draft.results.isEmpty else {
             discardWorkoutDraft()
@@ -1422,7 +1465,6 @@ final class AppStore {
         let quality = qualities.isEmpty
             ? nil
             : Int((Double(qualities.reduce(0, +)) / Double(qualities.count)).rounded())
-        let completedAt = Date.now
         var pauses = draft.pauseIntervals.filter { $0.endedAt != nil }
         if let startedAt = draft.currentPauseStartedAt {
             pauses.append(WorkoutPauseInterval(startedAt: startedAt, endedAt: completedAt))
@@ -1442,8 +1484,9 @@ final class AppStore {
             completionStatus: status,
             sessionRPE: draft.sessionRPE,
             averageHeartRate: draft.averageHeartRate > 0 ? draft.averageHeartRate : nil,
-            measuredActiveEnergyKcal: measuredEnergy,
-            pauseIntervals: pauses
+            pauseIntervals: pauses,
+            deviceActiveEnergyEstimateKcal: measuredEnergy,
+            deviceEnergySource: watchEnergy == nil ? nil : .appleWatch
         )
         record.metricSamples = draft.metricSamples
         let weight = latestWeight ?? profile?.bodyWeightKg ?? 70
@@ -1466,6 +1509,14 @@ final class AppStore {
         return record
     }
 
+    private func closeCurrentRest(in draft: inout WorkoutDraft, at restEndedAt: Date) {
+        guard let restStartedAt = draft.restStartedAt,
+              restEndedAt >= restStartedAt,
+              let resultIndex = draft.results.lastIndex(where: { $0.restEndedAt == nil }) else { return }
+        draft.results[resultIndex].restEndedAt = restEndedAt
+        draft.results[resultIndex].actualRestSeconds = restEndedAt.timeIntervalSince(restStartedAt)
+    }
+
     private func prepareDraftForCurrentExercise(_ draft: inout WorkoutDraft) {
         let exercise = draft.session.exercises[draft.exerciseIndex]
         let completed = draft.results.filter { $0.exerciseID == exercise.id }.count
@@ -1482,6 +1533,7 @@ final class AppStore {
         draft.recommendation = nil
         draft.restRecommendation = nil
         draft.restStartedAt = nil
+        draft.currentSetStartedAt = nil
         draft.userOverrodeSuggestedLoad = false
         draft.updatedAt = .now
     }

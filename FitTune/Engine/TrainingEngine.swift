@@ -205,6 +205,24 @@ enum TrainingEngine {
     ) -> (comparison: PersonalRecoveryComparison, calibrationPairs: Int) {
         guard let currentResponse else { return (.insufficientHistory, 0) }
         let pairs = historicalComparablePairs(in: history)
+        return personalRecoveryComparison(currentResponse: currentResponse, pairs: pairs)
+    }
+
+    static func personalRecoveryComparison(
+        currentResponse: SetHeartRateResponse?,
+        currentSet: SetResult,
+        history: [WorkoutRecord]
+    ) -> (comparison: PersonalRecoveryComparison, calibrationPairs: Int) {
+        guard let currentResponse else { return (.insufficientHistory, 0) }
+        let pairs = historicalComparablePairs(in: history)
+            .filter { canComparePerformance($0.first, currentSet, expectedKind: currentSet.resolvedSetKind) }
+        return personalRecoveryComparison(currentResponse: currentResponse, pairs: pairs)
+    }
+
+    private static func personalRecoveryComparison(
+        currentResponse: SetHeartRateResponse,
+        pairs: [HistoricalComparablePair]
+    ) -> (comparison: PersonalRecoveryComparison, calibrationPairs: Int) {
         let responses = pairs.compactMap(\.first.heartRateResponse)
         var comparisons: [(isSlower: Bool, pairCount: Int)] = []
 

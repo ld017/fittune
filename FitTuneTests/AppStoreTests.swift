@@ -10,6 +10,43 @@ final class AppStoreTests: XCTestCase {
         return defaults
     }
 
+    func testPauseTimeIsExcludedAndRealSessionRPEIsSaved() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        store.pauseWorkout(at: start.addingTimeInterval(60))
+        store.resumeWorkout(at: start.addingTimeInterval(660))
+        store.setWorkoutSessionRPE(8)
+
+        let record = try XCTUnwrap(store.saveActiveWorkout(
+            status: .partial,
+            at: start.addingTimeInterval(1_200)
+        ))
+
+        XCTAssertEqual(record.sessionRPE, 8)
+        XCTAssertEqual(record.pauseIntervals?.first?.durationSeconds, 600)
+    }
+
+    private func makeStrengthStore() -> AppStore {
+        let suite = "FitTuneTests.StrengthTimeline.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AppStore(defaults: defaults)
+        let exercise = ExercisePrescription(
+            name: "杠铃深蹲",
+            pattern: .squat,
+            sets: 3,
+            repLower: 5,
+            repUpper: 8,
+            targetRIR: 1,
+            isPriority: true,
+            workingSets: 3
+        )
+        store.startWorkout(TrainingSession(name: "腿", focus: "股四头", exercises: [exercise]))
+        return store
+    }
+
     func testDraftPersistsAcrossStoreRecreation() {
         let defaults = makeDefaults()
         let store = AppStore(defaults: defaults)
@@ -433,32 +470,29 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(restored.workoutHistory.count, 1)
     }
 
-    func testLiveHeartRateWithoutPersonalHistoryLeavesRestUnchangedAtSixtySecondMilestone() {
+    func testLiveHeartRateWithoutPersonalHistoryLeavesRestUnchanged() {
         let store = AppStore(defaults: makeDefaults())
         store.finishOnboarding(with: testProfile(goal: .hypertrophy, split: .fullBody))
         let session = store.plan!.sessions[0]
         store.startWorkout(session)
+        let start = Date(timeIntervalSince1970: 5_000_000)
         store.updateWorkoutDraft {
             $0.loadKg = 100
             $0.reps = 8
             $0.rir = 1
         }
-        store.completeCurrentDraftSet()
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
         let baselineRest = store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds
-        let start = Date(timeIntervalSince1970: 5_000_000)
-        store.updateWorkoutDraft { $0.restStartedAt = start }
         let provenance = MetricProvenance(source: .bluetooth, sourceName: "H10", confidence: .measured, coverage: 1)
-        store.appendLiveMetricSample(.init(timestamp: start, heartRateBPM: 170, provenance: provenance), validity: .valid, now: start)
-        store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(60), heartRateBPM: 162, provenance: provenance), validity: .valid, now: start.addingTimeInterval(60))
+        store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(30), heartRateBPM: 170, provenance: provenance), validity: .valid, now: start.addingTimeInterval(30))
+        store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(90), heartRateBPM: 162, provenance: provenance), validity: .valid, now: start.addingTimeInterval(90))
         let firstUpdate = store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds
-        store.appendLiveMetricSample(.init(timestamp: start.addingTimeInterval(61), heartRateBPM: 161, provenance: provenance), validity: .valid, now: start.addingTimeInterval(61))
 
         XCTAssertEqual(firstUpdate, baselineRest)
         XCTAssertEqual(store.activeWorkoutDraft!.restRecommendation!.recommendedSeconds, firstUpdate)
-        XCTAssertEqual(store.activeWorkoutDraft!.metricSamples?.count, 3)
-        XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.count, 1)
-        XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.first?.recoveryBPM, 8)
-        XCTAssertEqual(store.activeWorkoutDraft!.heartRateDecisionLog?.first?.secondsAfterSet, 60)
+        XCTAssertEqual(store.activeWorkoutDraft!.metricSamples?.count, 2)
+        XCTAssertEqual(store.activeWorkoutDraft!.results.last?.heartRateResponse?.hrr60, 8)
     }
 
     func testSummaryRevisionAppendPreservesOriginalSets() {
@@ -607,7 +641,8 @@ final class AppStoreTests: XCTestCase {
 
         let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
 
-        XCTAssertEqual(record.measuredActiveEnergyKcal, 210)
+        XCTAssertEqual(record.deviceActiveEnergyEstimateKcal, 210)
+        XCTAssertNil(record.measuredActiveEnergyKcal)
         XCTAssertNotEqual(record.activeEnergyKcal, 210)
         XCTAssertEqual(record.energyMethod, "2024 Adult Compendium 力量训练结构模型")
         XCTAssertEqual(record.energyDiagnostics?.comparisonEstimateKcal, 210)
