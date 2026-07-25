@@ -678,11 +678,6 @@ enum TrainingEngine {
         return max(0, grossKcal - restingDuringExercise)
     }
 
-    private struct TimeWeightedHeartRateEnergy {
-        var kilocalories: Double
-        var coverage: Double
-    }
-
     static func hasUsableHeartRateSeries(
         _ samples: [WorkoutMetricSample],
         startedAt: Date,
@@ -697,69 +692,6 @@ enum TrainingEngine {
             let interval = right.date.timeIntervalSince(left.date)
             return interval > 0 && interval <= 15
         }
-    }
-
-    private static func timeWeightedHeartRateEnergy(
-        samples: [WorkoutMetricSample],
-        startedAt: Date,
-        completedAt: Date,
-        weightKg: Double,
-        profile: UserProfile,
-        fallbackKcalPerMinute: Double,
-        lowerRateFactor: Double,
-        upperRateFactor: Double
-    ) -> TimeWeightedHeartRateEnergy? {
-        let totalSeconds = max(60, completedAt.timeIntervalSince(startedAt))
-        let valid = validHeartRateSamples(
-            samples,
-            startedAt: startedAt,
-            completedAt: completedAt
-        )
-        guard valid.count >= 2 else { return nil }
-        guard heartRateActiveEnergy(
-            averageHeartRate: valid[0].bpm,
-            minutes: 1,
-            weightKg: weightKg,
-            profile: profile
-        ) != nil else { return nil }
-
-        var energy = 0.0
-        var coveredSeconds = 0.0
-        var cursor = startedAt
-        for pair in zip(valid, valid.dropFirst()) {
-            let left = pair.0
-            let right = pair.1
-            if left.date > cursor {
-                energy += fallbackKcalPerMinute * left.date.timeIntervalSince(cursor) / 60
-            }
-            let interval = right.date.timeIntervalSince(left.date)
-            if interval > 0, interval <= 15 {
-                let bpm = (left.bpm + right.bpm) / 2
-                let heartRateRate = heartRateActiveEnergy(
-                    averageHeartRate: bpm,
-                    minutes: 1,
-                    weightKg: weightKg,
-                    profile: profile
-                ) ?? fallbackKcalPerMinute
-                let boundedRate = min(
-                    fallbackKcalPerMinute * upperRateFactor,
-                    max(fallbackKcalPerMinute * lowerRateFactor, heartRateRate)
-                )
-                energy += boundedRate * interval / 60
-                coveredSeconds += interval
-            } else if interval > 0 {
-                energy += fallbackKcalPerMinute * interval / 60
-            }
-            cursor = max(cursor, right.date)
-        }
-        if cursor < completedAt {
-            energy += fallbackKcalPerMinute * completedAt.timeIntervalSince(cursor) / 60
-        }
-        guard coveredSeconds > 0 else { return nil }
-        return TimeWeightedHeartRateEnergy(
-            kilocalories: energy,
-            coverage: min(1, coveredSeconds / totalSeconds)
-        )
     }
 
     private static func validHeartRateSamples(
@@ -778,56 +710,12 @@ enum TrainingEngine {
             .sorted { $0.date < $1.date }
     }
 
-    private static func strengthFallbackEstimate(
-        record: WorkoutRecord,
-        weightKg: Double
-    ) -> EnergyEstimate {
-        let minutes = max(1, record.completedAt.timeIntervalSince(record.startedAt) / 60)
-        let inferredRPE = record.sessionRPE ?? average(record.sets.compactMap { $0.feeling?.rpe })
-        let met: Double
-        if inferredRPE >= 9 { met = 6.0 }
-        else if inferredRPE >= 7 { met = 5.0 }
-        else if inferredRPE >= 5 { met = 3.5 }
-        else { met = 3.0 }
-        let value = netActiveEnergy(met: met, weightKg: weightKg, minutes: minutes)
-        return EnergyEstimate(
-            kilocalories: value,
-            lowerBound: value * 0.65,
-            upperBound: value * 1.35,
-            method: "2024 Adult Compendium MET + session-RPE",
-            confidence: "低至中"
-        )
-    }
-
     static func strengthEnergyEstimate(record: WorkoutRecord, weightKg: Double, profile: UserProfile? = nil) -> EnergyEstimate {
-        if let measured = record.measuredActiveEnergyKcal, measured > 0 {
-            return EnergyEstimate(kilocalories: measured, lowerBound: measured * 0.95, upperBound: measured * 1.05, method: "Apple Watch / 设备实测", confidence: "高")
-        }
-        let minutes = max(1, record.completedAt.timeIntervalSince(record.startedAt) / 60)
-        let fallback = strengthFallbackEstimate(record: record, weightKg: weightKg)
-        if let profile,
-           let samples = record.metricSamples,
-           let blended = timeWeightedHeartRateEnergy(
-                samples: samples,
-                startedAt: record.startedAt,
-                completedAt: record.completedAt,
-                weightKg: weightKg,
-                profile: profile,
-                fallbackKcalPerMinute: fallback.kilocalories / minutes,
-                lowerRateFactor: 0.65,
-                upperRateFactor: 1.35
-           ) {
-            let lowerFactor = 0.65 + 0.10 * blended.coverage
-            let upperFactor = 1.35 - 0.10 * blended.coverage
-            return EnergyEstimate(
-                kilocalories: blended.kilocalories,
-                lowerBound: blended.kilocalories * lowerFactor,
-                upperBound: blended.kilocalories * upperFactor,
-                method: "FitTune 心率 + 力量模型估算",
-                confidence: blended.coverage >= 0.8 ? "中" : "低至中"
-            )
-        }
-        return fallback
+        StrengthEnergyEstimator.estimate(
+            record: record,
+            weightKg: weightKg,
+            profile: profile
+        )
     }
 
     static func estimateStrengthActiveEnergy(record: WorkoutRecord, weightKg: Double, profile: UserProfile? = nil) -> Double {

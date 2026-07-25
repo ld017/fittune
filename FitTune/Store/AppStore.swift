@@ -192,6 +192,7 @@ final class AppStore {
         current.energyLowerBoundKcal = estimate.lowerBound
         current.energyUpperBoundKcal = estimate.upperBound
         current.energyMethod = estimate.method
+        current.energyDiagnostics = estimate.diagnostics
         current.energyAlgorithmVersion = EnergyEngine.algorithmVersion
         current.summary = SummaryEngine.strengthSummary(
             for: current,
@@ -1257,6 +1258,7 @@ final class AppStore {
         record.energyLowerBoundKcal = energy.lowerBound
         record.energyUpperBoundKcal = energy.upperBound
         record.energyAlgorithmVersion = EnergyEngine.algorithmVersion
+        record.energyDiagnostics = energy.diagnostics
         record.effect = TrainingEngine.evaluateStrengthWorkout(record)
         record.planSnapshot = draft.planSnapshot
         record.changeEvents = draft.changeEvents

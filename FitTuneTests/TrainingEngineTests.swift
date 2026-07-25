@@ -542,7 +542,7 @@ final class TrainingEngineTests: XCTestCase {
         ]))
     }
 
-    func testStrengthMeasuredEnergyOverridesEstimate() {
+    func testStrengthDeviceEnergyIsComparisonOnly() {
         let record = WorkoutRecord(
             sessionName: "力量",
             startedAt: .now.addingTimeInterval(-3600),
@@ -552,8 +552,8 @@ final class TrainingEngineTests: XCTestCase {
             measuredActiveEnergyKcal: 234
         )
         let estimate = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: 70)
-        XCTAssertEqual(estimate.kilocalories, 234)
-        XCTAssertEqual(estimate.confidence, "高")
+        XCTAssertNotEqual(estimate.kilocalories, 234)
+        XCTAssertEqual(estimate.diagnostics?.comparisonEstimateKcal, 234)
     }
 
     func testLowHeartRateStrengthSessionUsesModelFloorInsteadOfSingleDigitEnergy() {
@@ -592,12 +592,12 @@ final class TrainingEngineTests: XCTestCase {
         )
 
         XCTAssertGreaterThan(estimate.kilocalories, 100)
-        XCTAssertTrue(estimate.method.contains("心率 + 力量模型"))
+        XCTAssertEqual(estimate.method, "2024 Adult Compendium 力量训练结构模型")
         XCTAssertLessThan(estimate.lowerBound, estimate.kilocalories)
         XCTAssertGreaterThan(estimate.upperBound, estimate.kilocalories)
     }
 
-    func testStrengthHeartRateGapsAreFilledWithoutDoubleCounting() {
+    func testStrengthWrapperKeepsStructuralCenterForGappyHeartRate() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var user = profile(goal: .hypertrophy, experience: .intermediate)
         user.ageYears = 30
@@ -631,17 +631,13 @@ final class TrainingEngineTests: XCTestCase {
             weightKg: 70,
             profile: user
         )
-        let fallback = TrainingEngine.netActiveEnergy(
-            met: 5,
-            weightKg: 70,
-            minutes: 60
-        )
+        let structural = TrainingEngine.strengthEnergyEstimate(record: record, weightKg: 70)
 
-        XCTAssertEqual(estimate.kilocalories, fallback, accuracy: fallback * 0.05)
-        XCTAssertEqual(estimate.confidence, "低至中")
+        XCTAssertEqual(estimate.kilocalories, structural.kilocalories, accuracy: 0.001)
+        XCTAssertEqual(estimate.confidence, structural.confidence)
     }
 
-    func testStrengthTimeSeriesWithoutDemographicsUsesPureSessionRPEModel() {
+    func testStrengthWrapperUsesStructuralModelWithoutDemographics() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let user = profile(goal: .hypertrophy, experience: .intermediate)
         let provenance = MetricProvenance(
@@ -673,7 +669,7 @@ final class TrainingEngineTests: XCTestCase {
             profile: user
         )
 
-        XCTAssertEqual(estimate.method, "2024 Adult Compendium MET + session-RPE")
+        XCTAssertEqual(estimate.method, "2024 Adult Compendium 力量训练结构模型")
         XCTAssertEqual(estimate.confidence, "低至中")
     }
 

@@ -29,6 +29,7 @@ let package = Package(
                 "Engine/TrendEngine.swift",
                 "Engine/EnergyEngine.swift",
                 "Engine/CardioEnergyEstimator.swift",
+                "Engine/StrengthEnergyEstimator.swift",
                 "Engine/HeartRateAnalysisEngine.swift",
                 "Engine/WorkoutActivitySnapshot.swift",
                 "Services/HealthImportModels.swift",

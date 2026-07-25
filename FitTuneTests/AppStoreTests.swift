@@ -576,7 +576,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(record.metricSamples?.first?.heartRateBPM, 135)
     }
 
-    func testStrengthSaveUsesLatestAppleWatchCumulativeEnergy() throws {
+    func testStrengthSaveKeepsLatestAppleWatchCumulativeEnergyAsComparison() throws {
         let store = AppStore(defaults: makeDefaults())
         let exercise = ExercisePrescription(
             name: "卧推",
@@ -608,8 +608,9 @@ final class AppStoreTests: XCTestCase {
         let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
 
         XCTAssertEqual(record.measuredActiveEnergyKcal, 210)
-        XCTAssertEqual(record.activeEnergyKcal, 210)
-        XCTAssertEqual(record.energyMethod, "Apple Watch / 设备实测")
+        XCTAssertNotEqual(record.activeEnergyKcal, 210)
+        XCTAssertEqual(record.energyMethod, "2024 Adult Compendium 力量训练结构模型")
+        XCTAssertEqual(record.energyDiagnostics?.comparisonEstimateKcal, 210)
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
@@ -680,7 +681,7 @@ final class AppStoreTests: XCTestCase {
 
         let record = try XCTUnwrap(store.saveActiveWorkout(status: .completed))
 
-        XCTAssertEqual(record.energyMethod, "FitTune 心率 + 力量模型估算")
+        XCTAssertEqual(record.energyMethod, "2024 Adult Compendium 力量训练结构模型")
         XCTAssertEqual(record.energyAlgorithmVersion, EnergyEngine.algorithmVersion)
     }
 
@@ -721,7 +722,7 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertGreaterThan(updated.activeEnergyKcal ?? 0, 100)
         XCTAssertEqual(oldRecord.activeEnergyKcal, 5)
-        XCTAssertTrue(updated.energyMethod?.contains("心率 + 力量模型") == true)
+        XCTAssertEqual(updated.energyMethod, "2024 Adult Compendium 力量训练结构模型")
     }
 
     func testCurrentStrengthEnergyRecordKeepsFinalizedMeasuredEnergyOverLiveCumulativeSample() {
@@ -754,8 +755,9 @@ final class AppStoreTests: XCTestCase {
         let updated = store.currentEnergyRecord(record)
 
         XCTAssertEqual(updated.measuredActiveEnergyKcal, 192)
-        XCTAssertEqual(updated.activeEnergyKcal, 192)
-        XCTAssertEqual(updated.energyMethod, "Apple Watch / 设备实测")
+        XCTAssertNotEqual(updated.activeEnergyKcal, 192)
+        XCTAssertEqual(updated.energyMethod, "2024 Adult Compendium 力量训练结构模型")
+        XCTAssertEqual(updated.energyDiagnostics?.comparisonEstimateKcal, 192)
     }
 
     func testCurrentCardioEnergyRecordRecalculatesWithoutMutatingInput() {
