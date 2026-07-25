@@ -28,6 +28,7 @@ let package = Package(
                 "Engine/SummaryEngine.swift",
                 "Engine/TrendEngine.swift",
                 "Engine/EnergyEngine.swift",
+                "Engine/HeartRateAnalysisEngine.swift",
                 "Engine/WorkoutActivitySnapshot.swift",
                 "Services/HealthImportModels.swift",
                 "Services/LiveSensorSource.swift",
