@@ -11,12 +11,13 @@ struct AlgorithmInfoView: View {
                 LabeledContent("趋势", value: TrendEngine.algorithmVersion)
             }
             Section("下组重量与休息") {
-                Text("重量建议主要使用完成次数、RIR、四维恢复和同动作历史。实时心率只能延长休息、阻止冒进加重和触发安全提示，不能单凭心率加重。所有建议均可修改，不会擅自删组或结束训练。")
+                Text("重量建议主要使用完成次数、RIR、四维恢复和同动作历史。实时心率只提供个人恢复参考与安全提示，不能单凭心率加重。休息倒计时和所有建议均可跳过或修改，不会锁定下一组、擅自删组或结束训练。")
                 Text("热身组默认 RIR 5（可调 4–6），正式组默认 RIR 0。只有正式组进入主要训练量、力竭率和力量趋势。")
             }
             Section("能量") {
                 Text("静息代谢优先使用实测 RMR；其次为有去脂体重时的 Cunningham；否则在年龄、身高和生理性别完整时使用 Mifflin–St Jeor。力量水平不直接代入基础代谢。")
-                Text("运动能量优先级：设备实测 → 合格心率数据 → 速度/坡度等专项方程 → MET 估算。全天设备主动能量作为去重上限，避免与训练和步数重复相加。")
+                Text("有氧主动能量优先级：专项机械模型 -> 心率 -> MET -> 仅设备降级。设备主动能量通常作为对照，不会覆盖合格的速度/坡度、功率或心率模型。")
+                Text("力量训练以时长、组数密度、复合动作占比和真实 session-RPE 的结构模型为主，心率只在覆盖充分时校正；EPOC 不叠加到本次主动能量。")
             }
             Section("限制") {
                 Text("e1RM 仅在合理次数/RIR 范围内作为个人纵向指标；高次数力竭组可信度较低。数据不足时不会强行生成 VO₂max。热量、恢复时间和训练效果均为区间估计，不是医学诊断。")
@@ -29,6 +30,14 @@ struct AlgorithmInfoView: View {
                 Link("RIR 负荷处方可靠性", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/36135029/")!)
                 Link("组间休息系统综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/39205815/")!)
                 Link("力竭与非力竭训练 Meta 分析", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/33497853/")!)
+                Link("腕式设备心率与能量误差", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/28538708/")!)
+                Link("成人最大心率年龄预测", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/11153730/")!)
+                Link("Fatmax 个体差异", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/14598198/")!)
+                Link("最大脂肪氧化评估综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/30929281/")!)
+                Link("session-RPE 训练负荷", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/11708692/")!)
+                Link("PCr 恢复综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/12238940/")!)
+                Link("1 分钟与 3 分钟组间休息试验", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/26605807/")!)
+                Link("EPOC 影响因素综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/17101527/")!)
             }
         }
         .navigationTitle("算法与科学依据")

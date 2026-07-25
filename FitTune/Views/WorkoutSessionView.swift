@@ -17,6 +17,9 @@ struct WorkoutSessionView: View {
     @State private var showExerciseLibrary = false
     @State private var showWorkoutEditor = false
     @State private var replacementExercise: ExercisePrescription?
+    @State private var showSessionRPE = false
+    @State private var pendingSaveStatus: WorkoutCompletionStatus?
+    @State private var pendingSessionRPE = 7
 
     init(session: TrainingSession? = nil) {
         initialSession = session
@@ -45,12 +48,12 @@ struct WorkoutSessionView: View {
         .onChange(of: liveSensors.latestSample?.id) { _, _ in appendLatestLiveSample(); updateLiveActivity() }
         .onChange(of: liveSensors.latestWatchEvent) { _, event in
             guard event?.sessionID == store.activeWorkoutDraft?.id, event?.event == .ended else { return }
-            saveAndExit(status: .partial)
+            requestSave(status: .partial)
         }
         .onChange(of: store.activeWorkoutDraft?.updatedAt) { _, _ in updateLiveActivity() }
         .confirmationDialog("离开当前训练？", isPresented: $showExitDialog, titleVisibility: .visible) {
             Button("继续未完成训练") { showExitDialog = false }
-            Button("保存并结束") { saveAndExit(status: .partial) }
+            Button("保存并结束") { requestSave(status: .partial) }
             Button("放弃训练", role: .destructive) { showDiscardConfirmation = true }
         } message: {
             Text("训练已自动缓存。只有保存或确认放弃后，未完成训练才会清除。")
@@ -86,6 +89,11 @@ struct WorkoutSessionView: View {
                 PlanEditorView(draft: editorDraft, mode: .activeWorkout)
             }
         }
+        .sheet(isPresented: $showSessionRPE, onDismiss: {
+            pendingSaveStatus = nil
+        }) {
+            sessionRPESheet
+        }
         .fullScreenCover(item: $replacementExercise) { exercise in
             ExerciseReplacementView(currentPrescription: exercise, targetPhase: exercise.resolvedPhase) { option, transfer in
                 guard var editor = store.makeActiveWorkoutEditorDraft(),
@@ -113,10 +121,11 @@ struct WorkoutSessionView: View {
                     prominentProgress(draft, exercise: exercise)
                     exerciseCard(draft, exercise: exercise)
                     completedSetsCard(draft, exercise: exercise)
-                    if draft.phase == .training {
+                    if draft.phase == .training || draft.phase == .setActive {
                         inputCard(draft)
                         safetyCard(draft)
-                        completeSetButton
+                        setTimer(draft)
+                        primarySetAction(draft)
                     } else if draft.phase == .resting {
                         restCard(draft)
                     } else {
@@ -148,9 +157,20 @@ struct WorkoutSessionView: View {
                     .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accent : FitTheme.warning)
             }
             Spacer()
-            Color.clear
-                .frame(width: 42, height: 42)
-                .accessibilityHidden(true)
+            Button {
+                if draft.currentPauseStartedAt == nil {
+                    store.pauseWorkout()
+                } else {
+                    store.resumeWorkout()
+                }
+            } label: {
+                Image(systemName: draft.currentPauseStartedAt == nil ? "pause.fill" : "play.fill")
+                    .font(.headline)
+                    .frame(width: 42, height: 42)
+                    .background(FitTheme.surface, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(draft.currentPauseStartedAt == nil ? "暂停训练" : "继续训练")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
@@ -200,7 +220,7 @@ struct WorkoutSessionView: View {
                 .disabled(draft.exerciseIndex == 0)
                 Button {
                     if !store.advanceDraftToNextExercise() {
-                        saveAndExit(status: .partial)
+                        requestSave(status: .partial)
                     }
                 } label: {
                     Label("下个动作", systemImage: "chevron.right")
@@ -347,18 +367,53 @@ struct WorkoutSessionView: View {
                     ? "尖锐疼痛、胸痛、眩晕、麻木或异常气短时应停止训练并视情况寻求专业帮助。系统不会替你自动结束。"
                     : "建议检查动作幅度与控制，必要时自行减重或结束本动作；该提示不改变重量计算。")
                     .font(.subheadline).foregroundStyle(FitTheme.secondaryText)
-                Button("保存当前内容并结束") { saveAndExit(status: .partial) }
+                Button("保存当前内容并结束") { requestSave(status: .partial) }
                     .font(.subheadline.bold()).foregroundStyle(FitTheme.danger)
             }
             .fitCard()
         }
     }
 
-    private var completeSetButton: some View {
-        Button { store.completeCurrentDraftSet() } label: {
-            Label("完成本组", systemImage: "checkmark.circle.fill")
+    @ViewBuilder
+    private func primarySetAction(_ draft: WorkoutDraft) -> some View {
+        switch draft.phase {
+        case .training:
+            Button { store.startCurrentDraftSet() } label: {
+                Label("开始本组", systemImage: "play.fill")
+            }
+            .buttonStyle(PrimaryActionButtonStyle())
+        case .setActive:
+            Button { store.completeCurrentDraftSet() } label: {
+                Label("完成本组", systemImage: "checkmark")
+            }
+            .buttonStyle(PrimaryActionButtonStyle())
+        case .resting, .exerciseComplete:
+            EmptyView()
         }
-        .buttonStyle(PrimaryActionButtonStyle())
+    }
+
+    @ViewBuilder
+    private func setTimer(_ draft: WorkoutDraft) -> some View {
+        if draft.phase == .setActive {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(spacing: 4) {
+                    Text("本组计时")
+                        .font(.caption.bold())
+                        .foregroundStyle(FitTheme.secondaryText)
+                    Text(formatSeconds(activeSetElapsedSeconds(draft, at: context.date)))
+                        .font(.system(.title2, design: .monospaced, weight: .bold))
+                        .foregroundStyle(FitTheme.accent)
+                        .frame(width: 96, height: 32)
+                        .accessibilityLabel("本组已进行 \(activeSetElapsedSeconds(draft, at: context.date)) 秒")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(height: 60)
+        } else {
+            Color.clear
+                .frame(height: 60)
+                .accessibilityHidden(true)
+        }
     }
 
     private func restCard(_ draft: WorkoutDraft) -> some View {
@@ -400,14 +455,15 @@ struct WorkoutSessionView: View {
                 HStack(spacing: 10) {
                     Button("+30 秒") { extendRest(by: 30) }
                         .buttonStyle(.bordered)
-                    Button("跳过计时") { store.advanceDraftToNextSet() }
-                        .buttonStyle(.bordered)
+                }
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    recoveryStatus(draft, at: context.date)
                 }
                 Text(liveSensors.statusMessage)
                     .font(.caption)
                     .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accentBlue : FitTheme.warning)
                 Button { store.advanceDraftToNextSet() } label: {
-                    Label("开始下一组", systemImage: "play.fill")
+                    Label("准备下一组", systemImage: "forward.fill")
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
             }
@@ -429,7 +485,7 @@ struct WorkoutSessionView: View {
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
             } else {
-                Button { saveAndExit(status: .completed) } label: {
+                Button { requestSave(status: .completed) } label: {
                     Label("完成本次训练", systemImage: "flag.checkered")
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
@@ -524,6 +580,72 @@ struct WorkoutSessionView: View {
         return max(0, rest.recommendedSeconds - Int(date.timeIntervalSince(started)))
     }
 
+    private func activeSetElapsedSeconds(_ draft: WorkoutDraft, at date: Date) -> Int {
+        guard let startedAt = draft.currentSetStartedAt else { return 0 }
+        let end = max(startedAt, date)
+        let completedPauseSeconds = draft.pauseIntervals.reduce(0.0) { total, pause in
+            guard let pauseEnd = pause.endedAt else { return total }
+            let overlapStart = max(startedAt, pause.startedAt)
+            let overlapEnd = min(end, pauseEnd)
+            return total + max(0, overlapEnd.timeIntervalSince(overlapStart))
+        }
+        let openPauseSeconds: Double
+        if let pauseStartedAt = draft.currentPauseStartedAt {
+            openPauseSeconds = max(0, end.timeIntervalSince(max(startedAt, pauseStartedAt)))
+        } else {
+            openPauseSeconds = 0
+        }
+        return max(0, Int(end.timeIntervalSince(startedAt) - completedPauseSeconds - openPauseSeconds))
+    }
+
+    @ViewBuilder
+    private func recoveryStatus(_ draft: WorkoutDraft, at date: Date) -> some View {
+        if let set = draft.results.last(where: { $0.exerciseID == draft.currentExercise.id }) {
+            let response = set.heartRateResponse
+            let recovery = TrainingEngine.personalRecoveryComparison(
+                currentResponse: response,
+                currentSet: set,
+                history: store.workoutHistory
+            )
+            VStack(alignment: .leading, spacing: 6) {
+                Label(recoveryMeasurementText(response, draft: draft, at: date), systemImage: "waveform.path.ecg")
+                    .font(.caption.bold())
+                    .foregroundStyle(response == nil ? FitTheme.warning : FitTheme.accentBlue)
+                if response != nil {
+                    Label(
+                        recovery.calibrationPairs >= 5
+                            ? "已结合个人同动作恢复"
+                            : "个人校准中 \(recovery.calibrationPairs)/5",
+                        systemImage: recovery.calibrationPairs >= 5 ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.clock"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(FitTheme.secondaryText)
+                }
+                Text("心率与休息均为参考，不会锁定下一组、自动结束或替你改变重量。")
+                    .font(.caption2)
+                    .foregroundStyle(FitTheme.secondaryText)
+            }
+        }
+    }
+
+    private func recoveryMeasurementText(_ response: SetHeartRateResponse?, draft: WorkoutDraft, at date: Date) -> String {
+        guard let response else {
+            if let restStartedAt = draft.restStartedAt,
+               date.timeIntervalSince(restStartedAt) <= 120,
+               liveSensors.latestValidity == .valid {
+                return "正在确认组后心率峰值"
+            }
+            return "样本不足，保持基础休息建议"
+        }
+        if let hrr60 = response.hrr60 {
+            return "峰后 60 秒恢复 \(Int(hrr60.rounded())) bpm"
+        }
+        if response.peakDelaySeconds > 0 {
+            return "峰值延后 \(response.peakDelaySeconds) 秒"
+        }
+        return "正在确认组后心率峰值"
+    }
+
     private func extendRest(by seconds: Int) {
         store.updateWorkoutDraft { draft in
             guard var rest = draft.restRecommendation else { return }
@@ -569,7 +691,47 @@ struct WorkoutSessionView: View {
         "\(value / 60):\(String(format: "%02d", value % 60))"
     }
 
-    private func saveAndExit(status: WorkoutCompletionStatus) {
+    private var sessionRPESheet: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                Text("这是一项整场主观用力感受，不会从每组 RIR 自动推算。")
+                    .font(.subheadline)
+                    .foregroundStyle(FitTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+                Text("\(pendingSessionRPE)")
+                    .font(.system(size: 54, weight: .black, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(FitTheme.accent)
+                    .frame(height: 64)
+                    .accessibilityLabel("整场主观用力程度 \(pendingSessionRPE)")
+                Stepper("session-RPE \(pendingSessionRPE)", value: $pendingSessionRPE, in: 1...10)
+                    .font(.headline)
+                Button("确认并保存") {
+                    guard let status = pendingSaveStatus else { return }
+                    store.setWorkoutSessionRPE(Double(pendingSessionRPE))
+                    performSaveAndExit(status: status)
+                }
+                .buttonStyle(PrimaryActionButtonStyle())
+            }
+            .padding(24)
+            .navigationTitle("整场用力程度 1–10")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { showSessionRPE = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func requestSave(status: WorkoutCompletionStatus) {
+        pendingSaveStatus = status
+        pendingSessionRPE = Int((store.activeWorkoutDraft?.sessionRPE ?? 7).rounded())
+        showSessionRPE = true
+    }
+
+    private func performSaveAndExit(status: WorkoutCompletionStatus) {
+        showSessionRPE = false
         liveSensors.endWorkout()
         WorkoutActivityController.shared.end()
         store.saveActiveWorkout(status: status)
