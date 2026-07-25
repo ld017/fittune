@@ -90,6 +90,7 @@
 		B00000000000000000000049 /* CardioEnergyEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004C /* CardioEnergyEstimatorTests.swift */; };
 		B0000000000000000000004A /* StrengthEnergyEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */; };
 		B0000000000000000000004B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004E /* Assets.xcassets */; };
+		B0000000000000000000004C /* V06SnapshotFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004F /* V06SnapshotFixture.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -230,6 +231,7 @@
 		C0000000000000000000004C /* CardioEnergyEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardioEnergyEstimatorTests.swift; sourceTree = "<group>"; };
 		C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthEnergyEstimatorTests.swift; sourceTree = "<group>"; };
 		C0000000000000000000004E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C0000000000000000000004F /* V06SnapshotFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures/V06SnapshotFixture.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -404,6 +406,7 @@
 				C0000000000000000000004B /* HeartRateAnalysisEngineTests.swift */,
 				C0000000000000000000004C /* CardioEnergyEstimatorTests.swift */,
 				C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */,
+				C0000000000000000000004F /* V06SnapshotFixture.swift */,
 			);
 			path = FitTuneTests;
 			sourceTree = "<group>";
@@ -721,6 +724,7 @@
 				B00000000000000000000048 /* HeartRateAnalysisEngineTests.swift in Sources */,
 				B00000000000000000000049 /* CardioEnergyEstimatorTests.swift in Sources */,
 				B0000000000000000000004A /* StrengthEnergyEstimatorTests.swift in Sources */,
+				B0000000000000000000004C /* V06SnapshotFixture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

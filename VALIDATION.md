@@ -202,4 +202,17 @@
 - FIT 3 是否能向 Apple 健康写入睡眠、静息心率、步数等内容由华为健康版本、地区和用户授权决定。FitTune 只读取实际到达 Apple 健康的数据。
 - 真机的锁屏实时活动、后台定位/运动和健康权限仍需在目标 iPhone 上逐项确认；模拟器通过不能替代权限弹窗验收。
 
+## FitTune v1.2.0 科学训练更新最终验证（2026-07-26）
+
+- 版本：`1.2.0 (13)`；Bundle ID：`com.codex.fittune`。
+- `swift test`：258 项通过，0 失败。
+- iPhone 17 Pro 模拟器 XCTest：229 项通过，0 失败，`** TEST SUCCEEDED **`。
+- Debug iOS Simulator、Release iPhoneOS（未签名）和 FitTuneWatch Release 构建均通过。
+- Xcode 工程清单可读取，`project.pbxproj` 校验通过，`git diff --check` 无格式错误。
+- Release 包包含 `Assets.car` 和应用图标；版本、构建号与 Bundle ID 均已从构建产物复核。
+- 模拟器以标准字号和辅助功能大字号检查“我的设置”；发现的横向选择器文字挤压已改为大字号纵向布局，并重新截图确认无相互覆盖。
+- 代表截图：`Screenshots/FitTune-1.2.0-profile-standard.png`、`Screenshots/FitTune-1.2.0-profile-accessibility-large.png`。
+
+仍需真机完成的项目：Apple Watch/蓝牙心率实时数据、HealthKit 权限弹窗、后台与锁屏持续采集、Live Activity/灵动岛交互、签名覆盖安装及 FIT 3 心率广播兼容性。传感器或权限不可用时，训练流程继续运行并降低数据可信度。
+
 ---

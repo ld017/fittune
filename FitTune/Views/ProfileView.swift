@@ -15,6 +15,7 @@ private enum TrashRecord {
 struct ProfileView: View {
     @Environment(AppStore.self) private var store
     @Environment(HealthDataSyncCoordinator.self) private var healthSync
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var goal: TrainingGoal = .recomposition
     @State private var secondaryGoal: SecondaryGoal = .none
@@ -426,15 +427,31 @@ struct ProfileView: View {
     }
 
     private func settingPicker<T: Hashable>(title: String, selection: Binding<T>, options: [T], label: @escaping (T) -> String) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Picker(title, selection: selection) {
-                ForEach(options, id: \.self) { option in
-                    Text(label(option)).tag(option)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                    Picker(title, selection: selection) {
+                        ForEach(options, id: \.self) { option in
+                            Text(label(option)).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                    .tint(FitTheme.accent)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Picker(title, selection: selection) {
+                        ForEach(options, id: \.self) { option in
+                            Text(label(option)).tag(option)
+                        }
+                    }
+                    .tint(FitTheme.accent)
                 }
             }
-            .tint(FitTheme.accent)
         }
     }
 
