@@ -34,3 +34,28 @@ Completed from base `32a9762`.
 - Confirmed speed edits remain normal segment changes and do not trigger failure or control-lock behavior.
 - Persisted additions are optional and legacy percent-grade segments decode as percent mode.
 - No remaining Task 9 concerns.
+
+## Fix Round 1
+
+### Findings addressed
+
+- Replaced transient-only treadmill calibration with a reusable `TreadmillMachineCalibration` containing the machine maximum level and rise/run grade measurement. It is optional in `AppSnapshot`, survives relaunch and session discard, clears with full data reset, and is reused only when the machine maximum level matches.
+- Today and live-session calibration controls now persist every valid calibration. Future level-mode sessions automatically restore the saved machine maximum and actual-grade calibration.
+- Passed `cardioPowerWatts` into Today’s manual `cardioEnergyEstimate` preview so cycling/rowing preview and saved energy use the same power input.
+
+### TDD evidence
+
+- RED: `testTreadmillCalibrationPersistsAndReusesForFutureMachineLevelSession` failed to compile because the reusable calibration model, store property, and persistence API did not exist.
+- GREEN: the test now verifies snapshot relaunch, reuse at a proportional level, retention after discarding a session, and reuse in a later session.
+
+### Verification
+
+- `swift test --filter CardioSessionTests`: 14 tests, 0 failures.
+- `swift test --filter CardioEnergyEstimatorTests`: 12 tests, 0 failures.
+- `swift test --filter TrainingEngineTests/testLegacyCardioWrapperDerivesSpeedFromDistanceAndPreservesPower`: 1 test, 0 failures.
+- Debug simulator build: `** BUILD SUCCEEDED **`.
+- `git diff --check`: passed.
+
+### Remaining concerns
+
+- None.

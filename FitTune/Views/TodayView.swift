@@ -100,6 +100,7 @@ struct TodayView: View {
                 stress = Int(latest.stress.resolvedValue ?? latest.stress.manualValue ?? Double(stress))
                 motivation = Int(latest.motivation.resolvedValue ?? latest.motivation.manualValue ?? Double(motivation))
             }
+            loadSavedTreadmillCalibration()
         }
         .sheet(isPresented: $showCardioEntry) { cardioEntrySheet }
     }
@@ -622,6 +623,7 @@ struct TodayView: View {
                             machineMaximumLevel: cardioModality == .inclineWalking && cardioInclineMode == .machineLevel ? cardioMachineMaximumLevel : nil,
                             maximumGradeCalibration: cardioGradeCalibration,
                             handrailSupport: cardioModality == .inclineWalking ? cardioHandrailSupport : .none,
+                            powerWatts: cardioPowerWatts > 0 ? cardioPowerWatts : nil,
                             measuredActiveEnergy: cardioMeasuredKcal > 0 ? cardioMeasuredKcal : nil
                         )
                         VStack(alignment: .leading, spacing: 5) {
@@ -682,6 +684,9 @@ struct TodayView: View {
             }
             .navigationTitle("记录有氧训练")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showCardioEntry = false } } }
+            .onChange(of: cardioMachineMaximumLevel) { _, _ in saveTreadmillCalibrationIfValid() }
+            .onChange(of: cardioCalibrationRise) { _, _ in saveTreadmillCalibrationIfValid() }
+            .onChange(of: cardioCalibrationRun) { _, _ in saveTreadmillCalibrationIfValid() }
         }
     }
 
@@ -698,6 +703,24 @@ struct TodayView: View {
         }
         let currentGrade = maximumGrade * min(1, max(0, cardioInclineLevel / cardioMachineMaximumLevel))
         return "最高档实测坡度 \(maximumGrade.formatted(.number.precision(.fractionLength(1))))%；当前约 \(currentGrade.formatted(.number.precision(.fractionLength(1))))%。"
+    }
+
+    private func loadSavedTreadmillCalibration() {
+        guard let saved = store.treadmillMachineCalibration else { return }
+        cardioMachineMaximumLevel = saved.maximumLevel
+        cardioInclineLevel = min(cardioInclineLevel, saved.maximumLevel)
+        cardioCalibrationRise = saved.gradeCalibration.rise
+        cardioCalibrationRun = saved.gradeCalibration.horizontalRun
+    }
+
+    private func saveTreadmillCalibrationIfValid() {
+        guard cardioInclineMode == .machineLevel,
+              let calibration = cardioGradeCalibration,
+              calibration.maximumGradePercent != nil else { return }
+        store.setTreadmillMachineCalibration(.init(
+            maximumLevel: cardioMachineMaximumLevel,
+            gradeCalibration: calibration
+        ))
     }
 
     private func syncWatchWorkouts() {

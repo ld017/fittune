@@ -52,6 +52,11 @@ struct TreadmillGradeCalibration: Codable, Equatable {
     }
 }
 
+struct TreadmillMachineCalibration: Codable, Equatable {
+    var maximumLevel: Double
+    var gradeCalibration: TreadmillGradeCalibration
+}
+
 enum CardioWorkloadSource: String, Codable {
     case userEntered
     case device

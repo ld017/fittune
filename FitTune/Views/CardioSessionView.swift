@@ -209,6 +209,15 @@ struct CardioSessionView: View {
     private func persistWorkload() {
         guard let modality = store.activeCardioDraft?.modality else { return }
         let inclineWalking = modality == .inclineWalking
+        if inclineWalking,
+           liveInclineMode == .machineLevel,
+           let calibration = liveCalibration,
+           calibration.maximumGradePercent != nil {
+            store.setTreadmillMachineCalibration(.init(
+                maximumLevel: liveMachineMaximumLevel,
+                gradeCalibration: calibration
+            ))
+        }
         store.updateCardioWorkload(
             speedKph: [.running, .briskWalking, .inclineWalking].contains(modality) && liveSpeedKph > 0 ? liveSpeedKph : nil,
             inclinePercent: inclineWalking && liveInclineMode == .percentGrade ? liveInclinePercent : nil,

@@ -31,6 +31,7 @@ final class AppStore {
     var activeCardioDraft: CardioSessionDraft?
     var presentedSummary: WorkoutSummaryPresentation?
     var dailyHealthSnapshots: [DailyHealthSnapshot] = []
+    var treadmillMachineCalibration: TreadmillMachineCalibration?
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
@@ -437,6 +438,11 @@ final class AppStore {
         at startedAt: Date = .now
     ) {
         guard activeCardioDraft == nil, activeWorkoutDraft == nil else { return }
+        let machineParameters = resolvedTreadmillMachineParameters(
+            inputMode: inclineInputMode,
+            maximumLevel: machineMaximumLevel,
+            calibration: maximumGradeCalibration
+        )
         var draft = CardioSessionDraft(
             modality: modality,
             intensity: intensity,
@@ -451,8 +457,8 @@ final class AppStore {
                     inclinePercent: inclinePercent,
                     inclineInputMode: inclineInputMode,
                     inclineLevel: inclineLevel,
-                    machineMaximumLevel: machineMaximumLevel,
-                    maximumGradeCalibration: maximumGradeCalibration,
+                    machineMaximumLevel: machineParameters.maximumLevel,
+                    maximumGradeCalibration: machineParameters.calibration,
                     powerWatts: powerWatts,
                     handrailSupport: handrailSupport,
                     source: .userEntered
@@ -476,6 +482,11 @@ final class AppStore {
     ) {
         guard var draft = activeCardioDraft else { return }
         guard changedAt > draft.startedAt else { return }
+        let machineParameters = resolvedTreadmillMachineParameters(
+            inputMode: inclineInputMode,
+            maximumLevel: machineMaximumLevel,
+            calibration: maximumGradeCalibration
+        )
         let hasWorkload = speedKph != nil || inclinePercent != nil || inclineLevel != nil || powerWatts != nil || handrailSupport != .none
         if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
             let current = draft.workloadSegments[openIndex]
@@ -484,8 +495,8 @@ final class AppStore {
                     || current.inclinePercent != inclinePercent
                     || current.inclineInputMode != inclineInputMode
                     || current.inclineLevel != inclineLevel
-                    || current.machineMaximumLevel != machineMaximumLevel
-                    || current.maximumGradeCalibration != maximumGradeCalibration
+                    || current.machineMaximumLevel != machineParameters.maximumLevel
+                    || current.maximumGradeCalibration != machineParameters.calibration
                     || current.powerWatts != powerWatts
                     || current.handrailSupport != handrailSupport else { return }
             draft.workloadSegments[openIndex].endedAt = changedAt
@@ -499,8 +510,8 @@ final class AppStore {
                 inclinePercent: inclinePercent,
                 inclineInputMode: inclineInputMode,
                 inclineLevel: inclineLevel,
-                machineMaximumLevel: machineMaximumLevel,
-                maximumGradeCalibration: maximumGradeCalibration,
+                machineMaximumLevel: machineParameters.maximumLevel,
+                maximumGradeCalibration: machineParameters.calibration,
                 powerWatts: powerWatts,
                 handrailSupport: handrailSupport,
                 source: .userEntered
@@ -509,6 +520,32 @@ final class AppStore {
         draft.updatedAt = changedAt
         activeCardioDraft = draft
         persist()
+    }
+
+    func setTreadmillMachineCalibration(_ calibration: TreadmillMachineCalibration?) {
+        if let calibration {
+            guard calibration.maximumLevel > 0,
+                  calibration.gradeCalibration.maximumGradePercent != nil else { return }
+        }
+        treadmillMachineCalibration = calibration
+        persist()
+    }
+
+    private func resolvedTreadmillMachineParameters(
+        inputMode: TreadmillInclineInputMode?,
+        maximumLevel: Double?,
+        calibration: TreadmillGradeCalibration?
+    ) -> (maximumLevel: Double?, calibration: TreadmillGradeCalibration?) {
+        guard inputMode == .machineLevel else { return (maximumLevel, calibration) }
+        if let calibration, calibration.maximumGradePercent != nil, let maximumLevel, maximumLevel > 0 {
+            treadmillMachineCalibration = .init(maximumLevel: maximumLevel, gradeCalibration: calibration)
+            return (maximumLevel, calibration)
+        }
+        guard let saved = treadmillMachineCalibration,
+              maximumLevel == nil || maximumLevel == saved.maximumLevel else {
+            return (maximumLevel, calibration)
+        }
+        return (maximumLevel ?? saved.maximumLevel, calibration ?? saved.gradeCalibration)
     }
 
     func setConfirmedCardioDistance(meters: Double?) {
@@ -1741,6 +1778,7 @@ final class AppStore {
         recoveryCheckIns = []
         restingHeartRateSamples = []
         activeCardioDraft = nil
+        treadmillMachineCalibration = nil
         safetySettings = PersonalSafetySettings()
         favoriteExerciseIDs = []
         customExercises = []
@@ -1808,7 +1846,8 @@ final class AppStore {
             customExercises: customExercises,
             restingHeartRateSamples: restingHeartRateSamples,
             activeCardioDraft: activeCardioDraft,
-            dailyHealthSnapshots: dailyHealthSnapshots
+            dailyHealthSnapshots: dailyHealthSnapshots,
+            treadmillMachineCalibration: treadmillMachineCalibration
         )
     }
 
@@ -1872,6 +1911,7 @@ final class AppStore {
         restingHeartRateSamples = snapshot.restingHeartRateSamples ?? []
         activeCardioDraft = snapshot.activeCardioDraft
         dailyHealthSnapshots = snapshot.dailyHealthSnapshots ?? []
+        treadmillMachineCalibration = snapshot.treadmillMachineCalibration
         if needsSchemaMigration {
             persist()
         }

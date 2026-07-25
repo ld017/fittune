@@ -1233,6 +1233,7 @@ struct AppSnapshot: Codable {
     var restingHeartRateSamples: [RestingHeartRateSample]? = nil
     var activeCardioDraft: CardioSessionDraft? = nil
     var dailyHealthSnapshots: [DailyHealthSnapshot]? = nil
+    var treadmillMachineCalibration: TreadmillMachineCalibration? = nil
     var schemaVersion: Int? = currentSchemaVersion
 
     var resolvedSchemaVersion: Int { schemaVersion ?? 6 }

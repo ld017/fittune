@@ -161,6 +161,43 @@ final class CardioSessionTests: XCTestCase {
         XCTAssertEqual(draft.currentWorkload?.maximumGradeCalibration, calibration)
     }
 
+    func testTreadmillCalibrationPersistsAndReusesForFutureMachineLevelSession() throws {
+        let defaults = makeDefaults()
+        let calibration = TreadmillMachineCalibration(
+            maximumLevel: 15,
+            gradeCalibration: .init(rise: 30, horizontalRun: 100)
+        )
+        let store = AppStore(defaults: defaults)
+        store.setTreadmillMachineCalibration(calibration)
+
+        let restored = AppStore(defaults: defaults)
+        XCTAssertEqual(restored.treadmillMachineCalibration, calibration)
+
+        restored.startCardioSession(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            speedKph: 5,
+            inclineInputMode: .machineLevel,
+            inclineLevel: 7.5,
+            handrailSupport: .none
+        )
+
+        let workload = try XCTUnwrap(restored.activeCardioDraft?.currentWorkload)
+        XCTAssertEqual(workload.machineMaximumLevel, 15)
+        XCTAssertEqual(workload.maximumGradeCalibration, calibration.gradeCalibration)
+        XCTAssertEqual(workload.resolvedInclinePercent, 15)
+
+        restored.discardCardioSession()
+        XCTAssertEqual(restored.treadmillMachineCalibration, calibration)
+        restored.startCardioSession(
+            modality: .inclineWalking,
+            intensity: .zone2,
+            inclineInputMode: .machineLevel,
+            inclineLevel: 15
+        )
+        XCTAssertEqual(restored.activeCardioDraft?.currentWorkload?.resolvedInclinePercent, 30)
+    }
+
     func testLegacyWorkloadWithoutInclineModeDecodesAsPercentGrade() throws {
         let json = """
         {
