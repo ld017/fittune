@@ -29,6 +29,39 @@ final class HeartRateAnalysisEngineTests: XCTestCase {
         XCTAssertLessThan(result.secondsByZone[.vigorous] ?? 0, 10)
     }
 
+    func testIntensityKeepsDominantSourceCoverageWhenSecondarySamplesInterleave() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let h10 = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "H10",
+            confidence: .measured,
+            coverage: 1
+        )
+        let watch = MetricProvenance(
+            source: .appleWatch,
+            sourceName: "Apple Watch",
+            confidence: .measured,
+            coverage: 1
+        )
+        let result = try XCTUnwrap(HeartRateAnalysisEngine.intensitySummary(
+            samples: [
+                .init(timestamp: start, heartRateBPM: 140, provenance: h10),
+                .init(timestamp: start.addingTimeInterval(5), heartRateBPM: 100, provenance: watch),
+                .init(timestamp: start.addingTimeInterval(10), heartRateBPM: 140, provenance: h10),
+                .init(timestamp: start.addingTimeInterval(15), heartRateBPM: 100, provenance: watch),
+                .init(timestamp: start.addingTimeInterval(20), heartRateBPM: 140, provenance: h10),
+                .init(timestamp: start.addingTimeInterval(25), heartRateBPM: 100, provenance: watch),
+                .init(timestamp: start.addingTimeInterval(30), heartRateBPM: 140, provenance: h10)
+            ],
+            startedAt: start,
+            completedAt: start.addingTimeInterval(30),
+            restingHeartRate: 60,
+            maximumHeartRate: 180
+        ))
+
+        XCTAssertEqual(result.coverage, 1, accuracy: 0.001)
+    }
+
     func testSetResponseFindsPeakThirtySecondsAfterSetThenMeasuresFromPeak() throws {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let end = start.addingTimeInterval(30)
@@ -173,6 +206,28 @@ final class HeartRateAnalysisEngineTests: XCTestCase {
         ))
 
         XCTAssertNil(response.hrr60)
+    }
+
+    func testSetResponseExcludesPeakSamplesAfterNextSetStarts() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = start.addingTimeInterval(30)
+        let source = MetricProvenance(
+            source: .bluetooth,
+            sourceName: "H10",
+            confidence: .measured,
+            coverage: 1
+        )
+        let response = try XCTUnwrap(HeartRateAnalysisEngine.setResponse(
+            samples: [
+                .init(timestamp: end, heartRateBPM: 150, provenance: source),
+                .init(timestamp: end.addingTimeInterval(20), heartRateBPM: 180, provenance: source)
+            ],
+            setStartedAt: start,
+            setCompletedAt: end,
+            nextSetStartedAt: end.addingTimeInterval(10)
+        ))
+
+        XCTAssertEqual(response.peakBPM, 150)
     }
 
     func testDriftUsesTimeWeightedHalvesForStableTwentyMinuteWorkload() throws {

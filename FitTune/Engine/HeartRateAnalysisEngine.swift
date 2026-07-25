@@ -49,7 +49,8 @@ enum HeartRateAnalysisEngine {
         setCompletedAt: Date,
         nextSetStartedAt: Date?
     ) -> SetHeartRateResponse? {
-        let peakWindowEnd = setCompletedAt.addingTimeInterval(45)
+        let delayedPeakWindowEnd = setCompletedAt.addingTimeInterval(45)
+        let peakWindowEnd = min(delayedPeakWindowEnd, nextSetStartedAt ?? delayedPeakWindowEnd)
         let peaks = validHeartRateSamples(samples).filter {
             $0.timestamp >= setStartedAt && $0.timestamp <= peakWindowEnd
         }
@@ -180,18 +181,21 @@ enum HeartRateAnalysisEngine {
                   sample.timestamp <= completedAt else { return nil }
             return (sample.timestamp, bpm, sample.provenance.sourceName, sample.provenance.confidence)
         }
-        .sorted { $0.timestamp < $1.timestamp }
 
-        return zip(valid, valid.dropFirst()).compactMap { left, right in
-            let seconds = right.timestamp.timeIntervalSince(left.timestamp)
-            guard seconds > 0, seconds <= 15, left.sourceName == right.sourceName else { return nil }
-            return HeartRateInterval(
-                start: left.timestamp,
-                end: right.timestamp,
-                bpm: (left.bpm + right.bpm) / 2,
-                sourceName: left.sourceName,
-                confidence: left.confidence
-            )
+        return Dictionary(grouping: valid, by: \.sourceName).values.flatMap { sourceSamples in
+            let sorted = sourceSamples.sorted { $0.timestamp < $1.timestamp }
+            return zip(sorted, sorted.dropFirst()).compactMap { pair -> HeartRateInterval? in
+                let (left, right) = pair
+                let seconds = right.timestamp.timeIntervalSince(left.timestamp)
+                guard seconds > 0, seconds <= 15 else { return nil }
+                return HeartRateInterval(
+                    start: left.timestamp,
+                    end: right.timestamp,
+                    bpm: (left.bpm + right.bpm) / 2,
+                    sourceName: left.sourceName,
+                    confidence: left.confidence
+                )
+            }
         }
     }
 
