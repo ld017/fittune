@@ -35,10 +35,23 @@ final class AppStore {
 
     private let defaults: UserDefaults
     private let storageKey = "FitTune.snapshot.v1"
+    @ObservationIgnored private var lastLiveMetricPersistAt: Date?
+    @ObservationIgnored private var liveMetricDraftID: UUID?
+    @ObservationIgnored private var liveHeartRateSum = 0.0
+    @ObservationIgnored private var liveHeartRateCount = 0
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         restore()
+    }
+
+    nonisolated static func shouldPersistLiveMetric(
+        lastPersistedAt: Date?,
+        now: Date,
+        interval: TimeInterval = 15
+    ) -> Bool {
+        guard let lastPersistedAt else { return true }
+        return now.timeIntervalSince(lastPersistedAt) >= interval
     }
 
     var readinessAssessment: ReadinessAssessment {
@@ -1199,9 +1212,19 @@ final class AppStore {
         guard validity == .valid, var draft = activeWorkoutDraft else { return }
         var samples = draft.metricSamples ?? []
         guard !samples.contains(where: { $0.id == sample.id }) else { return }
+        if liveMetricDraftID != draft.id {
+            let existingHeartRates = samples.compactMap(\.heartRateBPM)
+            liveMetricDraftID = draft.id
+            liveHeartRateSum = existingHeartRates.reduce(0, +)
+            liveHeartRateCount = existingHeartRates.count
+        }
         samples.append(sample)
         draft.metricSamples = samples
-        draft.averageHeartRate = samples.compactMap(\.heartRateBPM).reduce(0, +) / Double(max(1, samples.compactMap(\.heartRateBPM).count))
+        if let heartRate = sample.heartRateBPM {
+            liveHeartRateSum += heartRate
+            liveHeartRateCount += 1
+            draft.averageHeartRate = liveHeartRateSum / Double(liveHeartRateCount)
+        }
 
         if draft.phase == .resting,
            let resultIndex = draft.results.lastIndex(where: { $0.startedAt != nil }),
@@ -1243,22 +1266,28 @@ final class AppStore {
                 draft.restRecommendation = live.rest
                 if let response, let current = sample.heartRateBPM {
                     var log = draft.heartRateDecisionLog ?? []
-                    log.append(HeartRateDecisionEvent(
-                        setResultID: result.id,
-                        secondsAfterSet: response.peakDelaySeconds,
-                        peakBPM: response.peakBPM,
-                        currentBPM: current,
-                        recoveryBPM: max(0, response.peakBPM - current),
-                        sourceName: response.sourceName,
-                        effect: live.reasons.last ?? "心率未改变建议"
-                    ))
+                    let effect = live.reasons.last ?? "心率未改变建议"
+                    if log.last?.setResultID != result.id || log.last?.effect != effect {
+                        log.append(HeartRateDecisionEvent(
+                            setResultID: result.id,
+                            secondsAfterSet: response.peakDelaySeconds,
+                            peakBPM: response.peakBPM,
+                            currentBPM: current,
+                            recoveryBPM: max(0, response.peakBPM - current),
+                            sourceName: response.sourceName,
+                            effect: effect
+                        ))
+                    }
                     draft.heartRateDecisionLog = log
                 }
             }
         }
         draft.updatedAt = now
         activeWorkoutDraft = draft
-        persist()
+        if Self.shouldPersistLiveMetric(lastPersistedAt: lastLiveMetricPersistAt, now: now) {
+            persist()
+            lastLiveMetricPersistAt = now
+        }
     }
 
     func completeCurrentDraftSet(at completedAt: Date = .now) {

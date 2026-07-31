@@ -2,6 +2,14 @@ import XCTest
 @testable import FitTune
 
 final class WorkoutLifecycleTests: XCTestCase {
+    func testLiveMetricPersistenceWindowOnlyAllowsPeriodicWrites() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        XCTAssertTrue(AppStore.shouldPersistLiveMetric(lastPersistedAt: nil, now: start, interval: 15))
+        XCTAssertFalse(AppStore.shouldPersistLiveMetric(lastPersistedAt: start, now: start.addingTimeInterval(14), interval: 15))
+        XCTAssertTrue(AppStore.shouldPersistLiveMetric(lastPersistedAt: start, now: start.addingTimeInterval(15), interval: 15))
+    }
+
     @MainActor
     func testExplicitSetStartAndNextSetPersistActualTimeline() throws {
         let store = makeStrengthStore()
@@ -250,6 +258,26 @@ final class WorkoutLifecycleTests: XCTestCase {
         let response = try XCTUnwrap(store.activeWorkoutDraft?.results.first?.heartRateResponse)
         XCTAssertEqual(response.hrr60, 30)
         XCTAssertNil(response.hrr120)
+    }
+
+    @MainActor
+    func testRepeatedLiveRecoveryStateDoesNotDuplicateDecisionLogEffect() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let source = MetricProvenance(source: .bluetooth, sourceName: "FIT 3", confidence: .measured, coverage: 1)
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        for (seconds, bpm) in [(35.0, 170.0), (45.0, 165.0), (55.0, 160.0)] {
+            store.appendLiveMetricSample(
+                .init(timestamp: start.addingTimeInterval(seconds), heartRateBPM: bpm, provenance: source),
+                validity: .valid,
+                now: start.addingTimeInterval(seconds)
+            )
+        }
+
+        let events = try XCTUnwrap(store.activeWorkoutDraft?.heartRateDecisionLog)
+        XCTAssertEqual(Set(events.map(\.effect)).count, events.count)
     }
 
     func testLockScreenSnapshotUsesCurrentUserPlannedSetAndHeartRate() {
