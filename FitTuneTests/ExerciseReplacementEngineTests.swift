@@ -2,6 +2,83 @@ import XCTest
 @testable import FitTune
 
 final class ExerciseReplacementEngineTests: XCTestCase {
+    func testBrowserSnapshotFiltersGroupsAndIndexesRecentLoadOnce() throws {
+        let current = try exercise("杠铃卧推")
+        let dumbbell = try exercise("哑铃卧推")
+        let machine = try exercise("坐姿推胸机")
+        let prescription = ExercisePrescription(
+            name: current.name,
+            pattern: current.pattern,
+            sets: 4,
+            repLower: 6,
+            repUpper: 10,
+            targetRIR: 0,
+            isPriority: true,
+            equipmentKind: current.equipment
+        )
+        let recentSet = SetResult(
+            exerciseID: UUID(),
+            exerciseName: dumbbell.name,
+            setNumber: 1,
+            loadKg: 32.5,
+            reps: 8,
+            rir: 1,
+            completedAt: .now,
+            movementPattern: dumbbell.pattern
+        )
+        let history = [
+            WorkoutRecord(
+                sessionName: "胸",
+                startedAt: .now.addingTimeInterval(-3600),
+                completedAt: .now,
+                readinessScore: 80,
+                sets: [recentSet]
+            )
+        ]
+        let context = ExerciseReplacementContext(
+            current: current,
+            phase: .primary,
+            availableEquipment: [.barbell, .dumbbell, .selectorizedMachine],
+            disabledExerciseIDs: [],
+            injuredMuscles: [],
+            favoriteIDs: [dumbbell.id],
+            recentExerciseIDs: [dumbbell.id],
+            includeUnavailableEquipment: false
+        )
+
+        let snapshot = ExerciseReplacementEngine.browserSnapshot(
+            catalog: [current, dumbbell, machine],
+            replacementContext: context,
+            filters: .init(search: "哑铃"),
+            history: history,
+            currentPrescription: prescription
+        )
+
+        XCTAssertEqual(snapshot.recommended.map(\.id), [dumbbell.id])
+        XCTAssertEqual(snapshot.sections.count, 1)
+        XCTAssertEqual(snapshot.sections.first?.groups.first?.items.map(\.id), [dumbbell.id])
+        XCTAssertEqual(snapshot.loadTransfers[dumbbell.id]?.suggestedLoadKg, 32.5)
+    }
+
+    func testBrowserSnapshotExcludesUnavailableAndDisabledItemsInAddMode() throws {
+        let dumbbell = try exercise("哑铃卧推")
+        let machine = try exercise("坐姿推胸机")
+
+        let snapshot = ExerciseReplacementEngine.browserSnapshot(
+            catalog: [dumbbell, machine],
+            replacementContext: nil,
+            filters: .init(
+                availableEquipment: [.dumbbell],
+                disabledExerciseIDs: [machine.id]
+            ),
+            history: [],
+            currentPrescription: nil
+        )
+
+        XCTAssertEqual(snapshot.sections.flatMap(\.groups).flatMap(\.items).map(\.id), [dumbbell.id])
+        XCTAssertTrue(snapshot.recommended.isEmpty)
+    }
+
     func testHardFiltersRemoveDisabledInjuredAndUnavailableExercises() throws {
         let current = try exercise("杠铃卧推")
         let disabled = try exercise("哑铃卧推")
@@ -121,4 +198,3 @@ final class ExerciseReplacementEngineTests: XCTestCase {
         try XCTUnwrap(ExerciseCatalog.builtIns.first { $0.name == name }, "动作库缺少 \(name)")
     }
 }
-

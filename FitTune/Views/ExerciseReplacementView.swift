@@ -13,6 +13,8 @@ struct ExerciseReplacementView: View {
     @State private var selectedPattern: MovementPattern?
     @State private var selectedEquipment: EquipmentKind?
     @State private var includeUnavailableEquipment = false
+    @State private var snapshot = ExerciseBrowserSnapshot.empty
+    @State private var isRefreshing = true
 
     var body: some View {
         NavigationStack {
@@ -50,20 +52,32 @@ struct ExerciseReplacementView: View {
                     Text("默认排除已禁用、涉及避让部位及当前器械条件不支持的动作；展开不可用器械后会明确标记。")
                 }
 
-                if currentPrescription != nil, !recommended.isEmpty {
+                if currentPrescription != nil, !snapshot.recommended.isEmpty {
                     Section("优先推荐") {
-                        ForEach(Array(recommended.prefix(8))) { candidate in
+                        ForEach(Array(snapshot.recommended.prefix(8))) { candidate in
                             candidateRow(candidate)
                         }
                     }
                 }
 
-                ForEach(browseMuscles, id: \.self) { muscle in
-                    Section(muscleTitle(muscle)) {
-                        ForEach(patterns(for: muscle), id: \.self) { pattern in
-                            DisclosureGroup(pattern.title) {
-                                ForEach(browseItems(muscle: muscle, pattern: pattern)) { option in
-                                    browseRow(option)
+                if isRefreshing, snapshot.sections.isEmpty {
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView("正在整理动作库…")
+                            Spacer()
+                        }
+                    }
+                } else if snapshot.sections.isEmpty {
+                    ContentUnavailableView("没有匹配动作", systemImage: "figure.strengthtraining.traditional", description: Text("尝试清除筛选或缩短搜索词。"))
+                } else {
+                    ForEach(snapshot.sections) { section in
+                        Section(muscleTitle(section.muscle)) {
+                            ForEach(section.groups) { group in
+                                DisclosureGroup(group.pattern.title) {
+                                    ForEach(group.items) { option in
+                                        browseRow(option)
+                                    }
                                 }
                             }
                         }
@@ -79,6 +93,9 @@ struct ExerciseReplacementView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
+            }
+            .task(id: refreshKey) {
+                await refreshSnapshot()
             }
         }
     }
@@ -98,60 +115,6 @@ struct ExerciseReplacementView: View {
             )
     }
 
-    private var ranked: [ExerciseReplacementCandidate] {
-        guard let currentOption else { return [] }
-        return ExerciseReplacementEngine.rank(
-            catalog: catalog,
-            context: ExerciseReplacementContext(
-                current: currentOption,
-                phase: targetPhase,
-                availableEquipment: availableEquipment,
-                disabledExerciseIDs: store.safetySettings.disabledExerciseIDs,
-                injuredMuscles: injuredMuscles,
-                favoriteIDs: store.favoriteExerciseIDs,
-                recentExerciseIDs: recentExerciseIDs,
-                includeUnavailableEquipment: includeUnavailableEquipment
-            )
-        )
-    }
-
-    private var recommended: [ExerciseReplacementCandidate] {
-        ranked.filter { matchesFilters($0.exercise) }
-    }
-
-    private var visibleBrowseItems: [ExerciseOption] {
-        let rankedIDs = Set(ranked.map(\.id))
-        return catalog.filter { option in
-            let permitted = currentPrescription == nil
-                ? !store.safetySettings.disabledExerciseIDs.contains(option.id)
-                    && (includeUnavailableEquipment || availableEquipment.contains(option.equipment))
-                    && (option.primaryMuscles ?? []).isDisjoint(with: injuredMuscles)
-                : rankedIDs.contains(option.id)
-            return permitted && matchesFilters(option)
-        }
-    }
-
-    private var browseMuscles: [MuscleGroup] {
-        MuscleGroup.allCases.filter { muscle in
-            visibleBrowseItems.contains { $0.primaryMuscles?.contains(muscle) == true }
-        }
-    }
-
-    private func patterns(for muscle: MuscleGroup) -> [MovementPattern] {
-        MovementPattern.allCases.filter { pattern in
-            visibleBrowseItems.contains { $0.pattern == pattern && $0.primaryMuscles?.contains(muscle) == true }
-        }
-    }
-
-    private func browseItems(muscle: MuscleGroup, pattern: MovementPattern) -> [ExerciseOption] {
-        visibleBrowseItems
-            .filter { $0.pattern == pattern && $0.primaryMuscles?.contains(muscle) == true }
-            .sorted { left, right in
-                if left.equipment != right.equipment { return left.equipment.title < right.equipment.title }
-                return left.name.localizedStandardCompare(right.name) == .orderedAscending
-            }
-    }
-
     private func candidateRow(_ candidate: ExerciseReplacementCandidate) -> some View {
         Button { select(candidate.exercise) } label: {
             HStack(alignment: .top, spacing: 10) {
@@ -165,7 +128,7 @@ struct ExerciseReplacementView: View {
                     Text("\(candidate.exercise.equipment.title) · \(candidate.reasons.prefix(3).joined(separator: " · "))")
                         .font(.caption)
                         .foregroundStyle(FitTheme.secondaryText)
-                    Text(loadTransfer(for: candidate.exercise).reason)
+                    Text(snapshot.loadTransfers[candidate.id]?.reason ?? "选择后校准重量")
                         .font(.caption2)
                         .foregroundStyle(candidate.equipmentAvailable ? FitTheme.accentBlue : FitTheme.warning)
                 }
@@ -205,6 +168,9 @@ struct ExerciseReplacementView: View {
     }
 
     private func loadTransfer(for option: ExerciseOption) -> ReplacementLoadTransfer {
+        if let cached = snapshot.loadTransfers[option.id] {
+            return cached
+        }
         guard let currentPrescription else {
             return .init(suggestedLoadKg: nil, confidence: .unavailable, reason: "新增动作将在首组校准重量")
         }
@@ -218,12 +184,59 @@ struct ExerciseReplacementView: View {
         .tint(FitTheme.warning)
     }
 
-    private func matchesFilters(_ option: ExerciseOption) -> Bool {
-        let normalizedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (normalizedSearch.isEmpty || option.name.localizedCaseInsensitiveContains(normalizedSearch) || option.equipment.title.localizedCaseInsensitiveContains(normalizedSearch))
-            && (selectedMuscle == nil || option.primaryMuscles?.contains(selectedMuscle!) == true)
-            && (selectedPattern == nil || option.pattern == selectedPattern)
-            && (selectedEquipment == nil || option.equipment == selectedEquipment)
+    private var refreshKey: String {
+        [
+            searchText,
+            selectedMuscle?.rawValue ?? "-",
+            selectedPattern?.rawValue ?? "-",
+            selectedEquipment?.rawValue ?? "-",
+            includeUnavailableEquipment.description,
+            store.favoriteExerciseIDs.sorted().joined(separator: ","),
+            store.customExercises.map(\.id).sorted().joined(separator: ","),
+            "\(store.workoutHistory.count)",
+            store.workoutHistory.first?.id.uuidString ?? "-"
+        ].joined(separator: "|")
+    }
+
+    @MainActor
+    private func refreshSnapshot() async {
+        isRefreshing = true
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+        }
+        let replacementContext = currentOption.map {
+            ExerciseReplacementContext(
+                current: $0,
+                phase: targetPhase,
+                availableEquipment: availableEquipment,
+                disabledExerciseIDs: store.safetySettings.disabledExerciseIDs,
+                injuredMuscles: injuredMuscles,
+                favoriteIDs: store.favoriteExerciseIDs,
+                recentExerciseIDs: recentExerciseIDs,
+                includeUnavailableEquipment: includeUnavailableEquipment
+            )
+        }
+        let filters = ExerciseBrowserFilters(
+            search: searchText,
+            selectedMuscle: selectedMuscle,
+            selectedPattern: selectedPattern,
+            selectedEquipment: selectedEquipment,
+            availableEquipment: availableEquipment,
+            disabledExerciseIDs: store.safetySettings.disabledExerciseIDs,
+            injuredMuscles: injuredMuscles,
+            includeUnavailableEquipment: includeUnavailableEquipment
+        )
+        let refreshed = ExerciseReplacementEngine.browserSnapshot(
+            catalog: catalog,
+            replacementContext: replacementContext,
+            filters: filters,
+            history: store.workoutHistory,
+            currentPrescription: currentPrescription
+        )
+        guard !Task.isCancelled else { return }
+        snapshot = refreshed
+        isRefreshing = false
     }
 
     private func filterMenu<Value: Hashable>(

@@ -26,6 +26,37 @@ struct ReplacementLoadTransfer: Equatable {
     var reason: String
 }
 
+struct ExerciseBrowserFilters: Equatable {
+    var search = ""
+    var selectedMuscle: MuscleGroup?
+    var selectedPattern: MovementPattern?
+    var selectedEquipment: EquipmentKind?
+    var availableEquipment: Set<EquipmentKind> = Set(EquipmentKind.allCases)
+    var disabledExerciseIDs: Set<String> = []
+    var injuredMuscles: Set<MuscleGroup> = []
+    var includeUnavailableEquipment = false
+}
+
+struct ExerciseBrowserPatternGroup: Identifiable, Equatable {
+    var pattern: MovementPattern
+    var items: [ExerciseOption]
+    var id: MovementPattern { pattern }
+}
+
+struct ExerciseBrowserMuscleSection: Identifiable, Equatable {
+    var muscle: MuscleGroup
+    var groups: [ExerciseBrowserPatternGroup]
+    var id: MuscleGroup { muscle }
+}
+
+struct ExerciseBrowserSnapshot: Equatable {
+    var recommended: [ExerciseReplacementCandidate]
+    var sections: [ExerciseBrowserMuscleSection]
+    var loadTransfers: [String: ReplacementLoadTransfer]
+
+    static let empty = ExerciseBrowserSnapshot(recommended: [], sections: [], loadTransfers: [:])
+}
+
 enum ExerciseReplacementEngine {
     static func rank(
         catalog: [ExerciseOption],
@@ -146,6 +177,129 @@ enum ExerciseReplacementEngine {
         )
     }
 
+    static func browserSnapshot(
+        catalog: [ExerciseOption],
+        replacementContext: ExerciseReplacementContext?,
+        filters: ExerciseBrowserFilters,
+        history: [WorkoutRecord],
+        currentPrescription: ExercisePrescription?
+    ) -> ExerciseBrowserSnapshot {
+        let ranked = replacementContext.map { rank(catalog: catalog, context: $0) } ?? []
+        let rankedIDs = Set(ranked.map(\.id))
+        let effectiveEquipment = replacementContext?.availableEquipment ?? filters.availableEquipment
+        let effectiveDisabledIDs = replacementContext?.disabledExerciseIDs ?? filters.disabledExerciseIDs
+        let effectiveInjuredMuscles = replacementContext?.injuredMuscles ?? filters.injuredMuscles
+        let includeUnavailable = replacementContext?.includeUnavailableEquipment ?? filters.includeUnavailableEquipment
+
+        let visibleItems = catalog.filter { option in
+            let permitted: Bool
+            if replacementContext != nil {
+                permitted = rankedIDs.contains(option.id)
+            } else {
+                permitted = !effectiveDisabledIDs.contains(option.id)
+                    && (includeUnavailable || effectiveEquipment.contains(option.equipment))
+                    && (option.primaryMuscles ?? []).isDisjoint(with: effectiveInjuredMuscles)
+            }
+            return permitted && matches(option, filters: filters)
+        }
+
+        let sections = MuscleGroup.allCases.compactMap { muscle -> ExerciseBrowserMuscleSection? in
+            let groups = MovementPattern.allCases.compactMap { pattern -> ExerciseBrowserPatternGroup? in
+                let items = visibleItems
+                    .filter { $0.pattern == pattern && $0.primaryMuscles?.contains(muscle) == true }
+                    .sorted(by: browseOrder)
+                return items.isEmpty ? nil : ExerciseBrowserPatternGroup(pattern: pattern, items: items)
+            }
+            return groups.isEmpty ? nil : ExerciseBrowserMuscleSection(muscle: muscle, groups: groups)
+        }
+
+        let recommended = ranked.filter { matches($0.exercise, filters: filters) }
+        let recentLoads = recentLoadIndex(history: history)
+        var transferItems: [String: ExerciseOption] = [:]
+        for option in visibleItems + recommended.map(\.exercise) {
+            transferItems[option.id] = option
+        }
+        let transfers = transferItems.mapValues { option in
+            indexedTransferLoad(
+                from: currentPrescription,
+                to: option,
+                recentLoads: recentLoads
+            )
+        }
+        return ExerciseBrowserSnapshot(
+            recommended: recommended,
+            sections: sections,
+            loadTransfers: transfers
+        )
+    }
+
+    private static func matches(_ option: ExerciseOption, filters: ExerciseBrowserFilters) -> Bool {
+        let search = filters.search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matchesSearch = search.isEmpty
+            || option.name.localizedCaseInsensitiveContains(search)
+            || option.equipment.title.localizedCaseInsensitiveContains(search)
+            || option.aliases.contains { $0.localizedCaseInsensitiveContains(search) }
+        return matchesSearch
+            && (filters.selectedMuscle == nil || option.primaryMuscles?.contains(filters.selectedMuscle!) == true)
+            && (filters.selectedPattern == nil || option.pattern == filters.selectedPattern)
+            && (filters.selectedEquipment == nil || option.equipment == filters.selectedEquipment)
+    }
+
+    private static func browseOrder(_ left: ExerciseOption, _ right: ExerciseOption) -> Bool {
+        if left.equipment != right.equipment {
+            return left.equipment.title < right.equipment.title
+        }
+        return left.name.localizedStandardCompare(right.name) == .orderedAscending
+    }
+
+    private static func recentLoadIndex(history: [WorkoutRecord]) -> [String: Double] {
+        var result: [String: Double] = [:]
+        for record in history.sorted(by: { $0.completedAt > $1.completedAt }) {
+            for set in record.sets.reversed() {
+                let key = set.exerciseName.normalizedExerciseName
+                if result[key] == nil {
+                    result[key] = set.loadKg
+                }
+            }
+        }
+        return result
+    }
+
+    private static func indexedTransferLoad(
+        from prescription: ExercisePrescription?,
+        to replacement: ExerciseOption,
+        recentLoads: [String: Double]
+    ) -> ReplacementLoadTransfer {
+        guard let prescription else {
+            return ReplacementLoadTransfer(
+                suggestedLoadKg: nil,
+                confidence: .unavailable,
+                reason: "新增动作将在首组校准重量"
+            )
+        }
+        if prescription.name.normalizedExerciseName == replacement.name.normalizedExerciseName,
+           prescription.equipmentKind == replacement.equipment,
+           let load = prescription.suggestedLoadKg {
+            return ReplacementLoadTransfer(
+                suggestedLoadKg: load,
+                confidence: .derived,
+                reason: "同一动作与器械，保留当前建议重量"
+            )
+        }
+        if let load = recentLoads[replacement.name.normalizedExerciseName] {
+            return ReplacementLoadTransfer(
+                suggestedLoadKg: load,
+                confidence: .derived,
+                reason: "采用该动作最近一次实际完成重量，需用首组重新校准"
+            )
+        }
+        return ReplacementLoadTransfer(
+            suggestedLoadKg: nil,
+            confidence: .unavailable,
+            reason: "动作或器械不同，暂不换算重量，请手动输入并用首组校准"
+        )
+    }
+
     private static func difficultyDistance(
         _ left: ExerciseDifficulty?,
         _ right: ExerciseDifficulty?
@@ -194,4 +348,3 @@ enum ExerciseReplacementEngine {
         return names.joined(separator: "、")
     }
 }
-
