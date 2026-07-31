@@ -138,6 +138,8 @@ struct CardioSessionDraft: Identifiable, Codable, Equatable {
     var workloadSegments: [CardioWorkloadSegment] = []
     var confirmedDistanceMeters: Double? = nil
     var workloadWarnings: [String] = []
+    var pauseIntervals: [WorkoutPauseInterval] = []
+    var currentPauseStartedAt: Date? = nil
 
     var currentWorkload: CardioWorkloadSegment? {
         workloadSegments.last(where: { $0.endedAt == nil }) ?? workloadSegments.last
@@ -157,6 +159,8 @@ extension CardioSessionDraft {
         case workloadSegments
         case confirmedDistanceMeters
         case workloadWarnings
+        case pauseIntervals
+        case currentPauseStartedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -172,6 +176,8 @@ extension CardioSessionDraft {
         workloadSegments = try container.decodeIfPresent([CardioWorkloadSegment].self, forKey: .workloadSegments) ?? []
         confirmedDistanceMeters = try container.decodeIfPresent(Double.self, forKey: .confirmedDistanceMeters)
         workloadWarnings = try container.decodeIfPresent([String].self, forKey: .workloadWarnings) ?? []
+        pauseIntervals = try container.decodeIfPresent([WorkoutPauseInterval].self, forKey: .pauseIntervals) ?? []
+        currentPauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .currentPauseStartedAt)
     }
 }
 

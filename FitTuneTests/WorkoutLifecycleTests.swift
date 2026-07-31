@@ -2,6 +2,67 @@ import XCTest
 @testable import FitTune
 
 final class WorkoutLifecycleTests: XCTestCase {
+    func testEquivalentLiveActivitySnapshotsAreCoalescedAndChangesAreCappedAtOneHertz() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let snapshot = WorkoutActivitySnapshot(
+            sessionID: UUID(),
+            startedAt: start,
+            title: "跑步",
+            currentItem: "计时中",
+            progress: "户外",
+            heartRate: 140,
+            isCardio: true,
+            distanceMeters: 1_000
+        )
+        var gate = LiveActivityUpdateGate(minimumInterval: 1)
+
+        XCTAssertTrue(gate.shouldUpdate(snapshot, at: start))
+        XCTAssertFalse(gate.shouldUpdate(snapshot, at: start.addingTimeInterval(2)))
+
+        var changed = snapshot
+        changed.heartRate = 141
+        XCTAssertFalse(gate.shouldUpdate(changed, at: start.addingTimeInterval(0.9)))
+        XCTAssertTrue(gate.shouldUpdate(changed, at: start.addingTimeInterval(1)))
+
+        var nextSession = changed
+        nextSession.sessionID = UUID()
+        XCTAssertTrue(gate.shouldUpdate(nextSession, at: start.addingTimeInterval(1.1)))
+    }
+
+    func testSportSnapshotUsesSportSymbolTimerDistanceAndElevation() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let provenance = MetricProvenance(
+            source: .phoneSensor,
+            sourceName: "iPhone 定位",
+            confidence: .measured,
+            coverage: 1
+        )
+        let draft = SportSessionDraft(
+            kind: .mountaineering,
+            environment: .outdoor,
+            intensity: .training,
+            startedAt: start,
+            metricSamples: [
+                .init(
+                    timestamp: start.addingTimeInterval(60),
+                    distanceMeters: 850,
+                    altitudeMeters: 1_420,
+                    elevationGainMeters: 120,
+                    provenance: provenance
+                )
+            ]
+        )
+
+        let snapshot = WorkoutActivitySnapshot.sport(draft: draft, heartRate: 151)
+
+        XCTAssertEqual(snapshot.sessionID, draft.id)
+        XCTAssertEqual(snapshot.startedAt, start)
+        XCTAssertEqual(snapshot.title, "登山")
+        XCTAssertEqual(snapshot.symbol, "mountain.2")
+        XCTAssertEqual(snapshot.heartRate, 151)
+        XCTAssertEqual(snapshot.distanceMeters, 850)
+        XCTAssertEqual(snapshot.elevationGainMeters, 120)
+    }
     func testLiveMetricPersistenceWindowOnlyAllowsPeriodicWrites() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
 

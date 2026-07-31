@@ -1,7 +1,7 @@
 import Foundation
 
 enum DataExportService {
-    static let formatVersion = "1.0"
+    static let formatVersion = "2.0"
 
     static func json(snapshot: AppSnapshot) throws -> Data {
         let encoder = JSONEncoder()
@@ -86,15 +86,40 @@ enum DataExportService {
         return csv(rows)
     }
 
-    static func metricsCSV(workouts: [WorkoutRecord], cardio: [CardioWorkoutRecord]) -> String {
-        var rows = [["workout_id", "timestamp", "heart_rate_bpm", "cadence", "steps", "distance_m", "active_energy_kcal", "source", "confidence", "coverage"]]
+    static func metricsCSV(workouts: [WorkoutRecord], cardio: [CardioWorkoutRecord], sports: [SportSessionRecord] = []) -> String {
+        var rows = [["workout_id", "timestamp", "heart_rate_bpm", "cadence", "steps", "distance_m", "elevation_gain_m", "altitude_m", "speed_mps", "active_energy_kcal", "source", "confidence", "coverage"]]
         func append(_ id: UUID, samples: [WorkoutMetricSample]) {
             rows += samples.map {
-                [id.uuidString, iso($0.timestamp), decimal($0.heartRateBPM), decimal($0.cadence), $0.steps.map(String.init) ?? "", decimal($0.distanceMeters), decimal($0.activeEnergyKcal), $0.provenance.sourceName, $0.provenance.confidence.rawValue, decimal($0.provenance.coverage)]
+                [id.uuidString, iso($0.timestamp), decimal($0.heartRateBPM), decimal($0.cadence), $0.steps.map(String.init) ?? "", decimal($0.distanceMeters), decimal($0.elevationGainMeters), decimal($0.altitudeMeters), decimal($0.speedMetersPerSecond), decimal($0.activeEnergyKcal), $0.provenance.sourceName, $0.provenance.confidence.rawValue, decimal($0.provenance.coverage)]
             }
         }
         workouts.forEach { append($0.id, samples: $0.metricSamples ?? []) }
         cardio.forEach { append($0.id, samples: $0.metricSamples ?? []) }
+        sports.forEach { append($0.id, samples: $0.metricSamples) }
+        return csv(rows)
+    }
+
+    static func sportsCSV(sports: [SportSessionRecord]) -> String {
+        var rows = [[
+            "id", "kind", "environment", "intensity", "started_at", "completed_at", "status",
+            "effective_duration_min", "session_rpe", "training_load_au", "energy_kcal", "energy_lower_kcal",
+            "energy_upper_kcal", "energy_source", "confidence", "coverage", "average_hr", "maximum_hr",
+            "distance_m", "steps", "cadence", "elevation_gain_m", "recovery_hours", "algorithm_version", "warnings"
+        ]]
+        rows += sports.map { record in
+            let analysis = record.analysis
+            return [
+                record.id.uuidString, record.kind.rawValue, record.environment.rawValue, record.intensity.rawValue,
+                iso(record.startedAt), iso(record.completedAt), record.completionStatus.rawValue,
+                decimal(analysis.effectiveDurationSeconds / 60), decimal(record.sessionRPE), decimal(analysis.sessionRPELoadAU),
+                decimal(analysis.activeEnergyKcal.value), decimal(analysis.activeEnergyKcal.lowerBound), decimal(analysis.activeEnergyKcal.upperBound),
+                analysis.activeEnergyKcal.provenance.sourceName, analysis.activeEnergyKcal.provenance.confidence.rawValue,
+                decimal(analysis.dataCoverage), decimal(analysis.averageHeartRate), decimal(analysis.maximumHeartRate),
+                decimal(analysis.distanceMeters), analysis.steps.map(String.init) ?? "", decimal(analysis.averageCadence),
+                decimal(analysis.elevationGainMeters), decimal(analysis.estimatedRecoveryHours.value), analysis.algorithmVersion,
+                encoded(analysis.warnings)
+            ]
+        }
         return csv(rows)
     }
 

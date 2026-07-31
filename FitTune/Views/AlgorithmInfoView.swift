@@ -9,6 +9,7 @@ struct AlgorithmInfoView: View {
                 LabeledContent("能量", value: EnergyEngine.algorithmVersion)
                 LabeledContent("训练总结", value: SummaryEngine.algorithmVersion)
                 LabeledContent("趋势", value: TrendEngine.algorithmVersion)
+                LabeledContent("多运动", value: SportAnalysisEngine.algorithmVersion)
             }
             Section("下组重量与休息") {
                 Text("重量建议主要使用完成次数、RIR、四维恢复和同动作历史。实时心率只提供个人恢复参考与安全提示，不能单凭心率加重。休息倒计时和所有建议均可跳过或修改，不会锁定下一组、擅自删组或结束训练。")
@@ -23,6 +24,10 @@ struct AlgorithmInfoView: View {
                 Text("e1RM 仅在合理次数/RIR 范围内作为个人纵向指标；高次数力竭组可信度较低。数据不足时不会强行生成 VO₂max。热量、恢复时间和训练效果均为区间估计，不是医学诊断。")
                 Text("华为健康数据若写入 Apple 健康，可在同步后修订总结；它不是实时源，也不会占用 Apple Watch 或蓝牙心率设备连接位。")
             }
+            Section("多运动") {
+                Text("羽毛球、乒乓球、足球、攀岩、徒步、登山和越野跑按独立项目分析。主动热量以 2024 Adult Compendium 的净 MET 区间回退，训练负荷为有效分钟 × session-RPE；暂停时间不计入。")
+                Text("应用只显示传感器确有证据的距离、步数、海拔和爬升。不会推测击球、触球、冲刺、攀岩等级或高原风险；缺数据时降低可信度但不阻止训练。")
+            }
             Section("主要依据") {
                 Link("Mifflin–St Jeor 静息代谢方程", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/2305711/")!)
                 Link("Keytel 心率能量预测", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/15966347/")!)
@@ -35,6 +40,7 @@ struct AlgorithmInfoView: View {
                 Link("Fatmax 个体差异", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/14598198/")!)
                 Link("最大脂肪氧化评估综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/30929281/")!)
                 Link("session-RPE 训练负荷", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/11708692/")!)
+                Link("2024 Adult Compendium", destination: URL(string: "https://doi.org/10.1016/j.jshs.2023.10.010")!)
                 Link("PCr 恢复综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/12238940/")!)
                 Link("1 分钟与 3 分钟组间休息试验", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/26605807/")!)
                 Link("EPOC 影响因素综述", destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/17101527/")!)

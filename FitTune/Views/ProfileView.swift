@@ -3,11 +3,12 @@ import SwiftUI
 private enum TrashRecord {
     case workout(UUID, String)
     case cardio(UUID, String)
+    case sport(UUID, String)
     case weight(UUID, String)
 
     var title: String {
         switch self {
-        case let .workout(_, title), let .cardio(_, title), let .weight(_, title): title
+        case let .workout(_, title), let .cardio(_, title), let .sport(_, title), let .weight(_, title): title
         }
     }
 }
@@ -287,11 +288,12 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("记录对象与回收站", systemImage: "externaldrive.badge.timemachine")
                 .font(.headline).foregroundStyle(FitTheme.accent)
-            Text("可单独删除误操作的力量、有氧或体重记录；删除后进入回收站，可随时恢复。")
+            Text("可单独删除误操作的力量、有氧、运动或体重记录；删除后进入回收站，可随时恢复。")
                 .font(.subheadline).foregroundStyle(FitTheme.secondaryText)
             HStack(spacing: 8) {
                 MetricChip(value: "\(store.workoutHistory.count)", label: "力量")
                 MetricChip(value: "\(store.cardioWorkouts.count)", label: "有氧", tint: FitTheme.accentBlue)
+                MetricChip(value: "\(store.sportWorkouts.count)", label: "运动", tint: FitTheme.accent)
                 MetricChip(value: "\(store.deletedRecordCount)", label: "回收站", tint: FitTheme.warning)
             }
             Button("管理与恢复记录") { showRecords = true }.buttonStyle(PrimaryActionButtonStyle())
@@ -326,6 +328,17 @@ struct ProfileView: View {
                         )
                     }
                 }
+                Section("运动") {
+                    if store.sportWorkouts.isEmpty { Text("暂无记录").foregroundStyle(.secondary) }
+                    ForEach(store.sportWorkouts) { item in
+                        recordRow(
+                            title: item.kind.title,
+                            detail: "\(item.completedAt.formatted(date: .abbreviated, time: .shortened)) · \(Int(item.analysis.effectiveDurationSeconds / 60)) 分钟",
+                            clearMetrics: item.metricSamples.isEmpty ? nil : { store.clearSportMetrics(id: item.id) },
+                            delete: { store.deleteSportWorkout(id: item.id) }
+                        )
+                    }
+                }
                 Section("体重") {
                     ForEach(store.weightHistory.reversed()) { item in
                         recordRow(title: "\(item.kilograms.formatted(.number.precision(.fractionLength(1)))) kg", detail: item.date.formatted(date: .abbreviated, time: .shortened)) {
@@ -343,6 +356,11 @@ struct ProfileView: View {
                     ForEach(store.deletedCardioWorkouts) { item in
                         restoreRow(title: "有氧 · \(item.modality.title)", restore: { store.restoreCardioWorkout(id: item.id) }) {
                             pendingPermanentDeletion = .cardio(item.id, item.modality.title)
+                        }
+                    }
+                    ForEach(store.deletedSportWorkouts) { item in
+                        restoreRow(title: "运动 · \(item.kind.title)", restore: { store.restoreSportWorkout(id: item.id) }) {
+                            pendingPermanentDeletion = .sport(item.id, item.kind.title)
                         }
                     }
                     ForEach(store.deletedWeightHistory) { item in
@@ -410,6 +428,7 @@ struct ProfileView: View {
         switch record {
         case let .workout(id, _): store.permanentlyDeleteWorkout(id: id)
         case let .cardio(id, _): store.permanentlyDeleteCardioWorkout(id: id)
+        case let .sport(id, _): store.permanentlyDeleteSportWorkout(id: id)
         case let .weight(id, _): store.permanentlyDeleteWeight(id: id)
         }
         pendingPermanentDeletion = nil

@@ -245,11 +245,31 @@ final class LiveSensorCoordinator {
     }
 
     func endWorkout() {
+        endWorkoutCollectionKeepingPreference()
+    }
+
+    func pauseWorkout() {
+        guard let activeSessionID, activeLiveSource?.kind == .appleWatch else { return }
+        watchSource?.send(command: .paused, sessionID: activeSessionID, activity: "")
+    }
+
+    func resumeWorkout() {
+        guard let activeSessionID, activeLiveSource?.kind == .appleWatch else { return }
+        watchSource?.send(command: .resumed, sessionID: activeSessionID, activity: "")
+    }
+
+    func endWorkoutCollectionKeepingPreference() {
         if let activeSessionID, activeLiveSource?.kind == .appleWatch { watchSource?.send(command: .ended, sessionID: activeSessionID, activity: "") }
         stopSilenceMonitoring()
+        bluetoothSource.disconnect()
         activeSessionID = nil
         watchStreamState = nil
         watchStartState = .idle
+        reconnectReminder = nil
+        latestSample = nil
+        latestValidity = .missing
+        machine.stop()
+        statusMessage = preferredLiveSource.map { "训练采集已结束；下次将自动连接 \($0.name)" } ?? "训练采集已结束"
     }
 
     func watchStartTimedOut(sessionID: UUID) {

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TodayView: View {
+    private enum CardioEntryMode { case live, completed }
     @Environment(AppStore.self) private var store
     @Environment(HealthKitService.self) private var healthKit
     @Environment(HealthDataSyncCoordinator.self) private var healthSync
@@ -19,9 +20,9 @@ struct TodayView: View {
     @State private var cardioAverageHR = 0.0
     @State private var cardioMeasuredKcal = 0.0
     @State private var cardioSpeedKph = 0.0
-    @State private var cardioInclinePercent = 20.0
+    @State private var cardioInclinePercent = 0.0
     @State private var cardioInclineMode: TreadmillInclineInputMode = .percentGrade
-    @State private var cardioInclineLevel = 20.0
+    @State private var cardioInclineLevel = 0.0
     @State private var cardioMachineMaximumLevel = 20.0
     @State private var cardioCalibrationRise = 0.0
     @State private var cardioCalibrationRun = 0.0
@@ -29,6 +30,7 @@ struct TodayView: View {
     @State private var cardioPowerWatts = 0.0
     @State private var cardioFloors = 0.0
     @State private var cardioSessionRPE = 5.0
+    @State private var cardioEntryMode: CardioEntryMode = .live
 
     private var draftInput: ReadinessInput {
         ReadinessInput(
@@ -63,7 +65,6 @@ struct TodayView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     greeting
-                    todayEnergyCard
                     readinessCard
                     dailyDecisionCard
                     switch store.todayChoice.intent {
@@ -79,6 +80,7 @@ struct TodayView: View {
                         EmptyView()
                     }
                     cardioPlanCard
+                    todayEnergyCard
                     overview
                     scienceGuardrail
                     recentHistory
@@ -192,8 +194,7 @@ struct TodayView: View {
             .disabled(healthKit.state == .requesting)
 
             Button {
-                store.updateReadiness(draftInput)
-                store.updateRecoveryCheckIn(draftRecoveryCheckIn)
+                store.commitTodayStatus(readiness: draftInput, checkIn: draftRecoveryCheckIn)
                 withAnimation { savedFeedback = true }
                 Task {
                     try? await Task.sleep(for: .seconds(1.4))
@@ -231,7 +232,7 @@ struct TodayView: View {
             HStack(spacing: 8) {
                 MetricChip(value: energy.restingKcal.map { "\(Int($0.rounded()))" } ?? "待补全", label: "基础 kcal")
                 MetricChip(value: "\(Int(energy.strengthKcal.rounded()))", label: "力量 kcal", tint: FitTheme.accentBlue)
-                MetricChip(value: "\(Int(energy.cardioKcal.rounded()))", label: "有氧 kcal", tint: FitTheme.warning)
+                MetricChip(value: "\(Int(energy.cardioKcal.rounded()))", label: "有氧/运动 kcal", tint: FitTheme.warning)
             }
             if let distance = healthSync.snapshot.walkingDistanceKm.value {
                 Label("步行/跑步距离 \(distance.formatted(.number.precision(.fractionLength(1)))) km", systemImage: "figure.walk")
@@ -481,7 +482,7 @@ struct TodayView: View {
             }
 
             Button {
-                store.updateReadiness(draftInput)
+                store.commitTodayStatus(readiness: draftInput, checkIn: draftRecoveryCheckIn)
                 store.startWorkout(session)
             } label: {
                 Label("开始训练", systemImage: "play.fill")
@@ -521,15 +522,21 @@ struct TodayView: View {
                 }
             }
             HStack(spacing: 10) {
-                Button { showCardioEntry = true } label: {
-                    Label("选择并记录有氧", systemImage: "plus.circle.fill")
+                Button { cardioEntryMode = .live; showCardioEntry = true } label: {
+                    Label("开始有氧", systemImage: "play.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(FitTheme.accentBlue)
+                Button { cardioEntryMode = .completed; showCardioEntry = true } label: {
+                    Image(systemName: "square.and.pencil")
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("补录已完成有氧")
                 Button { syncWatchWorkouts() } label: {
                     Image(systemName: "applewatch")
-                        .frame(width: 42, height: 34)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.bordered)
                 .disabled(healthKit.state == .requesting)
@@ -571,8 +578,10 @@ struct TodayView: View {
                         }
                         .pickerStyle(.segmented)
                         VStack(spacing: 12) {
-                            IntegerInputControl(title: "时长", value: $cardioMinutes, range: 1...600, step: 5, unit: "分钟")
-                            NumericInputControl(title: "距离（可选）", value: $cardioDistanceKm, range: 0...300, step: 0.1, unit: "km")
+                            if cardioEntryMode == .completed {
+                                IntegerInputControl(title: "时长", value: $cardioMinutes, range: 1...600, step: 5, unit: "分钟")
+                                NumericInputControl(title: "距离（可选）", value: $cardioDistanceKm, range: 0...300, step: 0.1, unit: "km")
+                            }
                             if [.running, .briskWalking, .inclineWalking].contains(cardioModality) {
                                 NumericInputControl(title: "平均速度（可选）", value: $cardioSpeedKph, range: 0...30, step: 0.1, unit: "km/h")
                             }
@@ -604,11 +613,14 @@ struct TodayView: View {
                             if cardioModality == .stairClimber {
                                 NumericInputControl(title: "楼层（可选）", value: $cardioFloors, range: 0...1000, step: 1, unit: "层")
                             }
-                            NumericInputControl(title: "平均心率（可直接输入）", value: $cardioAverageHR, range: 0...220, step: 1, unit: "bpm")
-                            NumericInputControl(title: "session-RPE", value: $cardioSessionRPE, range: 1...10, step: 0.5, unit: "/10")
-                            NumericInputControl(title: "设备主动消耗（可选）", value: $cardioMeasuredKcal, range: 0...3000, step: 5, unit: "kcal")
+                            if cardioEntryMode == .completed {
+                                NumericInputControl(title: "平均心率（可直接输入）", value: $cardioAverageHR, range: 0...220, step: 1, unit: "bpm")
+                                NumericInputControl(title: "session-RPE", value: $cardioSessionRPE, range: 1...10, step: 0.5, unit: "/10")
+                                NumericInputControl(title: "设备主动消耗（可选）", value: $cardioMeasuredKcal, range: 0...3000, step: 5, unit: "kcal")
+                            }
                         }
                         .fitCard(padding: 14)
+                        if cardioEntryMode == .completed {
                         let estimate = TrainingEngine.cardioEnergyEstimate(
                             modality: cardioModality,
                             intensity: cardioIntensity,
@@ -635,6 +647,8 @@ struct TodayView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fitCard(padding: 14)
+                        }
+                        if cardioEntryMode == .completed {
                         Button("保存有氧训练") {
                             let record = TrainingEngine.makeCardioWorkout(
                                 modality: cardioModality,
@@ -660,6 +674,7 @@ struct TodayView: View {
                             showCardioEntry = false
                         }
                         .buttonStyle(PrimaryActionButtonStyle())
+                        } else {
                         Button {
                             store.startCardioSession(
                                 modality: cardioModality,
@@ -679,11 +694,12 @@ struct TodayView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(FitTheme.accentBlue)
+                        }
                     }
                     .padding(20)
                 }
             }
-            .navigationTitle("记录有氧训练")
+            .navigationTitle(cardioEntryMode == .live ? "开始实时有氧" : "补录已完成有氧")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showCardioEntry = false } } }
             .onChange(of: cardioMachineMaximumLevel) { _, _ in saveTreadmillCalibrationIfValid() }
             .onChange(of: cardioCalibrationRise) { _, _ in saveTreadmillCalibrationIfValid() }

@@ -6,7 +6,7 @@ struct WorkoutLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: FitTuneWorkoutAttributes.self) { context in
             HStack(spacing: 12) {
-                Image(systemName: context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional").foregroundStyle(.green)
+                Image(systemName: context.state.symbol ?? (context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional")).foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(context.state.currentItem).font(.headline).lineLimit(1)
                     if context.state.isCardio {
@@ -29,7 +29,7 @@ struct WorkoutLiveActivityWidget: Widget {
             .widgetURL(URL(string: "fittune://workout"))
         } dynamicIsland: { context in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { Label(context.attributes.title, systemImage: context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional") }
+                DynamicIslandExpandedRegion(.leading) { Label(context.attributes.title, systemImage: context.state.symbol ?? (context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional")) }
                 DynamicIslandExpandedRegion(.trailing) { if let bpm = context.state.heartRate { Text("♥︎ \(bpm)").foregroundStyle(.red) } }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
@@ -43,6 +43,8 @@ struct WorkoutLiveActivityWidget: Widget {
                             Spacer()
                             if let distance = context.state.distanceMeters {
                                 Text(String(format: "%.2f km", distance / 1000)).foregroundStyle(.secondary)
+                            } else if let elevation = context.state.elevationGainMeters {
+                                Text("↑ \(Int(elevation.rounded())) m").foregroundStyle(.secondary)
                             } else if let cadence = context.state.cadence {
                                 Text("\(Int(cadence.rounded())) spm").foregroundStyle(.secondary)
                             } else {
@@ -61,7 +63,7 @@ struct WorkoutLiveActivityWidget: Widget {
                         }
                     }
                 }
-            } compactLeading: { Image(systemName: context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional") }
+            } compactLeading: { Image(systemName: context.state.symbol ?? (context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional")) }
               compactTrailing: {
                   if context.state.isCardio {
                       Text(timerInterval: context.attributes.startedAt...Date.distantFuture, countsDown: false).font(.caption2.monospacedDigit())
@@ -71,7 +73,7 @@ struct WorkoutLiveActivityWidget: Widget {
                       Text(context.state.heartRate.map { "♥︎\($0)" } ?? context.state.progress).font(.caption2)
                   }
               }
-              minimal: { Image(systemName: context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional") }
+              minimal: { Image(systemName: context.state.symbol ?? (context.state.isCardio ? "figure.run" : "figure.strengthtraining.traditional")) }
         }
     }
 }

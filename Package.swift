@@ -17,6 +17,7 @@ let package = Package(
                 "Models/ExerciseCatalogModels.swift",
                 "Models/WorkoutModels.swift",
                 "Models/HealthMetricModels.swift",
+                "Models/SportModels.swift",
                 "Models/DailyHealthSnapshot.swift",
                 "Engine/TrainingEngine.swift",
                 "Engine/ExerciseCatalog.swift",
@@ -31,14 +32,20 @@ let package = Package(
                 "Engine/CardioEnergyEstimator.swift",
                 "Engine/StrengthEnergyEstimator.swift",
                 "Engine/HeartRateAnalysisEngine.swift",
+                "Engine/SportAnalysisEngine.swift",
+                "Engine/HealthRefreshGate.swift",
+                "Engine/HistoryBrowserEngine.swift",
+                "Engine/WorkoutPrimaryActionResolver.swift",
                 "Engine/WorkoutActivitySnapshot.swift",
                 "Services/HealthImportModels.swift",
                 "Services/LiveSensorSource.swift",
                 "Services/LiveSensorCoordinator.swift",
                 "Services/BluetoothHeartRateSource.swift",
+                "Services/SnapshotRepository.swift",
                 "Services/DataExportService.swift",
                 "Services/WatchMetricMerge.swift",
-                "Store/AppStore.swift"
+                "Store/AppStore.swift",
+                "Store/AppStore+Sports.swift"
             ]
         ),
         .testTarget(

@@ -10,6 +10,8 @@ struct FitTuneWorkoutAttributes: ActivityAttributes {
         var isCardio: Bool
         var distanceMeters: Double?
         var cadence: Double?
+        var symbol: String?
+        var elevationGainMeters: Double?
     }
 
     var sessionID: UUID

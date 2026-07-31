@@ -4,8 +4,10 @@ import Foundation
 @MainActor
 final class WorkoutActivityController {
     static let shared = WorkoutActivityController()
+    private var updateGate = LiveActivityUpdateGate(minimumInterval: 1)
 
     func startOrUpdate(_ snapshot: WorkoutActivitySnapshot) {
+        guard updateGate.shouldUpdate(snapshot) else { return }
         let state = contentState(snapshot)
         if let activity = Activity<FitTuneWorkoutAttributes>.activities.first(where: { $0.attributes.sessionID == snapshot.sessionID }) {
             Task { await activity.update(ActivityContent(state: state, staleDate: Date().addingTimeInterval(90))) }
@@ -19,6 +21,7 @@ final class WorkoutActivityController {
 
     func end() {
         end(excluding: nil)
+        updateGate = LiveActivityUpdateGate(minimumInterval: 1)
     }
 
     func reconcile(validSessionIDs: Set<UUID>) {
@@ -46,7 +49,9 @@ final class WorkoutActivityController {
             restEndsAt: snapshot.restEndsAt,
             isCardio: snapshot.isCardio,
             distanceMeters: snapshot.distanceMeters,
-            cadence: snapshot.cadence
+            cadence: snapshot.cadence,
+            symbol: snapshot.symbol,
+            elevationGainMeters: snapshot.elevationGainMeters
         )
     }
 }

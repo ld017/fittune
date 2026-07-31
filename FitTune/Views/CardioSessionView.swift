@@ -8,9 +8,9 @@ struct CardioSessionView: View {
     @State private var showExitDialog = false
     @State private var showDiscardAlert = false
     @State private var liveSpeedKph = 0.0
-    @State private var liveInclinePercent = 20.0
+    @State private var liveInclinePercent = 0.0
     @State private var liveInclineMode: TreadmillInclineInputMode = .percentGrade
-    @State private var liveInclineLevel = 20.0
+    @State private var liveInclineLevel = 0.0
     @State private var liveMachineMaximumLevel = 20.0
     @State private var liveCalibrationRise = 0.0
     @State private var liveCalibrationRun = 0.0
@@ -65,7 +65,7 @@ struct CardioSessionView: View {
             Button("取消", role: .cancel) {}
             Button("放弃", role: .destructive) {
                 motion.stop()
-                liveSensors.endWorkout()
+                liveSensors.endWorkoutCollectionKeepingPreference()
                 WorkoutActivityController.shared.end()
                 store.discardCardioSession()
                 dismiss()
@@ -98,7 +98,19 @@ struct CardioSessionView: View {
                 Text("后台自动保存").font(.caption2.bold()).foregroundStyle(FitTheme.accent)
             }
             Spacer()
-            Image(systemName: "heart.fill").foregroundStyle(FitTheme.danger).frame(width: 42)
+            Button {
+                if draft.currentPauseStartedAt == nil {
+                    store.pauseCardioSession(); liveSensors.pauseWorkout(); motion.stop()
+                } else {
+                    store.resumeCardioSession(); liveSensors.resumeWorkout(); motion.resume(modality: draft.modality)
+                }
+                updateLiveActivity()
+            } label: {
+                Image(systemName: draft.currentPauseStartedAt == nil ? "pause.fill" : "play.fill")
+                    .frame(width: 44, height: 44).background(FitTheme.surface, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(draft.currentPauseStartedAt == nil ? "暂停有氧" : "继续有氧")
         }
         .padding(.horizontal, 18)
     }
@@ -106,7 +118,7 @@ struct CardioSessionView: View {
     private func sessionMetrics(_ draft: CardioSessionDraft) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(spacing: 18) {
-                Text(durationText(context.date.timeIntervalSince(draft.startedAt)))
+                Text(durationText(effectiveDuration(draft, at: context.date)))
                     .font(.system(size: 48, weight: .black, design: .rounded).monospacedDigit())
                 HStack(spacing: 10) {
                     MetricChip(value: liveSensors.latestSample?.heartRateBPM.map { "\(Int($0.rounded()))" } ?? "—", label: "实时 bpm", tint: FitTheme.danger)
@@ -189,15 +201,19 @@ struct CardioSessionView: View {
         liveSensors.beginWorkout(sessionID: draft.id, activity: draft.modality.rawValue)
         motion.onSample = { store.appendCardioMetricSample($0) }
         motion.onDataGap = { store.markCardioDataGap($0) }
-        motion.start(modality: draft.modality, from: draft.startedAt)
+        if draft.currentPauseStartedAt == nil { startMotion(for: draft) }
+    }
+
+    private func startMotion(for draft: CardioSessionDraft) {
+        motion.start(modality: draft.modality, from: .now)
     }
 
     private func loadControls(from draft: CardioSessionDraft) {
         let workload = draft.currentWorkload
         liveSpeedKph = workload?.speedKph ?? 0
         liveInclineMode = workload?.resolvedInclineInputMode ?? .percentGrade
-        liveInclinePercent = workload?.inclinePercent ?? 20
-        liveInclineLevel = workload?.inclineLevel ?? 20
+        liveInclinePercent = workload?.inclinePercent ?? 0
+        liveInclineLevel = workload?.inclineLevel ?? 0
         liveMachineMaximumLevel = workload?.machineMaximumLevel ?? 20
         liveCalibrationRise = workload?.maximumGradeCalibration?.rise ?? 0
         liveCalibrationRun = workload?.maximumGradeCalibration?.horizontalRun ?? 0
@@ -281,7 +297,7 @@ struct CardioSessionView: View {
 
     private func finish(_ status: WorkoutCompletionStatus) {
         motion.stop()
-        liveSensors.endWorkout()
+        liveSensors.endWorkoutCollectionKeepingPreference()
         WorkoutActivityController.shared.end()
         _ = store.finishCardioSession(status: status)
         dismiss()
@@ -295,5 +311,14 @@ struct CardioSessionView: View {
     private func durationText(_ seconds: TimeInterval) -> String {
         let value = max(0, Int(seconds))
         return String(format: "%02d:%02d:%02d", value / 3600, value / 60 % 60, value % 60)
+    }
+
+    private func effectiveDuration(_ draft: CardioSessionDraft, at date: Date) -> TimeInterval {
+        WorkoutTimeline.effectiveDuration(
+            from: draft.startedAt,
+            to: date,
+            pauseIntervals: draft.pauseIntervals,
+            currentPauseStartedAt: draft.currentPauseStartedAt
+        )
     }
 }

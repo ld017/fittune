@@ -154,6 +154,9 @@ struct WorkoutMetricSample: Identifiable, Codable, Equatable {
     var cadence: Double?
     var steps: Int?
     var distanceMeters: Double?
+    var altitudeMeters: Double?
+    var elevationGainMeters: Double?
+    var speedMetersPerSecond: Double?
     var activeEnergyKcal: Double?
     var swimmingStrokeCount: Double?
     var provenance: MetricProvenance
@@ -165,6 +168,9 @@ struct WorkoutMetricSample: Identifiable, Codable, Equatable {
         cadence: Double? = nil,
         steps: Int? = nil,
         distanceMeters: Double? = nil,
+        altitudeMeters: Double? = nil,
+        elevationGainMeters: Double? = nil,
+        speedMetersPerSecond: Double? = nil,
         activeEnergyKcal: Double? = nil,
         swimmingStrokeCount: Double? = nil,
         provenance: MetricProvenance
@@ -175,6 +181,9 @@ struct WorkoutMetricSample: Identifiable, Codable, Equatable {
         self.cadence = cadence
         self.steps = steps
         self.distanceMeters = distanceMeters
+        self.altitudeMeters = altitudeMeters
+        self.elevationGainMeters = elevationGainMeters
+        self.speedMetersPerSecond = speedMetersPerSecond
         self.activeEnergyKcal = activeEnergyKcal
         self.swimmingStrokeCount = swimmingStrokeCount
         self.provenance = provenance

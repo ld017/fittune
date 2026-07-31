@@ -17,6 +17,8 @@ final class MotionLocationSource: NSObject, @preconcurrency CLLocationManagerDel
     private let pedometer = CMPedometer()
     private var lastLocation: CLLocation?
     private var modality: CardioModality?
+    private var sport: SportKind?
+    private var elevation = ElevationAccumulator()
 
     override init() {
         super.init()
@@ -29,7 +31,9 @@ final class MotionLocationSource: NSObject, @preconcurrency CLLocationManagerDel
     }
 
     func start(modality: CardioModality, from date: Date = .now) {
+        resetSession()
         self.modality = modality
+        sport = nil
         if [.running, .briskWalking, .inclineWalking, .cycling].contains(modality) {
             locationManager.requestWhenInUseAuthorization()
             locationManager.allowsBackgroundLocationUpdates = true
@@ -56,11 +60,74 @@ final class MotionLocationSource: NSObject, @preconcurrency CLLocationManagerDel
         statusMessage = modality == .swimming ? "无 Watch 时不估算游泳划水" : "iPhone 传感器采集中"
     }
 
+    func start(sport: SportKind, environment: SportEnvironment, from date: Date = .now) {
+        resetSession()
+        modality = nil
+        self.sport = sport
+        let usesOutdoorLocation = environment == .outdoor && [.soccer, .climbing, .hiking, .mountaineering, .trailRunning].contains(sport)
+        if usesOutdoorLocation {
+            locationManager.requestWhenInUseAuthorization()
+            locationManager.allowsBackgroundLocationUpdates = true
+            locationManager.startUpdatingLocation()
+        }
+        if CMPedometer.isStepCountingAvailable(), sport != .climbing {
+            startPedometer(from: date)
+        }
+        statusMessage = usesOutdoorLocation ? "iPhone 定位与运动传感器采集中" : "iPhone 运动传感器采集中"
+    }
+
+    func resume(modality: CardioModality, from date: Date = .now) {
+        self.modality = modality
+        sport = nil
+        if [.running, .briskWalking, .inclineWalking, .cycling].contains(modality) {
+            locationManager.startUpdatingLocation()
+        }
+        if CMPedometer.isStepCountingAvailable(), modality != .swimming { startPedometer(from: date) }
+        statusMessage = modality == .swimming ? "无 Watch 时不估算游泳划水" : "iPhone 传感器采集中"
+    }
+
+    func resume(sport: SportKind, environment: SportEnvironment, from date: Date = .now) {
+        modality = nil
+        self.sport = sport
+        let usesOutdoorLocation = environment == .outdoor && [.soccer, .climbing, .hiking, .mountaineering, .trailRunning].contains(sport)
+        if usesOutdoorLocation { locationManager.startUpdatingLocation() }
+        if CMPedometer.isStepCountingAvailable(), sport != .climbing { startPedometer(from: date) }
+        statusMessage = usesOutdoorLocation ? "iPhone 定位与运动传感器采集中" : "iPhone 运动传感器采集中"
+    }
+
     func stop() {
         locationManager.stopUpdatingLocation()
         pedometer.stopUpdates()
         lastLocation = nil
         statusMessage = "采集已停止"
+    }
+
+    private func resetSession() {
+        stop()
+        distanceMeters = 0
+        steps = 0
+        cadence = nil
+        lastLocation = nil
+        elevation.reset()
+    }
+
+    private func startPedometer(from date: Date) {
+        pedometer.startUpdates(from: date) { [weak self] data, error in
+            Task { @MainActor in
+                guard let self else { return }
+                if let error {
+                    self.onDataGap?("运动传感器中断：\(error.localizedDescription)")
+                    return
+                }
+                guard let data else { return }
+                self.steps = data.numberOfSteps.intValue
+                self.cadence = data.currentCadence.map { $0.doubleValue * 60 }
+                let distance = data.distance?.doubleValue
+                if let distance { self.distanceMeters = max(self.distanceMeters, distance) }
+                let provenance = MetricProvenance(source: .phoneSensor, sourceName: "iPhone 运动传感器", confidence: .measured, coverage: 1, sampledAt: .now)
+                self.onSample?(WorkoutMetricSample(timestamp: .now, cadence: self.cadence, steps: self.steps, distanceMeters: distance, provenance: provenance))
+            }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -70,8 +137,16 @@ final class MotionLocationSource: NSObject, @preconcurrency CLLocationManagerDel
                 if segment >= 0 && segment < 500 { distanceMeters += segment }
             }
             lastLocation = location
+            _ = elevation.ingest(altitudeMeters: location.altitude, verticalAccuracy: location.verticalAccuracy)
             let provenance = MetricProvenance(source: .phoneSensor, sourceName: "iPhone 定位", confidence: .measured, coverage: 1, sampledAt: location.timestamp)
-            onSample?(WorkoutMetricSample(timestamp: location.timestamp, distanceMeters: distanceMeters, provenance: provenance))
+            onSample?(WorkoutMetricSample(
+                timestamp: location.timestamp,
+                distanceMeters: distanceMeters,
+                altitudeMeters: elevation.altitudeMeters,
+                elevationGainMeters: elevation.elevationGainMeters,
+                speedMetersPerSecond: location.speed >= 0 ? location.speed : nil,
+                provenance: provenance
+            ))
         }
     }
 

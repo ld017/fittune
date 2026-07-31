@@ -418,7 +418,7 @@ final class AppStoreTests: XCTestCase {
 
     func testRestingHeartRateSamplesPersistAndUpdateRecoveryAssessment() {
         let defaults = makeDefaults()
-        let now = Date(timeIntervalSince1970: 2_000_000)
+        let now = Date()
         let store = AppStore(defaults: defaults)
         store.updateRecoveryCheckIn(RecoveryCheckIn(
             date: now,

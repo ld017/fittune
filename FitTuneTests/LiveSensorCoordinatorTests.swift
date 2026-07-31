@@ -218,6 +218,62 @@ final class LiveSensorCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testEndingCollectionStopsReconnectButKeepsPreferredSource() {
+        let suite = "LiveSensorCoordinatorTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let bluetooth = RecordingBluetoothHeartRateSource()
+        let coordinator = LiveSensorCoordinator(
+            bluetoothSource: bluetooth,
+            defaults: defaults
+        )
+        let preferred = LiveSourceDescriptor(
+            id: "fit3",
+            kind: .bluetooth,
+            name: "FIT 3"
+        )
+        coordinator.select(preferred)
+        coordinator.beginWorkout(sessionID: UUID(), activity: "strength")
+
+        coordinator.endWorkoutCollectionKeepingPreference()
+
+        XCTAssertEqual(bluetooth.disconnectCount, 1)
+        XCTAssertEqual(coordinator.preferredLiveSource, preferred)
+        XCTAssertNil(coordinator.activeLiveSource)
+        XCTAssertNil(coordinator.activeSessionID)
+        XCTAssertEqual(coordinator.state, .none)
+
+        let restored = LiveSensorCoordinator(
+            bluetoothSource: RecordingBluetoothHeartRateSource(),
+            defaults: defaults
+        )
+        XCTAssertEqual(restored.preferredLiveSource, preferred)
+    }
+
+    func testElevationGainRejectsInvalidAccuracyAndSmallNoise() {
+        var accumulator = ElevationAccumulator(
+            maximumVerticalAccuracy: 20,
+            minimumChangeMeters: 3
+        )
+
+        XCTAssertFalse(accumulator.ingest(altitudeMeters: 100, verticalAccuracy: -1))
+        XCTAssertFalse(accumulator.ingest(altitudeMeters: 100, verticalAccuracy: 21))
+        XCTAssertTrue(accumulator.ingest(altitudeMeters: 100, verticalAccuracy: 5))
+        XCTAssertFalse(accumulator.ingest(altitudeMeters: 102, verticalAccuracy: 5))
+        XCTAssertTrue(accumulator.ingest(altitudeMeters: 104, verticalAccuracy: 5))
+        XCTAssertEqual(accumulator.altitudeMeters, 104)
+        XCTAssertEqual(accumulator.elevationGainMeters, 4)
+
+        XCTAssertTrue(accumulator.ingest(altitudeMeters: 99, verticalAccuracy: 5))
+        XCTAssertTrue(accumulator.ingest(altitudeMeters: 103, verticalAccuracy: 5))
+        XCTAssertEqual(accumulator.elevationGainMeters, 8)
+
+        accumulator.reset()
+        XCTAssertNil(accumulator.altitudeMeters)
+        XCTAssertEqual(accumulator.elevationGainMeters, 0)
+    }
+
+    @MainActor
     func testManualDisconnectClearsReconnectReminderAndSession() {
         let coordinator = LiveSensorCoordinator()
         let source = LiveSourceDescriptor(
@@ -270,11 +326,12 @@ private final class RecordingBluetoothHeartRateSource: BluetoothHeartRateProvidi
     var onDisconnected: (() -> Void)?
     var onMeasurement: ((BluetoothHeartRateMeasurement, Date, String) -> Void)?
     var reconnectIdentifiers: [String] = []
+    var disconnectCount = 0
 
     func startScanning() {}
     func connect(identifier: String) {}
     func reconnect(identifier: String) {
         reconnectIdentifiers.append(identifier)
     }
-    func disconnect() {}
+    func disconnect() { disconnectCount += 1 }
 }

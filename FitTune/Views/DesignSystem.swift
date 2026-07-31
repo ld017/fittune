@@ -225,7 +225,7 @@ struct NumericInputControl: View {
             Text(title).font(.subheadline).foregroundStyle(FitTheme.secondaryText)
             Spacer()
             Button { value = max(range.lowerBound, value - step) } label: {
-                Image(systemName: "minus").frame(width: prominent ? 46 : 34, height: prominent ? 46 : 34).background(FitTheme.elevated, in: Circle())
+                Image(systemName: "minus").frame(width: prominent ? 46 : 44, height: prominent ? 46 : 44).background(FitTheme.elevated, in: Circle())
             }
             .buttonStyle(.plain)
             .buttonRepeatBehavior(.enabled)
@@ -234,7 +234,7 @@ struct NumericInputControl: View {
                 .background(FitTheme.elevated, in: RoundedRectangle(cornerRadius: prominent ? 14 : 10))
             if !unit.isEmpty { Text(unit).font(.caption).foregroundStyle(FitTheme.secondaryText) }
             Button { value = min(range.upperBound, value + step) } label: {
-                Image(systemName: "plus").frame(width: prominent ? 46 : 34, height: prominent ? 46 : 34).background(FitTheme.accent, in: Circle()).foregroundStyle(FitTheme.background)
+                Image(systemName: "plus").frame(width: prominent ? 46 : 44, height: prominent ? 46 : 44).background(FitTheme.accent, in: Circle()).foregroundStyle(FitTheme.background)
             }
             .buttonStyle(.plain)
             .buttonRepeatBehavior(.enabled)
@@ -310,7 +310,7 @@ struct IntegerInputControl: View {
             Text(title).font(.subheadline).foregroundStyle(FitTheme.secondaryText)
             Spacer()
             Button { value = max(range.lowerBound, value - step) } label: {
-                Image(systemName: "minus").frame(width: 34, height: 34).background(FitTheme.elevated, in: Circle())
+                Image(systemName: "minus").frame(width: 44, height: 44).background(FitTheme.elevated, in: Circle())
             }
             .buttonStyle(.plain)
             TextField("0", value: $value, format: .number)
@@ -323,7 +323,7 @@ struct IntegerInputControl: View {
                 .onChange(of: value) { _, newValue in value = min(range.upperBound, max(range.lowerBound, newValue)) }
             if !unit.isEmpty { Text(unit).font(.caption).foregroundStyle(FitTheme.secondaryText) }
             Button { value = min(range.upperBound, value + step) } label: {
-                Image(systemName: "plus").frame(width: 34, height: 34).background(FitTheme.accent, in: Circle()).foregroundStyle(FitTheme.background)
+                Image(systemName: "plus").frame(width: 44, height: 44).background(FitTheme.accent, in: Circle()).foregroundStyle(FitTheme.background)
             }
             .buttonStyle(.plain)
         }

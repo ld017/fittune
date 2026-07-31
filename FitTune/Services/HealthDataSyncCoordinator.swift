@@ -20,6 +20,7 @@ final class HealthDataSyncCoordinator {
 
     private let service: HealthKitService
     private var started = false
+    private var refreshGate = HealthRefreshGate()
 
     init(service: HealthKitService) {
         self.service = service
@@ -47,22 +48,27 @@ final class HealthDataSyncCoordinator {
     }
 
     func refreshToday(reason: HealthRefreshReason) async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        lastRefreshReason = reason
-        let samples: [DailyHealthSample] = await withCheckedContinuation { continuation in
-            service.fetchDailyHealthSamples(day: .now, timeZone: .current) { samples in
-                continuation.resume(returning: samples)
+        guard refreshGate.requestRefresh() else { return }
+        var resolvedReason = reason
+        repeat {
+            isRefreshing = true
+            lastRefreshReason = resolvedReason
+            let samples: [DailyHealthSample] = await withCheckedContinuation { continuation in
+                service.fetchDailyHealthSamples(day: .now, timeZone: .current) { samples in
+                    continuation.resume(returning: samples)
+                }
             }
-        }
-        snapshot = DailyHealthSnapshotReducer.reduce(
-            samples: samples,
-            day: .now,
-            timeZone: .current,
-            permissions: permissions,
-            now: .now
-        )
-        lastErrorMessage = service.isAvailable ? nil : "此设备无法读取 Apple 健康数据"
+            let refreshed = DailyHealthSnapshotReducer.reduce(
+                samples: samples,
+                day: .now,
+                timeZone: .current,
+                permissions: permissions,
+                now: .now
+            )
+            if refreshed != snapshot { snapshot = refreshed }
+            lastErrorMessage = service.isAvailable ? nil : "此设备无法读取 Apple 健康数据"
+            resolvedReason = .observer
+        } while refreshGate.finishRefreshAndBeginPending()
         isRefreshing = false
     }
 

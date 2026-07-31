@@ -48,8 +48,8 @@ final class DomainModelTests: XCTestCase {
         XCTAssertEqual(try roundTrip(prescription).phase, .finisher)
     }
 
-    func testCurrentSnapshotSchemaIsFifteen() {
-        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 15)
+    func testCurrentSnapshotSchemaIsSixteen() {
+        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 16)
     }
 
     func testScientificWorkoutFieldsRoundTripAndLegacyFieldsRemainOptional() throws {
@@ -87,7 +87,7 @@ final class DomainModelTests: XCTestCase {
         let data = try JSONEncoder().encode(set)
         XCTAssertEqual(try JSONDecoder().decode(SetResult.self, from: data), set)
         XCTAssertEqual(segment.durationSeconds, 600)
-        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 15)
+        XCTAssertEqual(AppSnapshot.currentSchemaVersion, 16)
     }
 
     func testLegacySummaryMetricsDecodeWithoutScientificSummaryFields() throws {

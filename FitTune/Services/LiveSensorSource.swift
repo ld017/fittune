@@ -62,3 +62,34 @@ enum LiveMetricValidator {
         return .valid
     }
 }
+
+struct ElevationAccumulator: Equatable {
+    private(set) var altitudeMeters: Double?
+    private(set) var elevationGainMeters = 0.0
+    let maximumVerticalAccuracy: Double
+    let minimumChangeMeters: Double
+
+    init(maximumVerticalAccuracy: Double = 20, minimumChangeMeters: Double = 3) {
+        self.maximumVerticalAccuracy = maximumVerticalAccuracy
+        self.minimumChangeMeters = minimumChangeMeters
+    }
+
+    @discardableResult
+    mutating func ingest(altitudeMeters candidate: Double, verticalAccuracy: Double) -> Bool {
+        guard verticalAccuracy >= 0, verticalAccuracy <= maximumVerticalAccuracy else { return false }
+        guard let previous = altitudeMeters else {
+            altitudeMeters = candidate
+            return true
+        }
+        let change = candidate - previous
+        guard abs(change) >= minimumChangeMeters else { return false }
+        if change > 0 { elevationGainMeters += change }
+        altitudeMeters = candidate
+        return true
+    }
+
+    mutating func reset() {
+        altitudeMeters = nil
+        elevationGainMeters = 0
+    }
+}

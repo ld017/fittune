@@ -107,7 +107,7 @@ enum HeartRateAnalysisEngine {
             } else {
                 percent = interval.bpm / maximumHeartRate * 100
             }
-            secondsByZone[zone(for: percent), default: 0] += interval.duration
+            secondsByZone[zone(for: percent, usesHeartRateReserve: usesReserve), default: 0] += interval.duration
             if usesReserve, (40...65).contains(percent) {
                 fatOxidationOpportunitySeconds += interval.duration
             }
@@ -147,12 +147,26 @@ enum HeartRateAnalysisEngine {
         return restingHeartRate > 0 && restingHeartRate < maximumHeartRate
     }
 
-    private static func zone(for percent: Double) -> HeartRateIntensityZone {
-        switch percent {
-        case ..<30: .veryLight
-        case ..<40: .light
-        case ..<60: .moderate
-        case ..<90: .vigorous
+    private static func zone(
+        for percent: Double,
+        usesHeartRateReserve: Bool
+    ) -> HeartRateIntensityZone {
+        if usesHeartRateReserve {
+            return switch percent {
+            case ..<30: .veryLight
+            case ..<40: .light
+            case ..<60: .moderate
+            case ..<90: .vigorous
+            default: .nearMaximum
+            }
+        }
+
+        // ACSM %HRmax bands are distinct from heart-rate-reserve bands.
+        return switch percent {
+        case ..<57: .veryLight
+        case ..<64: .light
+        case ..<77: .moderate
+        case ..<96: .vigorous
         default: .nearMaximum
         }
     }

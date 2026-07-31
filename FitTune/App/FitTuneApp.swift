@@ -34,6 +34,7 @@ struct FitTuneApp: App {
                     if phase == .inactive || phase == .background {
                         store.checkpointActiveWorkout()
                         store.checkpointActiveCardio()
+                        store.checkpointActiveSport()
                     }
                     Task { await healthSync.handleScenePhase(phase) }
                 }
@@ -41,10 +42,9 @@ struct FitTuneApp: App {
                     store.ingestDailyHealthSnapshot(snapshot)
                 }
                 .task {
-                    let validIDs = Set([store.activeWorkoutDraft?.id, store.activeCardioDraft?.id].compactMap { $0 })
+                    let validIDs = Set([store.activeWorkoutDraft?.id, store.activeCardioDraft?.id, store.activeSportDraft?.id].compactMap { $0 })
                     WorkoutActivityController.shared.reconcile(validSessionIDs: validIDs)
                     await healthSync.requestAuthorizationAndStart()
-                    store.ingestDailyHealthSnapshot(healthSync.snapshot)
                 }
         }
     }

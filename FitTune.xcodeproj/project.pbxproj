@@ -91,6 +91,16 @@
 		B0000000000000000000004A /* StrengthEnergyEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */; };
 		B0000000000000000000004B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004E /* Assets.xcassets */; };
 		B0000000000000000000004C /* V06SnapshotFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000004F /* V06SnapshotFixture.swift */; };
+		B10000000000000000000001 /* SportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* SportModels.swift */; };
+		B10000000000000000000002 /* SportAnalysisEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* SportAnalysisEngine.swift */; };
+		B10000000000000000000003 /* HealthRefreshGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000003 /* HealthRefreshGate.swift */; };
+		B10000000000000000000004 /* HistoryBrowserEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* HistoryBrowserEngine.swift */; };
+		B10000000000000000000005 /* WorkoutPrimaryActionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* WorkoutPrimaryActionResolver.swift */; };
+		B10000000000000000000006 /* SnapshotRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* SnapshotRepository.swift */; };
+		B10000000000000000000007 /* AppStore+Sports.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000007 /* AppStore+Sports.swift */; };
+		B10000000000000000000008 /* SportsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000008 /* SportsHubView.swift */; };
+		B10000000000000000000009 /* SportSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000009 /* SportSessionView.swift */; };
+		B1000000000000000000000A /* SportHistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* SportHistoryDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -232,6 +242,16 @@
 		C0000000000000000000004D /* StrengthEnergyEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthEnergyEstimatorTests.swift; sourceTree = "<group>"; };
 		C0000000000000000000004E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C0000000000000000000004F /* V06SnapshotFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures/V06SnapshotFixture.swift; sourceTree = "<group>"; };
+		C10000000000000000000001 /* SportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportModels.swift; sourceTree = "<group>"; };
+		C10000000000000000000002 /* SportAnalysisEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportAnalysisEngine.swift; sourceTree = "<group>"; };
+		C10000000000000000000003 /* HealthRefreshGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRefreshGate.swift; sourceTree = "<group>"; };
+		C10000000000000000000004 /* HistoryBrowserEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryBrowserEngine.swift; sourceTree = "<group>"; };
+		C10000000000000000000005 /* WorkoutPrimaryActionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutPrimaryActionResolver.swift; sourceTree = "<group>"; };
+		C10000000000000000000006 /* SnapshotRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotRepository.swift; sourceTree = "<group>"; };
+		C10000000000000000000007 /* AppStore+Sports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+Sports.swift"; sourceTree = "<group>"; };
+		C10000000000000000000008 /* SportsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsHubView.swift; sourceTree = "<group>"; };
+		C10000000000000000000009 /* SportSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportSessionView.swift; sourceTree = "<group>"; };
+		C1000000000000000000000A /* SportHistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportHistoryDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -296,6 +316,7 @@
 				C00000000000000000000044 /* DailyHealthSnapshot.swift */,
 				C00000000000000000000016 /* WorkoutModels.swift */,
 				C00000000000000000000017 /* HealthMetricModels.swift */,
+				C10000000000000000000001 /* SportModels.swift */,
 				C00000000000000000000039 /* WorkoutActivityAttributes.swift */,
 			);
 			path = Models;
@@ -317,6 +338,10 @@
 				C00000000000000000000048 /* CardioEnergyEstimator.swift */,
 				C00000000000000000000049 /* StrengthEnergyEstimator.swift */,
 				C0000000000000000000004A /* HeartRateAnalysisEngine.swift */,
+				C10000000000000000000002 /* SportAnalysisEngine.swift */,
+				C10000000000000000000003 /* HealthRefreshGate.swift */,
+				C10000000000000000000004 /* HistoryBrowserEngine.swift */,
+				C10000000000000000000005 /* WorkoutPrimaryActionResolver.swift */,
 				C00000000000000000000038 /* WorkoutActivitySnapshot.swift */,
 			);
 			path = Engine;
@@ -326,6 +351,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000004 /* AppStore.swift */,
+				C10000000000000000000007 /* AppStore+Sports.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -344,6 +370,7 @@
 				C00000000000000000000035 /* WatchMetricMerge.swift */,
 				C00000000000000000000036 /* WatchWorkoutBridge.swift */,
 				C0000000000000000000003A /* WorkoutActivityController.swift */,
+				C10000000000000000000006 /* SnapshotRepository.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -369,6 +396,9 @@
 				C0000000000000000000002C /* HistoryDetailView.swift */,
 				C00000000000000000000033 /* AlgorithmInfoView.swift */,
 				C00000000000000000000034 /* SafetySettingsView.swift */,
+				C10000000000000000000008 /* SportsHubView.swift */,
+				C10000000000000000000009 /* SportSessionView.swift */,
+				C1000000000000000000000A /* SportHistoryDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -652,6 +682,7 @@
 				B00000000000000000000041 /* DailyHealthSnapshot.swift in Sources */,
 				B00000000000000000000013 /* WorkoutModels.swift in Sources */,
 				B00000000000000000000014 /* HealthMetricModels.swift in Sources */,
+				B10000000000000000000001 /* SportModels.swift in Sources */,
 				B00000000000000000000003 /* TrainingEngine.swift in Sources */,
 				B0000000000000000000003A /* ExerciseCatalog.swift in Sources */,
 				B0000000000000000000003B /* ExerciseReplacementEngine.swift in Sources */,
@@ -665,9 +696,14 @@
 				B00000000000000000000045 /* CardioEnergyEstimator.swift in Sources */,
 				B00000000000000000000046 /* StrengthEnergyEstimator.swift in Sources */,
 				B00000000000000000000047 /* HeartRateAnalysisEngine.swift in Sources */,
+				B10000000000000000000002 /* SportAnalysisEngine.swift in Sources */,
+				B10000000000000000000003 /* HealthRefreshGate.swift in Sources */,
+				B10000000000000000000004 /* HistoryBrowserEngine.swift in Sources */,
+				B10000000000000000000005 /* WorkoutPrimaryActionResolver.swift in Sources */,
 				B00000000000000000000035 /* WorkoutActivitySnapshot.swift in Sources */,
 				B00000000000000000000036 /* WorkoutActivityAttributes.swift in Sources */,
 				B00000000000000000000004 /* AppStore.swift in Sources */,
+				B10000000000000000000007 /* AppStore+Sports.swift in Sources */,
 				B00000000000000000000005 /* HealthKitService.swift in Sources */,
 				B00000000000000000000044 /* HealthDataSyncCoordinator.swift in Sources */,
 				B00000000000000000000019 /* HealthImportModels.swift in Sources */,
@@ -679,6 +715,7 @@
 				B00000000000000000000032 /* WatchMetricMerge.swift in Sources */,
 				B00000000000000000000033 /* WatchWorkoutBridge.swift in Sources */,
 				B00000000000000000000037 /* WorkoutActivityController.swift in Sources */,
+				B10000000000000000000006 /* SnapshotRepository.swift in Sources */,
 				B00000000000000000000006 /* DesignSystem.swift in Sources */,
 				B00000000000000000000007 /* RootView.swift in Sources */,
 				B00000000000000000000008 /* OnboardingView.swift in Sources */,
@@ -697,6 +734,9 @@
 				B00000000000000000000029 /* HistoryDetailView.swift in Sources */,
 				B00000000000000000000030 /* AlgorithmInfoView.swift in Sources */,
 				B00000000000000000000031 /* SafetySettingsView.swift in Sources */,
+				B10000000000000000000008 /* SportsHubView.swift in Sources */,
+				B10000000000000000000009 /* SportSessionView.swift in Sources */,
+				B1000000000000000000000A /* SportHistoryDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -754,13 +794,13 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -776,13 +816,13 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -799,13 +839,13 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FitTuneWatch/FitTuneWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWatch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -822,12 +862,12 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FitTuneWatch/FitTuneWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTuneWatch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -891,7 +931,7 @@
 				CODE_SIGN_ENTITLEMENTS = FitTune/Resources/FitTune.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -910,7 +950,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -927,7 +967,7 @@
 				CODE_SIGN_ENTITLEMENTS = FitTune/Resources/FitTune.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = PWP85U27MD;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FitTune/Resources/Info.plist;
@@ -945,7 +985,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codex.fittune;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

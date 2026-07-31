@@ -1246,7 +1246,7 @@ struct StartingLoadRecommendation: Equatable {
 }
 
 struct AppSnapshot: Codable {
-    static let currentSchemaVersion = 15
+    static let currentSchemaVersion = 16
 
     var profile: UserProfile?
     var plan: TrainingPlan?
@@ -1275,6 +1275,9 @@ struct AppSnapshot: Codable {
     var activeCardioDraft: CardioSessionDraft? = nil
     var dailyHealthSnapshots: [DailyHealthSnapshot]? = nil
     var treadmillMachineCalibration: TreadmillMachineCalibration? = nil
+    var sportWorkouts: [SportSessionRecord]? = nil
+    var deletedSportWorkouts: [SportSessionRecord]? = nil
+    var activeSportDraft: SportSessionDraft? = nil
     var schemaVersion: Int? = currentSchemaVersion
 
     var resolvedSchemaVersion: Int { schemaVersion ?? 6 }

@@ -304,6 +304,18 @@ final class CardioSessionTests: XCTestCase {
         XCTAssertTrue(result.metricSamples?.isEmpty ?? true)
     }
 
+    func testPausedTimeIsExcludedFromFinishedCardioDuration() throws {
+        let store = AppStore(defaults: makeDefaults())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCardioSession(modality: .running, intensity: .zone2, at: start)
+        store.pauseCardioSession(at: start.addingTimeInterval(600))
+        store.resumeCardioSession(at: start.addingTimeInterval(900))
+
+        let record = try XCTUnwrap(store.finishCardioSession(status: .completed, at: start.addingTimeInterval(1_800)))
+
+        XCTAssertEqual(record.durationMinutes, 25)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suite = "CardioSessionTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

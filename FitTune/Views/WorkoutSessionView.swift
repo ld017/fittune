@@ -67,7 +67,7 @@ struct WorkoutSessionView: View {
         .alert("确认放弃本次训练？", isPresented: $showDiscardConfirmation) {
             Button("返回训练", role: .cancel) {}
             Button("放弃且不保存", role: .destructive) {
-                liveSensors.endWorkout()
+                liveSensors.endWorkoutCollectionKeepingPreference()
                 WorkoutActivityController.shared.end()
                 store.discardWorkoutDraft()
                 dismiss()
@@ -131,7 +131,6 @@ struct WorkoutSessionView: View {
                         inputCard(draft)
                         safetyCard(draft)
                         setTimer(draft)
-                        primarySetAction(draft)
                     } else if draft.phase == .resting {
                         restCard(draft)
                     } else {
@@ -142,6 +141,7 @@ struct WorkoutSessionView: View {
                 .padding(.bottom, 28)
             }
         }
+        .safeAreaInset(edge: .bottom) { primaryActionDock(draft) }
     }
 
     private func topBar(_ draft: WorkoutDraft) -> some View {
@@ -166,8 +166,10 @@ struct WorkoutSessionView: View {
             Button {
                 if draft.currentPauseStartedAt == nil {
                     store.pauseWorkout()
+                    liveSensors.pauseWorkout()
                 } else {
                     store.resumeWorkout()
+                    liveSensors.resumeWorkout()
                 }
             } label: {
                 Image(systemName: draft.currentPauseStartedAt == nil ? "pause.fill" : "play.fill")
@@ -383,23 +385,35 @@ struct WorkoutSessionView: View {
         }
     }
 
-    @ViewBuilder
-    private func primarySetAction(_ draft: WorkoutDraft) -> some View {
-        switch draft.phase {
-        case .training:
-            Button { store.startCurrentDraftSet() } label: {
-                Label("开始本组", systemImage: "play.fill")
-            }
-            .buttonStyle(PrimaryActionButtonStyle())
-            .disabled(draft.currentPauseStartedAt != nil)
-        case .setActive:
-            Button { store.completeCurrentDraftSet() } label: {
-                Label("完成本组", systemImage: "checkmark")
-            }
-            .buttonStyle(PrimaryActionButtonStyle())
-            .disabled(draft.currentPauseStartedAt != nil)
-        case .resting, .exerciseComplete:
-            EmptyView()
+    private func primaryActionDock(_ draft: WorkoutDraft) -> some View {
+        let action = WorkoutPrimaryActionResolver.resolve(
+            phase: draft.phase,
+            isPaused: draft.currentPauseStartedAt != nil,
+            hasNextExercise: draft.exerciseIndex < draft.session.exercises.count - 1
+        )
+        return Button { perform(action) } label: {
+            Label(action.title, systemImage: action.systemImage)
+        }
+        .buttonStyle(PrimaryActionButtonStyle())
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    private func perform(_ action: WorkoutPrimaryAction) {
+        switch action {
+        case .resumeWorkout:
+            store.resumeWorkout(); liveSensors.resumeWorkout()
+        case .startSet:
+            store.startCurrentDraftSet()
+        case .completeSet:
+            store.completeCurrentDraftSet()
+        case .startNextSet:
+            store.startNextDraftSet()
+        case .advanceExercise:
+            _ = store.advanceDraftToNextExercise()
+        case .finishWorkout:
+            requestSave(status: .completed)
         }
     }
 
@@ -473,11 +487,6 @@ struct WorkoutSessionView: View {
                 Text(liveSensors.statusMessage)
                     .font(.caption)
                     .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accentBlue : FitTheme.warning)
-                Button { store.startNextDraftSet() } label: {
-                    Label("开始下一组", systemImage: "play.fill")
-                }
-                .buttonStyle(PrimaryActionButtonStyle())
-                .disabled(draft.currentPauseStartedAt != nil)
             }
         }
         .fitCard(padding: 18)
@@ -492,18 +501,6 @@ struct WorkoutSessionView: View {
             Text("\(exercise.name) 已完成").font(.title2.bold()).multilineTextAlignment(.center)
             Text("你仍可在上方增加预计总组数；系统不会自动锁定该动作。")
                 .font(.subheadline).foregroundStyle(FitTheme.secondaryText).multilineTextAlignment(.center)
-            if draft.exerciseIndex < draft.session.exercises.count - 1 {
-                Button { store.advanceDraftToNextExercise() } label: {
-                    Label("进入下一个动作", systemImage: "arrow.right")
-                }
-                .buttonStyle(PrimaryActionButtonStyle())
-                .disabled(draft.currentPauseStartedAt != nil)
-            } else {
-                Button { requestSave(status: .completed) } label: {
-                    Label("完成本次训练", systemImage: "flag.checkered")
-                }
-                .buttonStyle(PrimaryActionButtonStyle())
-            }
         }
         .fitCard(padding: 22)
     }
@@ -517,7 +514,7 @@ struct WorkoutSessionView: View {
                     Button { store.updateWorkoutDraft { $0.techniqueQuality = score } } label: {
                         Text("\(score)")
                             .font(.caption.bold().monospacedDigit())
-                            .frame(width: 30, height: 30)
+                            .frame(width: 44, height: 44)
                             .background(draft.techniqueQuality == score ? FitTheme.accent : FitTheme.elevated, in: Circle())
                             .foregroundStyle(draft.techniqueQuality == score ? FitTheme.background : FitTheme.secondaryText)
                     }
@@ -739,7 +736,7 @@ struct WorkoutSessionView: View {
 
     private func performSaveAndExit(status: WorkoutCompletionStatus) {
         showSessionRPE = false
-        liveSensors.endWorkout()
+        liveSensors.endWorkoutCollectionKeepingPreference()
         WorkoutActivityController.shared.end()
         store.saveActiveWorkout(status: status)
         dismiss()

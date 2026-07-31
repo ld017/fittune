@@ -41,9 +41,37 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
         self.sessionID = sessionID
         startedAt = .now
         sequence = 0
+        let readTypes = [
+            HKQuantityType.quantityType(forIdentifier: .heartRate),
+            HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned),
+            HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
+        ].compactMap { $0 }
+        healthStore.requestAuthorization(toShare: [HKObjectType.workoutType()], read: Set(readTypes)) { [weak self] success, error in
+            Task { @MainActor in
+                guard let self else { return }
+                guard success else {
+                    self.status = error?.localizedDescription ?? "健康权限不可用"
+                    self.sendAcknowledgement(sessionID: sessionID, accepted: false, reason: self.status)
+                    self.sessionID = nil
+                    self.startedAt = nil
+                    return
+                }
+                self.beginAuthorizedSession(sessionID: sessionID, activity: activity)
+            }
+        }
+    }
+
+    private func beginAuthorizedSession(sessionID: UUID, activity: String) {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = activityType(activity)
-        configuration.locationType = [.running, .walking, .cycling].contains(configuration.activityType) ? .outdoor : .indoor
+        let components = activity.split(separator: "|").map(String.init)
+        if components.dropFirst().first == "outdoor" {
+            configuration.locationType = .outdoor
+        } else if components.dropFirst().first == "indoor" {
+            configuration.locationType = .indoor
+        } else {
+            configuration.locationType = [.running, .walking, .cycling, .hiking].contains(configuration.activityType) ? .outdoor : .indoor
+        }
         do {
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
             let builder = session.associatedWorkoutBuilder()
@@ -68,7 +96,12 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
                     }
                 }
             }
-        } catch { status = error.localizedDescription }
+        } catch {
+            status = error.localizedDescription
+            sendAcknowledgement(sessionID: sessionID, accepted: false, reason: status)
+            self.sessionID = nil
+            startedAt = nil
+        }
     }
 
     func pause() { workoutSession?.pause(); isPaused = true; sendEvent("paused") }
@@ -176,7 +209,7 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
     }
 
     private func activityType(_ text: String) -> HKWorkoutActivityType {
-        switch text {
+        switch text.split(separator: "|").first.map(String.init) ?? text {
         case "running": .running
         case "briskWalking", "inclineWalking": .walking
         case "cycling": .cycling
@@ -185,6 +218,11 @@ final class WatchWorkoutSessionManager: NSObject, WCSessionDelegate, HKWorkoutSe
         case "stairClimber": .stairClimbing
         case "elliptical": .elliptical
         case "jumpRope": .jumpRope
+        case "badminton": .badminton
+        case "tableTennis": .tableTennis
+        case "soccer": .soccer
+        case "climbing": .climbing
+        case "hiking": .hiking
         default: .traditionalStrengthTraining
         }
     }

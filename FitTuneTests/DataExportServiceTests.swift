@@ -96,4 +96,34 @@ final class DataExportServiceTests: XCTestCase {
         XCTAssertTrue(setsCSV.contains("actual_rest_seconds"))
         XCTAssertTrue(setsCSV.contains("peak_delay_seconds"))
     }
+
+    func testSportsCSVIncludesAnalysisProvenanceAndRawMetrics() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let draft = SportSessionDraft(kind: .trailRunning, environment: .outdoor, intensity: .training, startedAt: start)
+        let analysis = SportAnalysisEngine.analyze(
+            draft: draft,
+            completedAt: start.addingTimeInterval(3_600),
+            sessionRPE: 7,
+            weightKg: 70,
+            restingHeartRate: nil,
+            maximumHeartRate: nil
+        )
+        let record = SportSessionRecord(
+            kind: .trailRunning,
+            environment: .outdoor,
+            intensity: .training,
+            startedAt: start,
+            completedAt: start.addingTimeInterval(3_600),
+            completionStatus: .completed,
+            sessionRPE: 7,
+            analysis: analysis
+        )
+
+        let csv = DataExportService.sportsCSV(sports: [record])
+
+        XCTAssertTrue(csv.hasPrefix("id,kind,environment"))
+        XCTAssertTrue(csv.contains("trailRunning"))
+        XCTAssertTrue(csv.contains("2.0.0-sport-analysis-1"))
+        XCTAssertTrue(csv.contains("energy_lower_kcal"))
+    }
 }

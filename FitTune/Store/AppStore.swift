@@ -30,18 +30,37 @@ final class AppStore {
     var restingHeartRateSamples: [RestingHeartRateSample] = []
     var activeCardioDraft: CardioSessionDraft?
     var presentedSummary: WorkoutSummaryPresentation?
+    var presentedSportRecord: SportSessionRecord?
     var dailyHealthSnapshots: [DailyHealthSnapshot] = []
     var treadmillMachineCalibration: TreadmillMachineCalibration?
+    var sportWorkouts: [SportSessionRecord] = []
+    var deletedSportWorkouts: [SportSessionRecord] = []
+    var activeSportDraft: SportSessionDraft?
 
-    private let defaults: UserDefaults
-    private let storageKey = "FitTune.snapshot.v1"
+    private let repository: any SnapshotRepository
+    private let legacyDefaults: UserDefaults?
+    private(set) var lastPersistenceError: String?
+    private(set) var snapshotLoadResult: SnapshotLoadResult?
     @ObservationIgnored private var lastLiveMetricPersistAt: Date?
     @ObservationIgnored private var liveMetricDraftID: UUID?
     @ObservationIgnored private var liveHeartRateSum = 0.0
     @ObservationIgnored private var liveHeartRateCount = 0
+    @ObservationIgnored private var lastCardioMetricPersistAt: Date?
+    @ObservationIgnored private var cardioMetricDraftID: UUID?
+    @ObservationIgnored private var cardioMetricSampleIDs: Set<UUID> = []
+    @ObservationIgnored var lastSportMetricPersistAt: Date?
+    @ObservationIgnored var sportMetricDraftID: UUID?
+    @ObservationIgnored var sportMetricSampleIDs: Set<UUID> = []
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init() {
+        repository = FileSnapshotRepository()
+        legacyDefaults = .standard
+        restore()
+    }
+
+    init(defaults: UserDefaults) {
+        repository = UserDefaultsSnapshotRepository(defaults: defaults)
+        legacyDefaults = nil
         restore()
     }
 
@@ -68,7 +87,9 @@ final class AppStore {
     }
 
     var currentRecoveryAssessment: RecoveryAssessmentResult? {
-        guard let checkIn = recoveryCheckIns.max(by: { $0.date < $1.date }) else { return nil }
+        guard let checkIn = recoveryCheckIns
+            .filter({ Calendar.current.isDateInToday($0.date) })
+            .max(by: { $0.date < $1.date }) else { return nil }
         return RecoveryEngine.assess(checkIn: checkIn, restingHeartRates: restingHeartRateSamples)
     }
 
@@ -155,7 +176,7 @@ final class AppStore {
             let source: MetricSource = current.energyMethod?.contains("设备实测") == true ? .appleWatch : .historicalModel
             return EnergyEngine.metricRange(from: estimate, source: source)
         }
-        let cardio = cardioWorkouts.filter { calendar.isDateInToday($0.date) }.map { record in
+        var cardio = cardioWorkouts.filter { calendar.isDateInToday($0.date) }.map { record in
             let current = currentEnergyRecord(record)
             return savedEnergyRange(
                 value: current.activeEnergyKcal,
@@ -165,6 +186,9 @@ final class AppStore {
                 algorithmVersion: current.energyAlgorithmVersion
             )
         }
+        cardio += sportWorkouts
+            .filter { calendar.isDateInToday($0.completedAt) }
+            .map(\.analysis.activeEnergyKcal)
         let wearableEntry = dailyActiveEnergy.filter { calendar.isDateInToday($0.date) }.max { $0.kilocalories < $1.kilocalories }
         let stepEntry = dailySteps.filter { calendar.isDateInToday($0.date) }.max { $0.steps < $1.steps }
         let cardioWorkoutSteps = cardioWorkouts
@@ -172,6 +196,9 @@ final class AppStore {
             .reduce(0) { total, record in
                 total + (record.metricSamples?.compactMap(\.steps).max() ?? 0)
             }
+            + sportWorkouts
+                .filter { calendar.isDateInToday($0.completedAt) }
+                .reduce(0) { $0 + ($1.analysis.steps ?? 0) }
         let resting = profile.flatMap { TrainingEngine.restingEnergyEstimate(profile: $0, weightKg: weight) }.map { EnergyEngine.metricRange(from: $0, source: .historicalModel) }
         let steps = stepEntry.map { entry in
             MetricRange(value: entry.estimatedActiveEnergyKcal, lowerBound: entry.estimatedActiveEnergyKcal * 0.7, upperBound: entry.estimatedActiveEnergyKcal * 1.3, provenance: .init(source: .phoneEstimate, sourceName: "\(entry.source)步数/距离估算", confidence: .estimated, coverage: 1, algorithmVersion: EnergyEngine.algorithmVersion))
@@ -398,6 +425,33 @@ final class AppStore {
         persist()
     }
 
+    func commitTodayStatus(readiness input: ReadinessInput, checkIn: RecoveryCheckIn) {
+        readiness = input
+        let assessment = TrainingEngine.assessReadiness(input)
+        let entry = RecoveryEntry(
+            date: input.date,
+            sleepHours: input.sleepHours,
+            sleepQuality: input.sleepQuality ?? 3,
+            soreness: input.soreness,
+            stress: input.stress,
+            motivation: input.motivation,
+            readinessScore: assessment.score
+        )
+        if let index = recoveryHistory.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: input.date) }) {
+            recoveryHistory[index] = entry
+        } else {
+            recoveryHistory.append(entry)
+        }
+        if let index = recoveryCheckIns.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: checkIn.date) }) {
+            recoveryCheckIns[index] = checkIn
+        } else {
+            recoveryCheckIns.append(checkIn)
+        }
+        recoveryHistory.sort { $0.date < $1.date }
+        recoveryCheckIns.sort { $0.date < $1.date }
+        persist()
+    }
+
     func importRestingHeartRate(_ sample: RestingHeartRateSample) {
         let duplicate = restingHeartRateSamples.contains { existing in
             if let externalID = sample.externalID, !externalID.isEmpty {
@@ -450,7 +504,7 @@ final class AppStore {
         handrailSupport: HandrailSupport = .none,
         at startedAt: Date = .now
     ) {
-        guard activeCardioDraft == nil, activeWorkoutDraft == nil else { return }
+        guard activeCardioDraft == nil, activeWorkoutDraft == nil, activeSportDraft == nil else { return }
         let machineParameters = resolvedTreadmillMachineParameters(
             inputMode: inclineInputMode,
             maximumLevel: machineMaximumLevel,
@@ -479,7 +533,9 @@ final class AppStore {
             ]
         }
         activeCardioDraft = draft
-        persist()
+        cardioMetricDraftID = draft.id
+        cardioMetricSampleIDs = []
+        if persist() { lastCardioMetricPersistAt = startedAt }
     }
 
     func updateCardioWorkload(
@@ -532,7 +588,7 @@ final class AppStore {
         )
         draft.updatedAt = changedAt
         activeCardioDraft = draft
-        persist()
+        if persist() { lastCardioMetricPersistAt = changedAt }
     }
 
     func setTreadmillMachineCalibration(_ calibration: TreadmillMachineCalibration?) {
@@ -564,37 +620,60 @@ final class AppStore {
     func setConfirmedCardioDistance(meters: Double?) {
         guard var draft = activeCardioDraft else { return }
         draft.confirmedDistanceMeters = meters
-        draft.updatedAt = .now
+        let now = Date.now
+        draft.updatedAt = now
         activeCardioDraft = draft
-        persist()
+        if persist() { lastCardioMetricPersistAt = now }
     }
 
-    func appendCardioMetricSample(_ sample: WorkoutMetricSample) {
-        guard var draft = activeCardioDraft,
-              !draft.metricSamples.contains(where: { $0.id == sample.id }) else { return }
+    func appendCardioMetricSample(_ sample: WorkoutMetricSample, now: Date = .now) {
+        guard var draft = activeCardioDraft else { return }
+        prepareCardioMetricTracking(for: draft)
+        guard cardioMetricSampleIDs.insert(sample.id).inserted else { return }
         draft.metricSamples.append(sample)
         draft.distanceMeters = max(draft.distanceMeters, sample.distanceMeters ?? 0)
-        draft.updatedAt = .now
+        draft.updatedAt = now
         activeCardioDraft = draft
-        persist()
+        if Self.shouldPersistLiveMetric(lastPersistedAt: lastCardioMetricPersistAt, now: now), persist() {
+            lastCardioMetricPersistAt = now
+        }
     }
 
     func markCardioDataGap(_ reason: String) {
         guard var draft = activeCardioDraft else { return }
         draft.dataGapReason = reason
-        draft.updatedAt = .now
+        let now = Date.now
+        draft.updatedAt = now
         activeCardioDraft = draft
-        persist()
+        if persist() { lastCardioMetricPersistAt = now }
     }
 
     func checkpointActiveCardio() {
         guard activeCardioDraft != nil else { return }
-        persist()
+        if persist() { lastCardioMetricPersistAt = .now }
+    }
+
+    func pauseCardioSession(at date: Date = .now) {
+        guard var draft = activeCardioDraft, draft.currentPauseStartedAt == nil, date >= draft.startedAt else { return }
+        draft.currentPauseStartedAt = date
+        draft.updatedAt = date
+        activeCardioDraft = draft
+        if persist() { lastCardioMetricPersistAt = date }
+    }
+
+    func resumeCardioSession(at date: Date = .now) {
+        guard var draft = activeCardioDraft, let pausedAt = draft.currentPauseStartedAt, date >= pausedAt else { return }
+        draft.pauseIntervals.append(.init(startedAt: pausedAt, endedAt: date))
+        draft.currentPauseStartedAt = nil
+        draft.updatedAt = date
+        activeCardioDraft = draft
+        if persist() { lastCardioMetricPersistAt = date }
     }
 
     func discardCardioSession() {
         activeCardioDraft = nil
         persist()
+        resetCardioMetricTracking()
     }
 
     @discardableResult
@@ -604,13 +683,29 @@ final class AppStore {
         if let openIndex = draft.workloadSegments.lastIndex(where: { $0.endedAt == nil }) {
             draft.workloadSegments[openIndex].endedAt = completedAt
         }
-        let minutes = max(1, Int(completedAt.timeIntervalSince(draft.startedAt) / 60))
-        let heartRates = draft.metricSamples.compactMap(\.heartRateBPM)
-        let watchEnergy = TrainingEngine.appleWatchActiveEnergy(from: draft.metricSamples)
+        var pauses = draft.pauseIntervals
+        if let pausedAt = draft.currentPauseStartedAt {
+            pauses.append(.init(startedAt: pausedAt, endedAt: completedAt))
+            draft.currentPauseStartedAt = nil
+        }
+        let effectiveSeconds = WorkoutTimeline.effectiveDuration(
+            from: draft.startedAt,
+            to: completedAt,
+            pauseIntervals: pauses
+        )
+        let minutes = max(1, Int(effectiveSeconds / 60))
+        let activeMetricSamples = draft.metricSamples.filter { sample in
+            !pauses.contains { interval in
+                let end = interval.endedAt ?? completedAt
+                return sample.timestamp >= interval.startedAt && sample.timestamp <= end
+            }
+        }
+        let heartRates = activeMetricSamples.compactMap(\.heartRateBPM)
+        let watchEnergy = TrainingEngine.appleWatchActiveEnergy(from: activeMetricSamples)
         let confirmedDistanceKm = draft.confirmedDistanceMeters.map { $0 / 1_000 }
         let sensorDistanceKm = draft.distanceMeters > 0 ? draft.distanceMeters / 1_000 : nil
         let distanceKm = confirmedDistanceKm ?? sensorDistanceKm
-        let estimate = CardioEnergyEstimator.estimate(
+        var estimate = CardioEnergyEstimator.estimate(
             CardioEnergyInput(
                 modality: draft.modality,
                 intensity: draft.intensity,
@@ -621,12 +716,20 @@ final class AppStore {
                 confirmedDistanceKm: confirmedDistanceKm,
                 sensorDistanceKm: sensorDistanceKm,
                 workloadSegments: draft.workloadSegments,
-                metricSamples: draft.metricSamples,
+                metricSamples: activeMetricSamples,
                 deviceEstimateKcal: watchEnergy,
                 deviceEnergySource: watchEnergy == nil ? nil : .appleWatch,
                 importedDeviceOnly: false
             )
         )
+        let elapsedSeconds = completedAt.timeIntervalSince(draft.startedAt)
+        if elapsedSeconds > 0, effectiveSeconds < elapsedSeconds {
+            let activeRatio = effectiveSeconds / elapsedSeconds
+            estimate.kilocalories *= activeRatio
+            estimate.lowerBound *= activeRatio
+            estimate.upperBound *= activeRatio
+            estimate.diagnostics?.warnings.append("暂停时间已从有效时长、心率与热量估算中排除。")
+        }
         let latestWorkload = draft.workloadSegments.last
         var record = CardioWorkoutRecord(
             date: draft.startedAt,
@@ -663,6 +766,7 @@ final class AppStore {
         cardioWorkouts.insert(record, at: 0)
         activeCardioDraft = nil
         persist()
+        resetCardioMetricTracking()
         if let summary = record.summary {
             presentedSummary = WorkoutSummaryPresentation(title: record.modality.title, date: record.date, summary: summary)
         }
@@ -675,13 +779,14 @@ final class AppStore {
     }
 
     func makeExportFiles() throws -> [URL] {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FitTune-v1-export-\(UUID().uuidString)", isDirectory: true)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FitTune-v2-export-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let files: [(String, Data)] = [
             ("FitTune-backup.json", try DataExportService.json(snapshot: currentSnapshot())),
             ("workouts.csv", Data(DataExportService.workoutsCSV(workouts: workoutHistory, cardio: cardioWorkouts).utf8)),
             ("sets.csv", Data(DataExportService.setsCSV(workouts: workoutHistory).utf8)),
-            ("metrics.csv", Data(DataExportService.metricsCSV(workouts: workoutHistory, cardio: cardioWorkouts).utf8)),
+            ("metrics.csv", Data(DataExportService.metricsCSV(workouts: workoutHistory, cardio: cardioWorkouts, sports: sportWorkouts).utf8)),
+            ("sports.csv", Data(DataExportService.sportsCSV(sports: sportWorkouts).utf8)),
             ("recovery.csv", Data(DataExportService.recoveryCSV(entries: recoveryCheckIns).utf8))
         ]
         return try files.map { name, data in
@@ -1121,7 +1226,7 @@ final class AppStore {
     }
 
     func startWorkout(_ session: TrainingSession) {
-        guard activeWorkoutDraft == nil, let first = session.exercises.first else { return }
+        guard activeWorkoutDraft == nil, activeCardioDraft == nil, activeSportDraft == nil, let first = session.exercises.first else { return }
         let starting = loadRecommendation(for: first)
         var draft = WorkoutDraft(
             sourceSessionID: session.id,
@@ -1781,6 +1886,7 @@ final class AppStore {
         deletedCardioHistory.removeAll()
         deletedRecoveryHistory.removeAll()
         deletedBodyCompositionHistory.removeAll()
+        deletedSportWorkouts.removeAll()
         rebuildLearnedLoads()
         persist()
     }
@@ -1792,12 +1898,14 @@ final class AppStore {
         deletedCardioHistory.insert(contentsOf: cardioHistory, at: 0)
         deletedRecoveryHistory.insert(contentsOf: recoveryHistory, at: 0)
         deletedBodyCompositionHistory.insert(contentsOf: bodyCompositionHistory, at: 0)
+        deletedSportWorkouts.insert(contentsOf: sportWorkouts, at: 0)
         workoutHistory.removeAll()
         cardioWorkouts.removeAll()
         weightHistory.removeAll()
         cardioHistory.removeAll()
         recoveryHistory.removeAll()
         bodyCompositionHistory.removeAll()
+        sportWorkouts.removeAll()
         rebuildLearnedLoads()
         persist()
     }
@@ -1809,21 +1917,24 @@ final class AppStore {
         cardioHistory.append(contentsOf: deletedCardioHistory)
         recoveryHistory.append(contentsOf: deletedRecoveryHistory)
         bodyCompositionHistory.append(contentsOf: deletedBodyCompositionHistory)
+        sportWorkouts.append(contentsOf: deletedSportWorkouts)
         deletedWorkoutHistory.removeAll()
         deletedCardioWorkouts.removeAll()
         deletedWeightHistory.removeAll()
         deletedCardioHistory.removeAll()
         deletedRecoveryHistory.removeAll()
         deletedBodyCompositionHistory.removeAll()
+        deletedSportWorkouts.removeAll()
         workoutHistory.sort { $0.completedAt > $1.completedAt }
         cardioWorkouts.sort { $0.date > $1.date }
+        sportWorkouts.sort { $0.completedAt > $1.completedAt }
         weightHistory.sort { $0.date < $1.date }
         rebuildLearnedLoads()
         persist()
     }
 
     var deletedRecordCount: Int {
-        deletedWorkoutHistory.count + deletedCardioWorkouts.count + deletedWeightHistory.count + deletedCardioHistory.count + deletedRecoveryHistory.count + deletedBodyCompositionHistory.count
+        deletedWorkoutHistory.count + deletedCardioWorkouts.count + deletedSportWorkouts.count + deletedWeightHistory.count + deletedCardioHistory.count + deletedRecoveryHistory.count + deletedBodyCompositionHistory.count
     }
 
     func resetAllData() {
@@ -1844,6 +1955,9 @@ final class AppStore {
         deletedCardioHistory = []
         deletedRecoveryHistory = []
         deletedBodyCompositionHistory = []
+        sportWorkouts = []
+        deletedSportWorkouts = []
+        activeSportDraft = nil
         dailyTrainingChoice = nil
         activeWorkoutDraft = nil
         recoveryCheckIns = []
@@ -1854,7 +1968,15 @@ final class AppStore {
         favoriteExerciseIDs = []
         customExercises = []
         dailyHealthSnapshots = []
-        defaults.removeObject(forKey: storageKey)
+        resetCardioMetricTracking()
+        resetSportMetricTracking()
+        do {
+            try repository.removeAll()
+            legacyDefaults?.removeObject(forKey: UserDefaultsSnapshotRepository.defaultKey)
+            lastPersistenceError = nil
+        } catch {
+            lastPersistenceError = error.localizedDescription
+        }
     }
 
     private var scheduledSession: TrainingSession? {
@@ -1890,7 +2012,7 @@ final class AppStore {
         }
     }
 
-    private func currentSnapshot() -> AppSnapshot {
+    func currentSnapshot() -> AppSnapshot {
         AppSnapshot(
             profile: profile,
             plan: plan,
@@ -1918,24 +2040,61 @@ final class AppStore {
             restingHeartRateSamples: restingHeartRateSamples,
             activeCardioDraft: activeCardioDraft,
             dailyHealthSnapshots: dailyHealthSnapshots,
-            treadmillMachineCalibration: treadmillMachineCalibration
+            treadmillMachineCalibration: treadmillMachineCalibration,
+            sportWorkouts: sportWorkouts,
+            deletedSportWorkouts: deletedSportWorkouts,
+            activeSportDraft: activeSportDraft
         )
     }
 
-    private func persist() {
+    @discardableResult
+    func persist() -> Bool {
         let snapshot = currentSnapshot()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(snapshot) {
-            defaults.set(data, forKey: storageKey)
+        do {
+            try repository.save(encoder.encode(snapshot))
+            lastPersistenceError = nil
+            return true
+        } catch {
+            lastPersistenceError = error.localizedDescription
+            return false
         }
     }
 
     private func restore() {
-        guard let data = defaults.data(forKey: storageKey) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let snapshot = try? decoder.decode(AppSnapshot.self, from: data) else { return }
+        let candidates = repository.loadCandidates()
+        for (index, data) in candidates.enumerated() {
+            guard let snapshot = try? decoder.decode(AppSnapshot.self, from: data) else { continue }
+            let needsSchemaMigration = apply(snapshot)
+            snapshotLoadResult = SnapshotLoadResult(
+                usedBackup: index > 0,
+                migratedLegacyStorage: false
+            )
+            if needsSchemaMigration { persist() }
+            return
+        }
+
+        if !candidates.isEmpty {
+            lastPersistenceError = "无法读取主快照或备份快照"
+        }
+        guard let legacyDefaults,
+              let data = legacyDefaults.data(forKey: UserDefaultsSnapshotRepository.defaultKey),
+              let snapshot = try? decoder.decode(AppSnapshot.self, from: data) else { return }
+        _ = apply(snapshot)
+        if persist() {
+            legacyDefaults.removeObject(forKey: UserDefaultsSnapshotRepository.defaultKey)
+            snapshotLoadResult = SnapshotLoadResult(
+                usedBackup: false,
+                migratedLegacyStorage: true
+            )
+        }
+    }
+
+    @discardableResult
+    private func apply(_ snapshot: AppSnapshot) -> Bool {
         let needsSchemaMigration = snapshot.resolvedSchemaVersion < AppSnapshot.currentSchemaVersion
         profile = snapshot.profile
         plan = snapshot.plan
@@ -1983,9 +2142,43 @@ final class AppStore {
         activeCardioDraft = snapshot.activeCardioDraft
         dailyHealthSnapshots = snapshot.dailyHealthSnapshots ?? []
         treadmillMachineCalibration = snapshot.treadmillMachineCalibration
-        if needsSchemaMigration {
-            persist()
+        sportWorkouts = snapshot.sportWorkouts ?? []
+        deletedSportWorkouts = snapshot.deletedSportWorkouts ?? []
+        activeSportDraft = snapshot.activeSportDraft
+        if let activeCardioDraft {
+            cardioMetricDraftID = activeCardioDraft.id
+            cardioMetricSampleIDs = Set(activeCardioDraft.metricSamples.map(\.id))
+            lastCardioMetricPersistAt = activeCardioDraft.updatedAt
+        } else {
+            resetCardioMetricTracking()
         }
+        if let activeSportDraft {
+            sportMetricDraftID = activeSportDraft.id
+            sportMetricSampleIDs = Set(activeSportDraft.metricSamples.map(\.id))
+            lastSportMetricPersistAt = activeSportDraft.lastCheckpointAt ?? activeSportDraft.updatedAt
+        } else {
+            resetSportMetricTracking()
+        }
+        return needsSchemaMigration
+    }
+
+    private func prepareCardioMetricTracking(for draft: CardioSessionDraft) {
+        guard cardioMetricDraftID != draft.id else { return }
+        cardioMetricDraftID = draft.id
+        cardioMetricSampleIDs = Set(draft.metricSamples.map(\.id))
+        lastCardioMetricPersistAt = draft.updatedAt
+    }
+
+    private func resetCardioMetricTracking() {
+        cardioMetricDraftID = nil
+        cardioMetricSampleIDs = []
+        lastCardioMetricPersistAt = nil
+    }
+
+    func resetSportMetricTracking() {
+        sportMetricDraftID = nil
+        sportMetricSampleIDs = []
+        lastSportMetricPersistAt = nil
     }
 
     private func materializeTrainingPhases(in plan: inout TrainingPlan?) {

@@ -11,6 +11,8 @@ struct WorkoutActivitySnapshot: Codable, Hashable {
     var isCardio: Bool = false
     var distanceMeters: Double? = nil
     var cadence: Double? = nil
+    var symbol: String? = nil
+    var elevationGainMeters: Double? = nil
 
     var nextSetURL: URL {
         URL(string: "fittune://workout?action=nextSet&session=\(sessionID.uuidString)")!
@@ -58,6 +60,26 @@ struct WorkoutActivitySnapshot: Codable, Hashable {
         )
     }
 
+    static func sport(draft: SportSessionDraft, heartRate: Double?) -> WorkoutActivitySnapshot {
+        let latestDistance = draft.metricSamples.compactMap(\.distanceMeters).max()
+        let latestCadence = draft.metricSamples.compactMap(\.cadence).last
+        let elevationGain = draft.metricSamples.compactMap(\.elevationGainMeters).max()
+        return WorkoutActivitySnapshot(
+            sessionID: draft.id,
+            startedAt: draft.startedAt,
+            title: draft.kind.title,
+            currentItem: draft.pausedAt == nil ? "实时记录中" : "已暂停",
+            progress: "\(draft.environment.title) · \(draft.intensity.title)",
+            heartRate: heartRate.map { Int($0.rounded()) },
+            restEndsAt: nil,
+            isCardio: true,
+            distanceMeters: latestDistance,
+            cadence: latestCadence,
+            symbol: draft.kind.symbol,
+            elevationGainMeters: elevationGain
+        )
+    }
+
     private static func cardioWorkloadText(_ workload: CardioWorkloadSegment?) -> String {
         guard let workload else { return "有氧训练" }
         var values: [String] = []
@@ -73,6 +95,29 @@ struct WorkoutActivitySnapshot: Codable, Hashable {
             values.append("\(Int(power.rounded())) W")
         }
         return values.isEmpty ? "有氧训练" : values.joined(separator: " · ")
+    }
+}
+
+struct LiveActivityUpdateGate: Equatable {
+    let minimumInterval: TimeInterval
+    private var lastSnapshot: WorkoutActivitySnapshot?
+    private var lastUpdatedAt: Date?
+
+    init(minimumInterval: TimeInterval = 1) {
+        self.minimumInterval = minimumInterval
+    }
+
+    mutating func shouldUpdate(_ snapshot: WorkoutActivitySnapshot, at date: Date = .now) -> Bool {
+        if lastSnapshot?.sessionID != snapshot.sessionID {
+            lastSnapshot = snapshot
+            lastUpdatedAt = date
+            return true
+        }
+        guard lastSnapshot != snapshot else { return false }
+        guard lastUpdatedAt.map({ date.timeIntervalSince($0) >= minimumInterval }) ?? true else { return false }
+        lastSnapshot = snapshot
+        lastUpdatedAt = date
+        return true
     }
 }
 
