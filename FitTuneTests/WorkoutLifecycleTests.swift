@@ -27,6 +27,46 @@ final class WorkoutLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testOneTapNextSetClosesRestAndStartsSetTimer() throws {
+        let store = makeStrengthStore()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        store.startCurrentDraftSet(at: start)
+        store.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        store.startNextDraftSet(at: start.addingTimeInterval(210))
+
+        let draft = try XCTUnwrap(store.activeWorkoutDraft)
+        XCTAssertEqual(draft.setNumber, 2)
+        XCTAssertEqual(draft.phase, .setActive)
+        XCTAssertEqual(draft.currentSetStartedAt, start.addingTimeInterval(210))
+        XCTAssertEqual(draft.results.last?.restEndedAt, start.addingTimeInterval(210))
+        XCTAssertEqual(draft.results.last?.actualRestSeconds, 180)
+    }
+
+    @MainActor
+    func testOneTapNextSetRejectsPausedAndRetrogradeStarts() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let pausedStore = makeStrengthStore()
+        pausedStore.startCurrentDraftSet(at: start)
+        pausedStore.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+        pausedStore.pauseWorkout(at: start.addingTimeInterval(40))
+
+        pausedStore.startNextDraftSet(at: start.addingTimeInterval(210))
+
+        XCTAssertEqual(pausedStore.activeWorkoutDraft?.phase, .resting)
+        XCTAssertEqual(pausedStore.activeWorkoutDraft?.setNumber, 1)
+
+        let staleStore = makeStrengthStore()
+        staleStore.startCurrentDraftSet(at: start)
+        staleStore.completeCurrentDraftSet(at: start.addingTimeInterval(30))
+
+        staleStore.startNextDraftSet(at: start.addingTimeInterval(29))
+
+        XCTAssertEqual(staleStore.activeWorkoutDraft?.phase, .resting)
+        XCTAssertEqual(staleStore.activeWorkoutDraft?.setNumber, 1)
+    }
+
+    @MainActor
     func testDelayedPeakIsAttachedToMostRecentlyCompletedSet() throws {
         let store = makeStrengthStore()
         let start = Date(timeIntervalSince1970: 1_700_000_000)

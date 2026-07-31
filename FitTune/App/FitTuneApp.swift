@@ -28,7 +28,7 @@ struct FitTuneApp: App {
                     guard let link = WorkoutActivitySnapshot.parseActionURL(url),
                           link.action == .nextSet,
                           store.activeWorkoutDraft?.id == link.sessionID else { return }
-                    store.advanceDraftToNextSet()
+                    store.startNextDraftSet()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .inactive || phase == .background {

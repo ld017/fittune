@@ -473,8 +473,8 @@ struct WorkoutSessionView: View {
                 Text(liveSensors.statusMessage)
                     .font(.caption)
                     .foregroundStyle(liveSensors.latestValidity == .valid ? FitTheme.accentBlue : FitTheme.warning)
-                Button { store.advanceDraftToNextSet() } label: {
-                    Label("准备下一组", systemImage: "forward.fill")
+                Button { store.startNextDraftSet() } label: {
+                    Label("开始下一组", systemImage: "play.fill")
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
                 .disabled(draft.currentPauseStartedAt != nil)

@@ -1375,43 +1375,27 @@ final class AppStore {
               draft.phase == .resting,
               draft.exerciseIndex >= 0,
               draft.exerciseIndex < draft.session.exercises.count else { return }
-        let exercise = draft.session.exercises[draft.exerciseIndex]
         guard draft.setNumber < draft.totalPlannedSets else { return }
-
         guard closeCurrentRest(in: &draft, at: restEndedAt) else { return }
-
-        let previousKind = draft.currentSetKind
-        draft.setNumber += 1
-        if draft.currentSetKind == .warmup,
-           let target = draft.workingLoadTargetByExercise[exercise.id] {
-            let suggestions = TrainingEngine.warmupPrescription(
-                workingLoadKg: target,
-                workingReps: exercise.repLower,
-                setCount: draft.currentWarmupSets
-            )
-            let warmupIndex = min(suggestions.count - 1, max(0, draft.setNumber - 1))
-            if suggestions.indices.contains(warmupIndex) {
-                draft.loadKg = suggestions[warmupIndex].loadKg
-                draft.reps = suggestions[warmupIndex].reps
-            }
-        } else if previousKind == .warmup,
-                  let target = draft.workingLoadTargetByExercise[exercise.id] {
-            draft.loadKg = target
-            draft.reps = exercise.repLower
-        } else if let suggested = draft.recommendation?.nextLoadKg {
-            draft.loadKg = suggested
-            draft.reps = exercise.repLower
-        } else {
-            draft.reps = exercise.repLower
-        }
-        draft.rir = draft.currentSetKind.defaultRIR
-        draft.techniqueQuality = 4
-        draft.hasPain = false
-        draft.phase = .training
-        draft.restRecommendation = nil
-        draft.restStartedAt = nil
-        draft.userOverrodeSuggestedLoad = false
+        prepareDraftForNextSet(&draft)
         draft.updatedAt = restEndedAt
+        activeWorkoutDraft = draft
+        persist()
+    }
+
+    func startNextDraftSet(at startedAt: Date = .now) {
+        guard var draft = activeWorkoutDraft,
+              canMutateActiveWorkout(draft),
+              draft.phase == .resting,
+              draft.exerciseIndex >= 0,
+              draft.exerciseIndex < draft.session.exercises.count,
+              draft.setNumber < draft.totalPlannedSets,
+              closeCurrentRest(in: &draft, at: startedAt) else { return }
+        finalizePreviousSetResponse(in: &draft, nextSetStartedAt: startedAt)
+        prepareDraftForNextSet(&draft)
+        draft.currentSetStartedAt = startedAt
+        draft.phase = .setActive
+        draft.updatedAt = startedAt
         activeWorkoutDraft = draft
         persist()
     }
@@ -1657,6 +1641,41 @@ final class AppStore {
             setCompletedAt: draft.results[resultIndex].completedAt,
             nextSetStartedAt: nextSetStartedAt
         )
+    }
+
+    private func prepareDraftForNextSet(_ draft: inout WorkoutDraft) {
+        let exercise = draft.session.exercises[draft.exerciseIndex]
+        let previousKind = draft.currentSetKind
+        draft.setNumber += 1
+        if draft.currentSetKind == .warmup,
+           let target = draft.workingLoadTargetByExercise[exercise.id] {
+            let suggestions = TrainingEngine.warmupPrescription(
+                workingLoadKg: target,
+                workingReps: exercise.repLower,
+                setCount: draft.currentWarmupSets
+            )
+            let warmupIndex = min(suggestions.count - 1, max(0, draft.setNumber - 1))
+            if suggestions.indices.contains(warmupIndex) {
+                draft.loadKg = suggestions[warmupIndex].loadKg
+                draft.reps = suggestions[warmupIndex].reps
+            }
+        } else if previousKind == .warmup,
+                  let target = draft.workingLoadTargetByExercise[exercise.id] {
+            draft.loadKg = target
+            draft.reps = exercise.repLower
+        } else if let suggested = draft.recommendation?.nextLoadKg {
+            draft.loadKg = suggested
+            draft.reps = exercise.repLower
+        } else {
+            draft.reps = exercise.repLower
+        }
+        draft.rir = draft.currentSetKind.defaultRIR
+        draft.techniqueQuality = 4
+        draft.hasPain = false
+        draft.phase = .training
+        draft.restRecommendation = nil
+        draft.restStartedAt = nil
+        draft.userOverrodeSuggestedLoad = false
     }
 
     private func prepareDraftForCurrentExercise(_ draft: inout WorkoutDraft) {
